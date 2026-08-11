@@ -14,16 +14,24 @@ def show(supabase):
     with col1:
         technicien = st.text_input("Nom du Technicien LPEE", value="Agent LPEE")
         bl_num = st.text_input("N° BL", value="BL-2026-001")
-        ouvrage = st.selectbox("Ouvrage", ["Voile / Semelle", "PRA 505 CHEVETRE", "PRA 025/DA2"])
+        
+        # 🔹 MODIFICATION 1 : Saisie libre pour l'Ouvrage
+        ouvrage = st.text_input("Ouvrage", value="Voile / Semelle")
+        
         quantite_m3 = st.number_input("Quantité (m³)", min_value=0.0, value=8.0, step=0.5)
         
     with col2:
-        # 🔹 MODIFICATION 1 : Le champ Client est désactivé (disabled=True)
+        # Client désactivé (TGCC par défaut)
         client = st.text_input("Client", value="TGCC", disabled=True)
         
         heure_fin = st.time_input("Heure de fin de production")
         heure_arrivee = st.time_input("Heure d'arrivée au chantier")
-        classe_beton = st.selectbox("Classe", ["C25/30", "C30/37", "C35/45"])
+        
+        # 🔹 MODIFICATION 2 : Classes C40/50 et C45/55 ajoutées
+        classe_beton = st.selectbox(
+            "Classe", 
+            ["C25/30", "C30/37", "C35/45", "C40/50", "C45/55"]
+        )
         
     with col3:
         centrale = st.text_input("Centrale à Béton", value="TG PREFA")
@@ -32,15 +40,12 @@ def show(supabase):
         temp_ambiante = st.number_input("Température Ambiante (°C)", value=25.0)
         affaissement = st.number_input("Affaissement (mm)", value=150.0)
         
-        # ---------------------------------------------------------
-        # 🔹 MODIFICATION 2 : Gestion dynamique du Prélèvement et Nb d'éprouvettes
-        # ---------------------------------------------------------
+        # Prélèvement et gestion dynamique du nombre d'éprouvettes
         prelevement = st.selectbox(
             "Prélèvement", 
             ["OUI - Conforme (NF EN 12350-2)", "NON"]
         )
         
-        # Si 'NON' est sélectionné, on désactive le champ et force la valeur à 0
         is_non_prelevement = "NON" in prelevement
         
         nb_eprouvettes = st.number_input(
@@ -89,7 +94,7 @@ def show(supabase):
         if res.data:
             df = pd.DataFrame(res.data)
             
-            # 🔹 MODIFICATION 3 : Masquer la colonne created_at / created
+            # Masquer la colonne created_at / created
             cols_to_drop = [col for col in ["created_at", "created"] if col in df.columns]
             if cols_to_drop:
                 df = df.drop(columns=cols_to_drop)
