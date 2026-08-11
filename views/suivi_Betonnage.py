@@ -94,7 +94,7 @@ def show(supabase):
             st.error(f"Erreur d'enregistrement : {e}")
 
     # ---------------------------------------------------------
-    # 2. AFFICHAGE DE L'HISTORIQUE
+    # 2. AFFICHAGE DE L'HISTORIQUE ET ESPACE ADMIN
     # ---------------------------------------------------------
     st.markdown("---")
     st.subheader("📊 Historique")
@@ -117,7 +117,7 @@ def show(supabase):
                 
                 df["Durée de transport"] = df.apply(calculer_duree, axis=1)
 
-            # 2. Masquer les colonnes non désirées (y compris Client et Centrale)
+            # 2. Masquer les colonnes non désirées
             cols_to_drop = [
                 col for col in ["id", "created_at", "created", "heure_fin_coulage", "heure_fin", "client", "centrale_beton"] 
                 if col in df.columns
@@ -128,13 +128,11 @@ def show(supabase):
             # 3. Réorganisation des colonnes
             cols = list(df.columns)
             
-            # Placement de 'heure_arrivee' juste après 'date_livraison'
             if "date_livraison" in cols and "heure_arrivee" in cols:
                 cols.remove("heure_arrivee")
                 pos = cols.index("date_livraison") + 1
                 cols.insert(pos, "heure_arrivee")
             
-            # 🔹 MODIFICATION : Déplacement de 'meteo' tout à la fin
             if "meteo" in cols:
                 cols.remove("meteo")
                 cols.append("meteo")
@@ -163,6 +161,49 @@ def show(supabase):
             df.index = range(1, len(df) + 1)
                 
             st.dataframe(df, use_container_width=True)
+
+            # --- BLOC D'ADMINISTRATION (MODIFIER / SUPPRIMER) ---
+            if st.session_state.get("role") == "admin":
+                st.markdown("---")
+                st.subheader("🛠️ Espace Administration - Suivi Béton")
+                
+                record_options = {f"ID {r['id']} - BL: {r.get('bl_num', 'N/A')} - Ouvrage: {r.get('ouvrage', '')}": r for r in res.data}
+                selected_key = st.selectbox("Sélectionner l'enregistrement à gérer", list(record_options.keys()))
+                selected_item = record_options[selected_key]
+                
+                col_ed, col_del = st.columns(2)
+                
+                with col_ed:
+                    with st.expander("📝 Modifier ce contrôle"):
+                        with st.form("edit_form_beton"):
+                            new_bl = st.text_input("N° BL", value=selected_item.get("bl_num", ""))
+                            new_ouvrage = st.text_input("Ouvrage", value=selected_item.get("ouvrage", ""))
+                            new_quantite = st.number_input("Quantité (m³)", value=float(selected_item.get("quantite_m3", 0.0)))
+                            new_aff = st.number_input("Affaissement (mm)", value=int(selected_item.get("affaissement", 0)))
+                            
+                            if st.form_submit_button("Enregistrer les modifications"):
+                                try:
+                                    supabase.table("suivi_betonnage").update({
+                                        "bl_num": new_bl,
+                                        "ouvrage": new_ouvrage,
+                                        "quantite_m3": float(new_quantite),
+                                        "affaissement": int(new_aff)
+                                    }).eq("id", selected_item["id"]).execute()
+                                    st.success("Modifications enregistrées avec succès !")
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"Erreur de mise à jour : {e}")
+                                    
+                with col_del:
+                    st.markdown("##### ⚠️ Suppression")
+                    if st.button("🗑️ Supprimer définitivement ce contrôle", type="primary"):
+                        try:
+                            supabase.table("suivi_betonnage").delete().eq("id", selected_item["id"]).execute()
+                            st.success("Enregistrement supprimé avec succès.")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Erreur de suppression : {e}")
+
         else:
             st.info("Aucune donnée enregistrée pour le moment.")
     except Exception as e:
