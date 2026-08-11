@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+from datetime import datetime, date
 
 def show(supabase):
     st.title("🏗️ Suivi et Contrôle Qualité Béton")
@@ -14,20 +15,24 @@ def show(supabase):
     with col1:
         technicien = st.text_input("Nom du Technicien LPEE", value="Agent LPEE")
         bl_num = st.text_input("N° BL", value="BL-2026-001")
-        
-        # 🔹 MODIFICATION 1 : Saisie libre pour l'Ouvrage
         ouvrage = st.text_input("Ouvrage", value="Voile / Semelle")
-        
         quantite_m3 = st.number_input("Quantité (m³)", min_value=0.0, value=8.0, step=0.5)
         
     with col2:
-        # Client désactivé (TGCC par défaut)
         client = st.text_input("Client", value="TGCC", disabled=True)
         
-        heure_fin = st.time_input("Heure de fin de production")
-        heure_arrivee = st.time_input("Heure d'arrivée au chantier")
+        # Saisie des heures
+        heure_fin = st.time_input("Heure de fin de production", value=datetime.strptime("08:00", "%H:%M").time())
+        heure_arrivee = st.time_input("Heure d'arrivée au chantier", value=datetime.strptime("08:35", "%H:%M").time())
         
-        # 🔹 MODIFICATION 2 : Classes C40/50 et C45/55 ajoutées
+        # 🔹 CALCUL DYNAMIQUE : Différence en minutes
+        dt_fin = datetime.combine(date.today(), heure_fin)
+        dt_arr = datetime.combine(date.today(), heure_arrivee)
+        duree_minutes = int((dt_arr - dt_fin).total_seconds() / 60)
+        
+        # Affichage du résultat calculé (lecture seule)
+        st.text_input("Durée de transport / attente (min)", value=f"{duree_minutes} min", disabled=True)
+        
         classe_beton = st.selectbox(
             "Classe", 
             ["C25/30", "C30/37", "C35/45", "C40/50", "C45/55"]
@@ -36,11 +41,15 @@ def show(supabase):
     with col3:
         centrale = st.text_input("Centrale à Béton", value="TG PREFA")
         meteo = st.selectbox("Météo", ["Ensoleillé ☀️", "Nuageux ☁️", "Pluie 🌧️"])
-        temp_beton = st.number_input("Température du Béton (°C)", value=20.0)
-        temp_ambiante = st.number_input("Température Ambiante (°C)", value=25.0)
-        affaissement = st.number_input("Affaissement (mm)", value=150.0)
         
-        # Prélèvement et gestion dynamique du nombre d'éprouvettes
+        # 🔹 MODIFICATION : Températures à 1 chiffre après la virgule (step=0.1, format="%.1f")
+        temp_beton = st.number_input("Température du Béton (°C)", value=20.0, step=0.1, format="%.1f")
+        temp_ambiante = st.number_input("Température Ambiante (°C)", value=25.0, step=0.1, format="%.1f")
+        
+        # 🔹 MODIFICATION : Affaissement en nombre entier avec un pas de 10
+        affaissement = st.number_input("Affaissement (mm)", min_value=0, value=150, step=10)
+        
+        # Prélèvement et gestion dynamique des éprouvettes
         prelevement = st.selectbox(
             "Prélèvement", 
             ["OUI - Conforme (NF EN 12350-2)", "NON"]
@@ -67,6 +76,8 @@ def show(supabase):
             "classe_beton": classe_beton,
             "centrale_beton": centrale,
             "meteo": meteo,
+            "heure_fin_coulage": heure_fin.strftime("%H:%M"),
+            "heure_arrivee": heure_arrivee.strftime("%H:%M"),
             "temperature": temp_beton,
             "temperature_ambiante": temp_ambiante,
             "affaissement": affaissement,
