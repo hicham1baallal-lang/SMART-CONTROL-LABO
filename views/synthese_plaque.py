@@ -26,7 +26,6 @@ def generate_excel_a4(df_filtered, filter_title="Synthèse Générale"):
     ws.oddHeader.left.text = "&\"Calibri,Bold\"&10LABORATOIRE LPEE - CTR-CSB\nProjet: LGV CASA SUD | Client: TGCC"
     ws.oddHeader.center.text = f"&\"Calibri,Bold\"&12SYNTHÈSE DES ESSAIS À LA PLAQUE\n{filter_title}"
     ws.oddHeader.right.text = "&\"Calibri,Regular\"&9Edité le: &D"
-
     ws.oddFooter.center.text = "&\"Calibri,Bold\"&10Page &P sur &N"
 
     # --- PALETTE DE COULEURS ET STYLES ---
@@ -104,7 +103,8 @@ def generate_excel_a4(df_filtered, filter_title="Synthèse Générale"):
     # --- 3. REMPLISSAGE DES DONNÉES ---
     start_row = 7
     for r_idx, (_, row) in enumerate(df_filtered.iterrows(), start=start_row):
-        ws.row_dimensions[r_idx].height = 34  
+        ws.row_dimensions[r_idx].height = 34 
+
         is_even = (r_idx % 2 == 0)
         current_fill = fill_zebra if is_even else PatternFill(fill_type=None)
 
@@ -122,7 +122,7 @@ def generate_excel_a4(df_filtered, filter_title="Synthèse Générale"):
 
         for c_idx, val in enumerate(values, start=1):
             cell = ws.cell(row=r_idx, column=c_idx, value=val)
-            cell.font = Font(name="Calibri", size=12)  
+            cell.font = Font(name="Calibri", size=12) 
             cell.border = thin_border
             cell.fill = current_fill
 
@@ -384,11 +384,55 @@ def show(supabase):
 
         st.dataframe(df_display_clean, use_container_width=True, hide_index=True)
 
+        # ==========================================================
+        # --- ZONE ADMINISTRATION (Admin Only) ---
+        # ==========================================================
+        if st.session_state.get("role") == "admin":
+            st.markdown("---")
+            st.subheader("🛠️ Espace Administration (Gestion des données)")
+            
+            record_options = {f"ID {r['id']} - {r.get('date_essai', 'N/A')} - {r.get('pk_profil', '')}": r for r in data}
+            selected_key = st.selectbox("Sélectionner l'essai à gérer", list(record_options.keys()))
+            selected_item = record_options[selected_key]
+            
+            col_ed, col_del = st.columns(2)
+            
+            with col_ed:
+                with st.expander("📝 Modifier cet essai"):
+                    with st.form("edit_form"):
+                        new_pk = st.text_input("PK / Profil", value=selected_item.get("pk_profil", ""))
+                        new_ev1 = st.number_input("EV1 (MPa)", value=float(selected_item.get("ev1", 0)))
+                        new_ev2 = st.number_input("EV2 (MPa)", value=float(selected_item.get("ev2", 0)))
+                        
+                        if st.form_submit_button("Enregistrer les modifications"):
+                            try:
+                                new_k = new_ev2 / new_ev1 if new_ev1 > 0 else 0
+                                supabase.table("essai_plaque").update({
+                                    "pk_profil": new_pk,
+                                    "ev1": new_ev1,
+                                    "ev2": new_ev2,
+                                    "k": new_k
+                                }).eq("id", selected_item["id"]).execute()
+                                st.success("Données mises à jour avec succès !")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Erreur lors de la mise à jour : {e}")
+                                
+            with col_del:
+                st.markdown("##### ⚠️ Suppression")
+                if st.button("🗑️ Supprimer définitivement", type="primary"):
+                    try:
+                        supabase.table("essai_plaque").delete().eq("id", selected_item["id"]).execute()
+                        st.success("Enregistrement supprimé avec succès.")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Erreur lors de la suppression : {e}")
+
         # --- TÉLÉCHARGEMENT EXCEL ---
         st.markdown("---")
         st.markdown("### 📥 Exportation Excel avec Mise en Page A4 Imprimable")
         
-        excel_data = generate_excel_a4(df_display, filter_title=filter_label)
+        excel_data = generate_excel_a4(filtered_df, filter_title=filter_label)
         file_name_clean = f"Synthese_Essais_Plaque_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
 
         st.download_button(
