@@ -1,15 +1,29 @@
 import streamlit as st
-from supabase import create_client
-# 🔹 1. Ajout de synthese_Beton dans l'importation
-from views import suivi_Betonnage, essai_Plaque, synthese_Beton
+from supabase import create_client, Client
 
-# Configuration de la page
+# 1. Configuration de la page Streamlit
 st.set_page_config(
     page_title="LPEE - CTR-CSB",
     page_icon="🏗️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# 2. Importation sécurisée des 4 vues
+try:
+    from views import suivi_betonnage, essai_plaque, synthese_beton, synthese_plaque
+except ImportError as e:
+    st.error(f"❌ Erreur lors de l'importation des vues : {e}")
+    st.stop()
+
+# 3. Connexion Supabase avec st.secrets
+try:
+    SUPABASE_URL = st.secrets["SUPABASE_URL"]
+    SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
+    supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+except Exception as e:
+    supabase = None
+    st.error(f"❌ Erreur de connexion Supabase : {e}")
 
 # Style CSS personnalisé
 st.markdown("""
@@ -20,21 +34,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Connexion Supabase
-SUPABASE_URL = "https://pfyfmfujccibiwfiwknu.supabase.co"
-SUPABASE_KEY = "sb_publishable_6h8ZUeV8ii5TjKUV9B1Ewg_eDawQRkW"
-
-@st.cache_resource
-def init_supabase():
-    return create_client(SUPABASE_URL, SUPABASE_KEY)
-
-try:
-    supabase = init_supabase()
-except Exception as e:
-    supabase = None
-    st.error(f"Erreur de connexion Supabase : {e}")
-
-# Barre latérale (Sidebar)
+# 4. Barre latérale (Sidebar)
 with st.sidebar:
     st.title("LPEE - CTR-CSB")
     st.caption("Projet : LGV CASA SETTAT | Client : TGCC")
@@ -43,22 +43,27 @@ with st.sidebar:
     
     page = st.radio(
         "",
-        ["Accueil", "Essai à la Plaque", "Suivi de Bétonnage", "Synthèse Béton"],
-        index=2
+        ["Accueil", "Essai à la Plaque", "Synthèse Plaque", "Suivi de Bétonnage", "Synthèse Béton"],
+        index=2  # Slectionne directement "Synthèse Plaque" par défaut
     )
     
     st.markdown("---")
     if st.button("🚪 Déconnexion"):
         st.info("Déconnecté")
 
-# Routage des vues
+# 5. Routage des vues
 if page == "Accueil":
     st.title("🏠 Accueil")
     st.write("Bienvenue sur la plateforme de suivi de chantier LPEE.")
-elif page == "Suivi de Bétonnage":
-    suivi_Betonnage.show(supabase)
+
 elif page == "Essai à la Plaque":
-    essai_Plaque.show(supabase)
+    essai_plaque.show(supabase)
+
+elif page == "Synthèse Plaque":
+    synthese_plaque.show(supabase)
+
+elif page == "Suivi de Bétonnage":
+    suivi_betonnage.show(supabase)
+
 elif page == "Synthèse Béton":
-    # 🔹 2. Appel de la page de synthèse
-    synthese_Beton.show(supabase)
+    synthese_beton.show(supabase)
