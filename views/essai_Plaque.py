@@ -39,11 +39,10 @@ def show(supabase):
     couche_idx = couche_options.index(st.session_state['ep_couche']) if st.session_state['ep_couche'] in couche_options else 0
 
     # ---------------------------------------------------------
-    # 1. FORMULAIRE DE SAISIE (clear_on_submit=False pour garder les saisies)
+    # 1. FORMULAIRE DE SAISIE
     # ---------------------------------------------------------
     with st.form("form_essai_plaque", clear_on_submit=False):
         
-        # --- CHAMPS DÉSACTIVÉS (CLIENT & PROJET) ---
         col_info1, col_info2 = st.columns(2)
         with col_info1:
             st.text_input("Client", value="TGCC", disabled=True)
@@ -52,7 +51,6 @@ def show(supabase):
 
         st.markdown("---")
 
-        # --- INFORMATIONS GÉNÉRALES ---
         col1, col2 = st.columns(2)
         with col1:
             date_selected = st.date_input("Date de l'essai", value=st.session_state['ep_date'])
@@ -65,7 +63,6 @@ def show(supabase):
                 index=couche_idx
             )
 
-        # --- EMPLACEMENT ET PK / PROFIL ---
         col_loc1, col_loc2 = st.columns(2)
         with col_loc1:
             emplacement = st.text_input("Emplacement", value=st.session_state['ep_emplacement'], placeholder="Ex: Zone Nord / Voie 1")
@@ -74,14 +71,12 @@ def show(supabase):
 
         st.markdown("### 📊 Données de Chargement (Enfoncements)")
         
-        # --- SAISIE Z1 ET Z2 ---
         col_z1, col_z2 = st.columns(2)
         with col_z1:
             z1 = st.number_input("Z1 - 1er chargement (mm)", min_value=0.0, value=st.session_state['ep_z1'], step=0.01, format="%.2f")
         with col_z2:
             z2 = st.number_input("Z2 - 2ème chargement (mm)", min_value=0.0, value=st.session_state['ep_z2'], step=0.01, format="%.2f")
 
-        # --- CALCULS AUTOMATIQUES ---
         ev1 = round(112.5 / (z1 * 2), 2) if z1 > 0 else 0.0
         ev2 = round(90.0 / (z2 * 2), 2) if z2 > 0 else 0.0
         k_val = round(ev2 / ev1, 2) if ev1 > 0 else 0.0
@@ -106,7 +101,6 @@ def show(supabase):
             st.warning("⚠️ Veuillez saisir des valeurs supérieures à 0 pour Z1 et Z2 afin d'effectuer les calculs.")
         else:
             try:
-                # Mémorisation des valeurs pour les conserver dans les cases lors du prochain affichage
                 st.session_state['ep_date'] = date_selected
                 st.session_state['ep_technicien'] = technicien
                 st.session_state['ep_couche'] = couche
@@ -133,46 +127,32 @@ def show(supabase):
 
                 supabase.table("essai_plaque").insert(data_payload).execute()
                 st.success("✅ Essai à la plaque enregistré avec succès !")
-                
-                # Rechargement automatique pour actualiser le tableau d'historique tout en conservant vos saisies
                 st.rerun()
 
             except Exception as e:
                 st.error(f"Erreur d'enregistrement : {e}")
 
     # ---------------------------------------------------------
-    # 3. AFFICHAGE DES ESSAIS ENREGISTRÉS (HISTORIQUE)
+    # 3. AFFICHAGE DES ESSAIS ENREGISTRÉS & BLOC ADMIN
     # ---------------------------------------------------------
     st.markdown("---")
     st.markdown("### 📋 Historique des Essais à la Plaque Enregistrés")
 
     try:
-        # Récupération des données depuis Supabase (les plus récents en premier)
         res = supabase.table("essai_plaque").select("*").order("date_essai", desc=True).execute()
         data = res.data if res else []
 
         if data:
             df = pd.DataFrame(data)
 
-            # Ordre précis des colonnes
             cols_order = [
-                "date_essai",
-                "couche",
-                "emplacement",
-                "pk_profil",
-                "z1",
-                "z2",
-                "ev1",
-                "ev2",
-                "k",
-                "technicien"
+                "date_essai", "couche", "emplacement", "pk_profil", 
+                "z1", "z2", "ev1", "ev2", "k", "technicien"
             ]
 
-            # Ne garder que les colonnes existantes dans cet ordre
             cols_present = [c for c in cols_order if c in df.columns]
             df_display = df[cols_present]
 
-            # Noms personnalisés pour les en-têtes du tableau
             renames = {
                 "date_essai": "Date d'essai",
                 "couche": "Couche",
@@ -187,13 +167,54 @@ def show(supabase):
             }
             df_display = df_display.rename(columns=renames)
 
-            # Affichage du tableau formaté
             st.dataframe(
                 df_display, 
                 use_container_width=True,
                 hide_index=True
             )
             st.caption(f"Total des essais enregistrés : {len(df_display)}")
+
+            # --- BLOC D'ADMINISTRATION (MODIFIER / SUPPRIMER) ---
+            if st.session_state.get("role") == "admin":
+                st.markdown("---")
+                st.subheader("🛠️ Espace Administration")
+                
+                record_options = {f"ID {r['id']} - {r.get('date_essai', 'N/A')} - {r.get('pk_profil', '')}": r for r in data}
+                selected_key = st.selectbox("Sélectionner l'essai à gérer", list(record_options.keys()))
+                selected_item = record_options[selected_key]
+                
+                col_ed, col_del = st.columns(2)
+                
+                with col_ed:
+                    with st.expander("📝 Modifier cet essai"):
+                        with st.form("edit_form_saisie"):
+                            new_pk = st.text_input("PK / Profil", value=selected_item.get("pk_profil", ""))
+                            new_ev1 = st.number_input("EV1 (MPa)", value=float(selected_item.get("ev1", 0)))
+                            new_ev2 = st.number_input("EV2 (MPa)", value=float(selected_item.get("ev2", 0)))
+                            
+                            if st.form_submit_button("Enregistrer les modifications"):
+                                try:
+                                    new_k = new_ev2 / new_ev1 if new_ev1 > 0 else 0
+                                    supabase.table("essai_plaque").update({
+                                        "pk_profil": new_pk,
+                                        "ev1": new_ev1,
+                                        "ev2": new_ev2,
+                                        "k": new_k
+                                    }).eq("id", selected_item["id"]).execute()
+                                    st.success("Données mises à jour !")
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"Erreur : {e}")
+                                    
+                with col_del:
+                    st.markdown("##### ⚠️ Suppression")
+                    if st.button("🗑️ Supprimer définitivement", type="primary"):
+                        try:
+                            supabase.table("essai_plaque").delete().eq("id", selected_item["id"]).execute()
+                            st.success("Supprimé avec succès.")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Erreur : {e}")
 
         else:
             st.info("Aucun essai à la plaque n'a encore été enregistré.")
