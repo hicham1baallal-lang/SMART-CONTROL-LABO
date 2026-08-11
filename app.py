@@ -1,6 +1,7 @@
 import streamlit as st
 from supabase import create_client
-from views import suivi_Betonnage, essai_Plaque
+# 🔹 1. Ajout de synthese_Beton dans l'importation
+from views import suivi_Betonnage, essai_Plaque, synthese_Beton
 
 # Configuration de la page
 st.set_page_config(
@@ -21,8 +22,7 @@ st.markdown("""
 
 # Connexion Supabase
 SUPABASE_URL = "https://pfyfmfujccibiwfiwknu.supabase.co"
-# ⚠️ Remplacez la chaîne ci-dessous par votre clé COMPLÈTE copiée depuis Supabase
-SUPABASE_KEY = "sb_publishable_6h8ZUeV8ii5TjKUV9B1Ewg_eDawQRkW" 
+SUPABASE_KEY = "sb_publishable_6h8ZUeV8ii5TjKUV9B1Ewg_eDawQRkW"
 
 @st.cache_resource
 def init_supabase():
@@ -60,5 +60,5 @@ elif page == "Suivi de Bétonnage":
 elif page == "Essai à la Plaque":
     essai_Plaque.show(supabase)
 elif page == "Synthèse Béton":
-    st.title("📊 Synthèse Béton")
-    st.write("Espace réservé pour les synthèses et statistiques.")
+    # 🔹 2. Appel de la page de synthèse
+    synthese_Beton.show(supabase)
