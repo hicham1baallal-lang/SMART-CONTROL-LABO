@@ -10,7 +10,7 @@ def show(supabase):
     # ---------------------------------------------------------
     st.subheader("Saisie d'un contrôle")
     
-    # 🔹 Champ Date de livraison
+    # Champ Date de livraison
     date_livraison = st.date_input("Date de livraison", value=date.today())
     
     col1, col2, col3 = st.columns(3)
@@ -117,18 +117,29 @@ def show(supabase):
                 
                 df["Durée de transport"] = df.apply(calculer_duree, axis=1)
 
-            # 2. Suppression des colonnes techniques / non désirées
-            cols_to_drop = [col for col in ["id", "created_at", "created", "heure_fin_coulage", "heure_fin"] if col in df.columns]
+            # 2. Masquer les colonnes non désirées (y compris Client et Centrale)
+            cols_to_drop = [
+                col for col in ["id", "created_at", "created", "heure_fin_coulage", "heure_fin", "client", "centrale_beton"] 
+                if col in df.columns
+            ]
             if cols_to_drop:
                 df = df.drop(columns=cols_to_drop)
 
-            # 3. Placement de 'heure_arrivee' juste après 'date_livraison'
+            # 3. Réorganisation des colonnes
             cols = list(df.columns)
+            
+            # Placement de 'heure_arrivee' juste après 'date_livraison'
             if "date_livraison" in cols and "heure_arrivee" in cols:
                 cols.remove("heure_arrivee")
                 pos = cols.index("date_livraison") + 1
                 cols.insert(pos, "heure_arrivee")
-                df = df[cols]
+            
+            # 🔹 MODIFICATION : Déplacement de 'meteo' tout à la fin
+            if "meteo" in cols:
+                cols.remove("meteo")
+                cols.append("meteo")
+
+            df = df[cols]
 
             # 4. Renommage propre des colonnes pour l'affichage
             df = df.rename(columns={
@@ -138,7 +149,6 @@ def show(supabase):
                 "ouvrage": "Ouvrage",
                 "quantite_m3": "Quantité (m³)",
                 "classe_beton": "Classe",
-                "meteo": "Météo",
                 "temperature": "Temp. Béton",
                 "temperature_ambiante": "Temp. Ambiante",
                 "affaissement": "Affaissement",
@@ -146,8 +156,7 @@ def show(supabase):
                 "nb_eprouvettes": "Nb Éprouvettes",
                 "observations": "Observations",
                 "technicien": "Technicien",
-                "client": "Client",
-                "centrale_beton": "Centrale"
+                "meteo": "Météo"
             })
                 
             # Numérotation à partir de 1
