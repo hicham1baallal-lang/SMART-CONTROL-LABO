@@ -17,6 +17,15 @@ def show(supabase):
 
     st.markdown("---")
 
+    # Fonction de sécurité pour éviter les erreurs NoneType
+    def safe_float(val, default=0.0):
+        if val is None:
+            return default
+        try:
+            return float(val)
+        except:
+            return default
+
     # ---------------------------------------------------------
     # GESTION DES VALEURS EN MÉMOIRE (SESSION STATE)
     # ---------------------------------------------------------
@@ -195,17 +204,17 @@ def show(supabase):
                                 def_date_essai = date.today()
 
                             new_date_essai = st.date_input("Date de l'essai", value=def_date_essai, key="edit_ep_date")
-                            new_technicien = st.text_input("Technicien", value=selected_item.get("technicien", ""), key="edit_ep_tech")
+                            new_technicien = st.text_input("Technicien", value=selected_item.get("technicien") or "", key="edit_ep_tech")
                             
-                            current_couche = selected_item.get("couche", "Remblai")
+                            current_couche = selected_item.get("couche") or "Remblai"
                             idx_c = couche_options.index(current_couche) if current_couche in couche_options else 0
                             new_couche = st.selectbox("Type de couche", couche_options, index=idx_c, key="edit_ep_couche")
                             
-                            new_emplacement = st.text_input("Emplacement", value=selected_item.get("emplacement", ""), key="edit_ep_emp")
-                            new_pk = st.text_input("PK / Profil", value=selected_item.get("pk_profil", ""), key="edit_ep_pk")
+                            new_emplacement = st.text_input("Emplacement", value=selected_item.get("emplacement") or "", key="edit_ep_emp")
+                            new_pk = st.text_input("PK / Profil", value=selected_item.get("pk_profil") or "", key="edit_ep_pk")
                             
-                            new_z1 = st.number_input("Z1 - 1er chargement (mm)", value=float(selected_item.get("z1", 0.0)), step=0.01, format="%.2f", key="edit_ep_z1")
-                            new_z2 = st.number_input("Z2 - 2ème chargement (mm)", value=float(selected_item.get("z2", 0.0)), step=0.01, format="%.2f", key="edit_ep_z2")
+                            new_z1 = st.number_input("Z1 - 1er chargement (mm)", value=safe_float(selected_item.get("z1"), 0.0), step=0.01, format="%.2f", key="edit_ep_z1")
+                            new_z2 = st.number_input("Z2 - 2ème chargement (mm)", value=safe_float(selected_item.get("z2"), 0.0), step=0.01, format="%.2f", key="edit_ep_z2")
                             
                             if st.form_submit_button("💾 Enregistrer toutes les modifications"):
                                 try:
