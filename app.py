@@ -2,7 +2,7 @@ import streamlit as st
 from supabase import create_client
 
 # 🔹 Importation des vues (Vérifiez bien la casse exacte de vos fichiers dans views/)
-from views import suivi_Betonnage, essai_Plaque, synthese_Beton, synthese_Plaque
+from views import suivi_betonnage, essai_plaque, synthese_beton, synthese_plaque
 
 # Configuration de la page
 st.set_page_config(
