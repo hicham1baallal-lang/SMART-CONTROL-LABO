@@ -10,6 +10,9 @@ def show(supabase):
     # ---------------------------------------------------------
     st.subheader("Saisie d'un contrôle")
     
+    # 🔹 Champ Date de livraison
+    date_livraison = st.date_input("Date de livraison", value=date.today())
+    
     col1, col2, col3 = st.columns(3)
     
     with col1:
@@ -64,6 +67,7 @@ def show(supabase):
     # Bouton Enregistrer
     if st.button("💾 Enregistrer"):
         data = {
+            "date_livraison": str(date_livraison),
             "bl_num": bl_num,
             "ouvrage": ouvrage,
             "quantite_m3": quantite_m3,
@@ -100,7 +104,7 @@ def show(supabase):
         if res.data:
             df = pd.DataFrame(res.data)
             
-            # 🔹 MODIFICATION 1 : Calcul de la colonne "Durée de transport" à partir des heures
+            # 1. Calcul de la colonne "Durée de transport"
             if "heure_fin_coulage" in df.columns and "heure_arrivee" in df.columns:
                 def calculer_duree(row):
                     try:
@@ -113,13 +117,38 @@ def show(supabase):
                 
                 df["Durée de transport"] = df.apply(calculer_duree, axis=1)
 
-            # 🔹 MODIFICATION 2 : Masquer les colonnes indésirables (id, dates et heures brutes)
-            cols_to_drop = [
-                col for col in ["id", "created_at", "created", "heure_arrivee", "heure_fin_coulage", "heure_fin"] 
-                if col in df.columns
-            ]
+            # 2. Suppression des colonnes techniques / non désirées
+            cols_to_drop = [col for col in ["id", "created_at", "created", "heure_fin_coulage", "heure_fin"] if col in df.columns]
             if cols_to_drop:
                 df = df.drop(columns=cols_to_drop)
+
+            # 3. Placement de 'heure_arrivee' juste après 'date_livraison'
+            cols = list(df.columns)
+            if "date_livraison" in cols and "heure_arrivee" in cols:
+                cols.remove("heure_arrivee")
+                pos = cols.index("date_livraison") + 1
+                cols.insert(pos, "heure_arrivee")
+                df = df[cols]
+
+            # 4. Renommage propre des colonnes pour l'affichage
+            df = df.rename(columns={
+                "date_livraison": "Date Livraison",
+                "heure_arrivee": "Heure d'arrivée",
+                "bl_num": "N° BL",
+                "ouvrage": "Ouvrage",
+                "quantite_m3": "Quantité (m³)",
+                "classe_beton": "Classe",
+                "meteo": "Météo",
+                "temperature": "Temp. Béton",
+                "temperature_ambiante": "Temp. Ambiante",
+                "affaissement": "Affaissement",
+                "prelevement": "Prélèvement",
+                "nb_eprouvettes": "Nb Éprouvettes",
+                "observations": "Observations",
+                "technicien": "Technicien",
+                "client": "Client",
+                "centrale_beton": "Centrale"
+            })
                 
             # Numérotation à partir de 1
             df.index = range(1, len(df) + 1)
