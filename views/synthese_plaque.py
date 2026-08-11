@@ -1,8 +1,8 @@
 import streamlit as st
 from supabase import create_client
 
-# 🔹 1. Importations avec minuscules
-from views import suivi_betonnage, essai_plaque, synthese_beton, synthese_plaque
+# 🔹 Importation des vues (Vérifiez bien la casse exacte de vos fichiers dans views/)
+from views import suivi_Betonnage, essai_Plaque, synthese_Beton, synthese_Plaque
 
 # Configuration de la page
 st.set_page_config(
@@ -58,13 +58,13 @@ if page == "Accueil":
     st.write("Bienvenue sur la plateforme de suivi de chantier LPEE.")
 
 elif page == "Essai à la Plaque":
-    essai_plaque.show(supabase)
+    essai_Plaque.show(supabase)
 
 elif page == "Synthèse Plaque":
-    synthese_plaque.show(supabase)  # 👈 'p' minuscule pour correspondre à l'import
+    synthese_Plaque.show(supabase)
 
 elif page == "Suivi de Bétonnage":
-    suivi_betonnage.show(supabase)
+    suivi_Betonnage.show(supabase)
 
 elif page == "Synthèse Béton":
-    synthese_beton.show(supabase)
+    synthese_Beton.show(supabase)
