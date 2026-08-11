@@ -9,31 +9,35 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# 2. Gestion de l'état d'authentification
-if "authenticated" not in st.session_state:
-    st.session_state.authenticated = False
+# 2. Gestion de l'état d'authentification et des Rôles
+if "role" not in st.session_state:
+    st.session_state.role = None  # Peut être None, "user", ou "admin"
 
 # --- ÉCRAN DE CONNEXION ---
-if not st.session_state.authenticated:
+if st.session_state.role is None:
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         st.markdown("<br><br>", unsafe_allow_html=True)
-        st.title("🔐 Accès Restreint - LPEE")
-        st.caption("Veuillez saisir le mot de passe pour accéder à la plateforme de suivi.")
+        st.title("🔐 Connexion LPEE")
         
-        # Champ mot de passe
-        password = st.text_input("Mot de passe", type="password", key="pwd_input")
+        password = st.text_input("Mot de passe", type="password")
         
-        if st.button("Se connecter", use_container_width=True):
-            # Mot de passe défini : ctr2026
-            if password == "ctr2026": 
-                st.session_state.authenticated = True
+        if st.button("Se connecter"):
+            if password == "ctr2026": # Mot de passe Utilisateur
+                st.session_state.role = "user"
+                st.rerun()
+            elif password == "admin2026": # <-- CHANGEZ CE MOT DE PASSE ADMIN
+                st.session_state.role = "admin"
                 st.rerun()
             else:
                 st.error("❌ Mot de passe incorrect.")
-    
-    # Stoppe l'exécution tant qu'on n'est pas connecté
     st.stop()
+
+# --- DÉCONNEXION (dans la sidebar) ---
+with st.sidebar:
+    if st.button("🚪 Déconnexion", use_container_width=True):
+        st.session_state.role = None
+        st.rerun()
 
 # ==========================================
 # 3. CODE PRINCIPAL (Affiché uniquement si connecté)
