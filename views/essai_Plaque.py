@@ -96,7 +96,7 @@ def show(supabase):
                 supabase.table("essai_plaque").insert(data_payload).execute()
                 st.success("✅ Essai à la plaque enregistré avec succès !")
                 
-                # 🔄 Force le rechargement de la page pour afficher l'essai instantanément dans le tableau ci-dessous
+                # Rechargement automatique pour rafraîchir l'historique
                 st.rerun()
 
             except Exception as e:
@@ -116,28 +116,38 @@ def show(supabase):
         if data:
             df = pd.DataFrame(data)
 
-            # Masquer les colonnes techniques
-            cols_to_drop = [c for c in ["id", "created_at"] if c in df.columns]
-            df_display = df.drop(columns=cols_to_drop)
+            # Ordre précis des colonnes avec 'technicien' en DERNIÈRE position
+            cols_order = [
+                "date_essai",
+                "couche",
+                "emplacement",
+                "z1",
+                "z2",
+                "ev1",
+                "ev2",
+                "k",
+                "technicien"
+            ]
 
-            # Noms lisibles pour l'en-tête du tableau
+            # Ne garder que les colonnes existantes dans cet ordre
+            cols_present = [c for c in cols_order if c in df.columns]
+            df_display = df[cols_present]
+
+            # Noms personnalisés pour les en-têtes du tableau
             renames = {
-                "date_essai": "Date Essai",
-                "client": "Client",
-                "projet": "Projet",
-                "norme": "Norme",
-                "technicien": "Technicien",
+                "date_essai": "Date d'essai",
                 "couche": "Couche",
                 "emplacement": "PK / Profil",
                 "z1": "Z1 (mm)",
                 "z2": "Z2 (mm)",
                 "ev1": "EV1 (MPa)",
                 "ev2": "EV2 (MPa)",
-                "k": "Coefficient K"
+                "k": "Coefficient K",
+                "technicien": "Technicien"
             }
             df_display = df_display.rename(columns=renames)
 
-            # Affichage du tableau
+            # Affichage du tableau formaté
             st.dataframe(
                 df_display, 
                 use_container_width=True,
