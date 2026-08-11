@@ -62,24 +62,30 @@ def generate_excel_a4(df_filtered, filter_title="Synthèse Générale"):
 
     # --- 1. EN-TÊTE DU DOCUMENT ---
     ws.merge_cells("A1:G1")
-    ws["A1"] = "LABORATOIRE LPEE — CENTRE TECHNIQUE RÉGIONAL  |  Norme : NF P 94-117-1 (Plaque Ø 600 mm)"
+    ws["A1"] = "LABORATOIRE LPEE — CENTRE TECHNIQUE RÉGIONAL"
     ws["A1"].font = font_title
     ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
 
     ws.merge_cells("A2:G2")
-    ws["A2"] = "Projet : LGV CASA SUD  |  Client : TGCC"
-    ws["A2"].font = Font(name="Calibri", size=14, bold=True, color=BLUE_SUBHEADER)
+    ws["A2"] = "Norme : NF P 94-117-1 (Plaque Ø 600 mm)"
+    ws["A2"].font = Font(name="Calibri", size=15, bold=True, color=NAVY_HEADER)
     ws["A2"].alignment = Alignment(horizontal="center", vertical="center")
 
     ws.merge_cells("A3:G3")
-    ws["A3"] = f"SYNTHÈSE DES ESSAIS DE PORTANCE À LA PLAQUE — {filter_title.upper()}"
-    ws["A3"].font = Font(name="Calibri", size=12, italic=True, color="595959")
+    ws["A3"] = "Projet : LGV CASA SUD  |  Client : TGCC"
+    ws["A3"].font = Font(name="Calibri", size=14, bold=True, color=BLUE_SUBHEADER)
     ws["A3"].alignment = Alignment(horizontal="center", vertical="center")
 
+    ws.merge_cells("A4:G4")
+    ws["A4"] = f"SYNTHÈSE DES ESSAIS DE PORTANCE À LA PLAQUE — {filter_title.upper()}"
+    ws["A4"].font = Font(name="Calibri", size=12, italic=True, color="595959")
+    ws["A4"].alignment = Alignment(horizontal="center", vertical="center")
+
     ws.row_dimensions[1].height = 26
-    ws.row_dimensions[2].height = 24
-    ws.row_dimensions[3].height = 20
-    ws.row_dimensions[4].height = 8
+    ws.row_dimensions[2].height = 26
+    ws.row_dimensions[3].height = 24
+    ws.row_dimensions[4].height = 20
+    ws.row_dimensions[5].height = 8
 
     # --- 2. EN-TÊTES DE TABLEAU ---
     headers = [
@@ -87,16 +93,16 @@ def generate_excel_a4(df_filtered, filter_title="Synthèse Générale"):
         "PK / Profil", "EV1 (MPa)", "EV2 (MPa)", "K (EV2/EV1)"
     ]
 
-    ws.row_dimensions[5].height = 30
+    ws.row_dimensions[6].height = 30
     for col_idx, text in enumerate(headers, 1):
-        cell = ws.cell(row=5, column=col_idx, value=text)
+        cell = ws.cell(row=6, column=col_idx, value=text)
         cell.font = font_th
         cell.fill = fill_th
         cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
         cell.border = thin_border
 
     # --- 3. REMPLISSAGE DES DONNÉES ---
-    start_row = 6
+    start_row = 7
     for r_idx, (_, row) in enumerate(df_filtered.iterrows(), start=start_row):
         ws.row_dimensions[r_idx].height = 34  
         is_even = (r_idx % 2 == 0)
