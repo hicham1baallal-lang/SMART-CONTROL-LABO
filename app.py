@@ -74,16 +74,17 @@ if page == "Accueil":
     
     st.markdown("---")
     
-    # Bannière visuelle stylisée (remplace l'image pour éviter les erreurs de liens)
-    st.markdown(
-        """
-        <div style='background: linear-gradient(90deg, #1F4E79 0%, #2E75B6 100%); padding: 30px; border-radius: 10px; color: white; text-align: center;'>
-            <h1 style='margin: 0; font-size: 2.5em;'>🚅 PROJET LGV CASA SUD</h1>
-            <p style='margin: 10px 0 0 0; font-size: 1.2em;'>Ligne à Grande Vitesse - Pôle Contrôle Qualité</p>
-        </div>
-        """, 
-        unsafe_allow_html=True
-    )
+    # Affichage de votre photo locale Al Boraq
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        try:
+            st.image(
+                "al_boraq.jpg", 
+                caption="Al Boraq - Ligne à Grande Vitesse - Projet LGV CASA SUD", 
+                use_container_width=True
+            )
+        except Exception:
+            st.warning("⚠️ L'image 'al_boraq.jpg' est introuvable dans le dossier du projet. Veuillez vérifier son nom et son emplacement.")
         
     st.markdown("---")
     
@@ -93,7 +94,7 @@ if page == "Accueil":
     
     Utilisez le menu de navigation latéral pour accéder aux différents modules de saisie et de suivi :
     * **🏗️ Suivi Béton :** Gestion des livraisons, fiches de contrôle, températures, affaissements et prélèvements.
-    * **🧪 Essai à la Plaque :** Saisie des essais de portance (Norme NF P 94-117-1) avec calculs automatiques des modules $EV1$, $EV2$ et du coefficient $K$.
+    * **🧪 Essai à la Plaque :** Saisie des essais de portance (Norme NF P 94-117-1) avec calculs automatiques des modules EV1, EV2 et du coefficient K.
     """)
 
 elif page == "Essai à la Plaque":
