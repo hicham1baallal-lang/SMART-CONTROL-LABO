@@ -8,7 +8,7 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 def generate_excel_a4(df_filtered, filter_title="Synthèse Générale"):
     """
     Génère un fichier Excel professionnel mis en page pour impression A4 Portrait
-    avec en-tête, pied de page (Responsable d'essai & Chef du laboratoire), couleurs, formules et synthèse qualité.
+    avec en-tête, tableau de données, résumé qualité et blocs de signature intégrés.
     """
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -22,15 +22,12 @@ def generate_excel_a4(df_filtered, filter_title="Synthèse Générale"):
     ws.page_setup.fitToHeight = 0
     ws.sheet_properties.pageSetUpPr.fitToPage = True
 
-    # --- EN-TÊTE ET PIED DE PAGE D'IMPRESSION (NATIVE EXCEL A4) ---
+    # --- EN-TÊTE ET PIED DE PAGE D'IMPRESSION ---
     ws.oddHeader.left.text = "&\"Calibri,Bold\"&9LABORATOIRE LPEE - CTR-CSB\nProjet: LGV CASA SUD | Client: TGCC"
     ws.oddHeader.center.text = f"&\"Calibri,Bold\"&11SYNTHÈSE DES ESSAIS À LA PLAQUE\n{filter_title}"
     ws.oddHeader.right.text = "&\"Calibri,Regular\"&8Edité le: &D"
 
-    # Pied de page avec Responsable d'essai et Chef du laboratoire
-    ws.oddFooter.left.text = "&\"Calibri,Regular\"&8Responsable d'essai: ___________________"
     ws.oddFooter.center.text = "&\"Calibri,Bold\"&9Page &P sur &N"
-    ws.oddFooter.right.text = "&\"Calibri,Regular\"&8Chef du Laboratoire: ___________________"
 
     # --- PALETTE DE COULEURS ET STYLES ---
     NAVY_HEADER = "1F4E79"
@@ -217,7 +214,36 @@ def generate_excel_a4(df_filtered, filter_title="Synthèse Générale"):
                 c.alignment = Alignment(horizontal="right", vertical="center")
                 c.number_format = fmt
 
-    # --- LARGEURS DE COLONNES (Optimisées Portrait) ---
+        # --- 6. BLOCS DE SIGNATURES ---
+        sig_start = synth_start + 7
+        ws.row_dimensions[sig_start].height = 20
+
+        # Responsable d'essai (Colonnes B à D)
+        ws.merge_cells(start_row=sig_start, start_column=2, end_row=sig_start, end_column=4)
+        c_resp = ws.cell(row=sig_start, column=2, value="Responsable d'essai")
+        c_resp.font = Font(name="Calibri", size=9, bold=True, color=NAVY_HEADER)
+        c_resp.alignment = Alignment(horizontal="center", vertical="center")
+        c_resp.border = thin_border
+
+        # Chef du Laboratoire (Colonnes G à I)
+        ws.merge_cells(start_row=sig_start, start_column=7, end_row=sig_start, end_column=9)
+        c_chef = ws.cell(row=sig_start, column=7, value="Chef du Laboratoire")
+        c_chef.font = Font(name="Calibri", size=9, bold=True, color=NAVY_HEADER)
+        c_chef.alignment = Alignment(horizontal="center", vertical="center")
+        c_chef.border = thin_border
+
+        # Zones vides pour signature (hauteur de 3 lignes)
+        for r in range(sig_start + 1, sig_start + 4):
+            ws.row_dimensions[r].height = 20
+            ws.merge_cells(start_row=r, start_column=2, end_row=r, end_column=4)
+            ws.merge_cells(start_row=r, start_column=7, end_row=r, end_column=9)
+            
+            for col in range(2, 5):
+                ws.cell(row=r, column=col).border = thin_border
+            for col in range(7, 10):
+                ws.cell(row=r, column=col).border = thin_border
+
+    # --- LARGEURS DE COLONNES (Portrait) ---
     col_widths = {
         'A': 11, 'B': 12, 'C': 15, 'D': 16, 'E': 12,
         'F': 9, 'G': 9, 'H': 11, 'I': 11, 'J': 11
