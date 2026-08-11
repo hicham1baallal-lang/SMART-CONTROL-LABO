@@ -1,7 +1,8 @@
 import streamlit as st
 from supabase import create_client
-# 🔹 1. Ajout de synthese_Beton dans l'importation
-from views import suivi_Betonnage, essai_Plaque, synthese_Beton
+
+# 🔹 1. Importation des vues (Ajout de synthese_Plaque)
+from views import suivi_Betonnage, essai_Plaque, synthese_Beton, synthese_Plaque
 
 # Configuration de la page
 st.set_page_config(
@@ -41,10 +42,11 @@ with st.sidebar:
     st.markdown("---")
     st.subheader("Menu Principal")
     
+    # 🔹 2. Ajout de "Synthèse Plaque" dans les options du menu
     page = st.radio(
         "",
-        ["Accueil", "Essai à la Plaque", "Suivi de Bétonnage", "Synthèse Béton"],
-        index=2
+        ["Accueil", "Essai à la Plaque", "Synthèse Plaque", "Suivi de Bétonnage", "Synthèse Béton"],
+        index=0
     )
     
     st.markdown("---")
@@ -55,10 +57,12 @@ with st.sidebar:
 if page == "Accueil":
     st.title("🏠 Accueil")
     st.write("Bienvenue sur la plateforme de suivi de chantier LPEE.")
-elif page == "Suivi de Bétonnage":
-    suivi_Betonnage.show(supabase)
 elif page == "Essai à la Plaque":
     essai_Plaque.show(supabase)
+elif page == "Synthèse Plaque":
+    # 🔹 3. Appel de la page de synthèse plaque
+    synthese_Plaque.show(supabase)
+elif page == "Suivi de Bétonnage":
+    suivi_Betonnage.show(supabase)
 elif page == "Synthèse Béton":
-    # 🔹 2. Appel de la page de synthèse
     synthese_Beton.show(supabase)
