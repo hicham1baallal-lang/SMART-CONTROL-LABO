@@ -25,8 +25,8 @@ if not st.session_state.authenticated:
         password = st.text_input("Mot de passe", type="password", key="pwd_input")
         
         if st.button("Se connecter", use_container_width=True):
-            # REMPLACEZ LES ... PAR VOTRE MOT DE PASSE RÉEL
-            if password == "...": 
+            # Mot de passe défini : ctr2026
+            if password == "lpee2026": 
                 st.session_state.authenticated = True
                 st.rerun()
             else:
