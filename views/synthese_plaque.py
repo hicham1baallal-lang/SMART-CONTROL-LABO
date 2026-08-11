@@ -62,17 +62,17 @@ def generate_excel_a4(df_filtered, filter_title="Synthèse Générale"):
     )
 
     # --- 1. EN-TÊTE DU DOCUMENT ---
-    ws.merge_cells("A1:J1")
+    ws.merge_cells("A1:G1")
     ws["A1"] = "LABORATOIRE LPEE — CENTRE TECHNIQUE RÉGIONAL"
     ws["A1"].font = font_title
     ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
 
-    ws.merge_cells("A2:J2")
+    ws.merge_cells("A2:G2")
     ws["A2"] = f"SYNTHÈSE DES ESSAIS DE PORTANCE À LA PLAQUE — {filter_title.upper()}"
     ws["A2"].font = Font(name="Calibri", size=12, bold=True, color=BLUE_SUBHEADER)
     ws["A2"].alignment = Alignment(horizontal="center", vertical="center")
 
-    ws.merge_cells("A3:J3")
+    ws.merge_cells("A3:G3")
     ws["A3"] = "Projet : LGV CASA SUD  |  Client : TGCC  |  Norme : NF P 94-117-1 (Plaque Ø 600 mm)"
     ws["A3"].font = font_subtitle
     ws["A3"].alignment = Alignment(horizontal="center", vertical="center")
@@ -84,8 +84,8 @@ def generate_excel_a4(df_filtered, filter_title="Synthèse Générale"):
 
     # --- 2. EN-TÊTES DE TABLEAU ---
     headers = [
-        "Date Essai", "Technicien", "Couche", "Emplacement", 
-        "PK / Profil", "Z1 (mm)", "Z2 (mm)", "EV1 (MPa)", "EV2 (MPa)", "K (EV2/EV1)"
+        "Date Essai", "Couche", "Emplacement", 
+        "PK / Profil", "EV1 (MPa)", "EV2 (MPa)", "K (EV2/EV1)"
     ]
 
     ws.row_dimensions[5].height = 30
@@ -96,10 +96,10 @@ def generate_excel_a4(df_filtered, filter_title="Synthèse Générale"):
         cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
         cell.border = thin_border
 
-    # --- 3. REMPLISSAGE DES DONNÉES (Police 12 & Hauteur 34) ---
+    # --- 3. REMPLISSAGE DES DONNÉES ---
     start_row = 6
     for r_idx, (_, row) in enumerate(df_filtered.iterrows(), start=start_row):
-        ws.row_dimensions[r_idx].height = 34  # ✅ Espacement de ligne demandé à 34
+        ws.row_dimensions[r_idx].height = 34  
         is_even = (r_idx % 2 == 0)
         current_fill = fill_zebra if is_even else PatternFill(fill_type=None)
 
@@ -107,12 +107,9 @@ def generate_excel_a4(df_filtered, filter_title="Synthèse Générale"):
 
         values = [
             str(row.get("date_essai", "") or ""),
-            str(row.get("technicien", "") or ""),
             str(row.get("couche", "") or ""),
             str(row.get("emplacement", "") or ""),
             str(row.get("pk_profil", "") or ""),
-            float(row.get("z1", 0.0) or 0.0),
-            float(row.get("z2", 0.0) or 0.0),
             float(row.get("ev1", 0.0) or 0.0),
             float(row.get("ev2", 0.0) or 0.0),
             k_val
@@ -120,21 +117,18 @@ def generate_excel_a4(df_filtered, filter_title="Synthèse Générale"):
 
         for c_idx, val in enumerate(values, start=1):
             cell = ws.cell(row=r_idx, column=c_idx, value=val)
-            cell.font = Font(name="Calibri", size=12)  # ✅ Police taille 12
+            cell.font = Font(name="Calibri", size=12)  
             cell.border = thin_border
             cell.fill = current_fill
 
-            if c_idx in [1, 2]:
+            if c_idx == 1:
                 cell.alignment = Alignment(horizontal="center", vertical="center")
-            elif c_idx in [3, 4, 5]:
+            elif c_idx in [2, 3, 4]:
                 cell.alignment = Alignment(horizontal="left", vertical="center")
-            elif c_idx in [6, 7]:
-                cell.alignment = Alignment(horizontal="right", vertical="center")
-                cell.number_format = "0.00"
-            elif c_idx in [8, 9]:
+            elif c_idx in [5, 6]:
                 cell.alignment = Alignment(horizontal="right", vertical="center")
                 cell.number_format = "#,##0.00"
-            elif c_idx == 10:
+            elif c_idx == 7:
                 cell.alignment = Alignment(horizontal="right", vertical="center")
                 cell.number_format = "0.00"
                 if k_val >= 1.5:
@@ -151,21 +145,19 @@ def generate_excel_a4(df_filtered, filter_title="Synthèse Générale"):
         stat_row = end_row + 1
         ws.row_dimensions[stat_row].height = 26
 
-        ws.merge_cells(start_row=stat_row, start_column=1, end_row=stat_row, end_column=5)
+        ws.merge_cells(start_row=stat_row, start_column=1, end_row=stat_row, end_column=4)
         lbl_cell = ws.cell(row=stat_row, column=1, value="MOYENNE DES ESSAIS")
         lbl_cell.font = Font(name="Calibri", size=11, bold=True, color=NAVY_HEADER)
         lbl_cell.alignment = Alignment(horizontal="right", vertical="center")
 
-        for col_idx in range(1, 6):
+        for col_idx in range(1, 5):
             ws.cell(row=stat_row, column=col_idx).border = thick_top_bottom
             ws.cell(row=stat_row, column=col_idx).fill = fill_kpi
 
         formulas = [
-            (6, f"=AVERAGE(F{start_row}:F{end_row})", "0.00"),
-            (7, f"=AVERAGE(G{start_row}:G{end_row})", "0.00"),
-            (8, f"=AVERAGE(H{start_row}:H{end_row})", "#,##0.00"),
-            (9, f"=AVERAGE(I{start_row}:I{end_row})", "#,##0.00"),
-            (10, f"=AVERAGE(J{start_row}:J{end_row})", "0.00")
+            (5, f"=AVERAGE(E{start_row}:E{end_row})", "#,##0.00"),
+            (6, f"=AVERAGE(F{start_row}:F{end_row})", "#,##0.00"),
+            (7, f"=AVERAGE(G{start_row}:G{end_row})", "0.00")
         ]
 
         for c_idx, form, num_fmt in formulas:
@@ -191,10 +183,10 @@ def generate_excel_a4(df_filtered, filter_title="Synthèse Générale"):
             c.border = thin_border
 
         metrics = [
-            ("Valeur Minimale", f"=MIN(H{start_row}:H{end_row})", f"=MIN(I{start_row}:I{end_row})", f"=MIN(J{start_row}:J{end_row})"),
-            ("Valeur Maximale", f"=MAX(H{start_row}:H{end_row})", f"=MAX(I{start_row}:I{end_row})", f"=MAX(J{start_row}:J{end_row})"),
-            ("Moyenne Générale", f"=AVERAGE(H{start_row}:H{end_row})", f"=AVERAGE(I{start_row}:I{end_row})", f"=AVERAGE(J{start_row}:J{end_row})"),
-            ("Nombre d'essais", f"=COUNT(H{start_row}:H{end_row})", f"=COUNT(I{start_row}:I{end_row})", f"=COUNT(J{start_row}:J{end_row})")
+            ("Valeur Minimale", f"=MIN(E{start_row}:E{end_row})", f"=MIN(F{start_row}:F{end_row})", f"=MIN(G{start_row}:G{end_row})"),
+            ("Valeur Maximale", f"=MAX(E{start_row}:E{end_row})", f"=MAX(F{start_row}:F{end_row})", f"=MAX(G{start_row}:G{end_row})"),
+            ("Moyenne Générale", f"=AVERAGE(E{start_row}:E{end_row})", f"=AVERAGE(F{start_row}:F{end_row})", f"=AVERAGE(G{start_row}:G{end_row})"),
+            ("Nombre d'essais", f"=COUNT(E{start_row}:E{end_row})", f"=COUNT(F{start_row}:F{end_row})", f"=COUNT(G{start_row}:G{end_row})")
         ]
 
         for idx, (label, ev1_f, ev2_f, k_f) in enumerate(metrics, start=synth_start+2):
@@ -218,35 +210,35 @@ def generate_excel_a4(df_filtered, filter_title="Synthèse Générale"):
         sig_start = synth_start + 7
         ws.row_dimensions[sig_start].height = 24
 
-        # Responsable d'essai (Colonnes B à D)
-        ws.merge_cells(start_row=sig_start, start_column=2, end_row=sig_start, end_column=4)
+        # Responsable d'essai (Colonnes B à C)
+        ws.merge_cells(start_row=sig_start, start_column=2, end_row=sig_start, end_column=3)
         c_resp = ws.cell(row=sig_start, column=2, value="Responsable d'essai")
         c_resp.font = Font(name="Calibri", size=11, bold=True, color=NAVY_HEADER)
         c_resp.alignment = Alignment(horizontal="center", vertical="center")
         c_resp.border = thin_border
 
-        # Chef du Laboratoire (Colonnes G à I)
-        ws.merge_cells(start_row=sig_start, start_column=7, end_row=sig_start, end_column=9)
-        c_chef = ws.cell(row=sig_start, column=7, value="Chef du Laboratoire")
+        # Chef du Laboratoire (Colonnes E à F)
+        ws.merge_cells(start_row=sig_start, start_column=5, end_row=sig_start, end_column=6)
+        c_chef = ws.cell(row=sig_start, column=5, value="Chef du Laboratoire")
         c_chef.font = Font(name="Calibri", size=11, bold=True, color=NAVY_HEADER)
         c_chef.alignment = Alignment(horizontal="center", vertical="center")
         c_chef.border = thin_border
 
-        # Zones vides pour signature (hauteur de 3 lignes)
+        # Zones vides pour signature
         for r in range(sig_start + 1, sig_start + 4):
             ws.row_dimensions[r].height = 24
-            ws.merge_cells(start_row=r, start_column=2, end_row=r, end_column=4)
-            ws.merge_cells(start_row=r, start_column=7, end_row=r, end_column=9)
+            ws.merge_cells(start_row=r, start_column=2, end_row=r, end_column=3)
+            ws.merge_cells(start_row=r, start_column=5, end_row=r, end_column=6)
             
-            for col in range(2, 5):
+            for col in range(2, 4):
                 ws.cell(row=r, column=col).border = thin_border
-            for col in range(7, 10):
+            for col in range(5, 7):
                 ws.cell(row=r, column=col).border = thin_border
 
-    # --- LARGEURS DE COLONNES AJUSTÉES POUR LA TAILLE 12 ---
+    # --- LARGEURS DE COLONNES ---
     col_widths = {
-        'A': 14, 'B': 15, 'C': 18, 'D': 20, 'E': 15,
-        'F': 12, 'G': 12, 'H': 14, 'I': 14, 'J': 14
+        'A': 14, 'B': 18, 'C': 20, 'D': 15,
+        'E': 14, 'F': 14, 'G': 14
     }
     for col_letter, width in col_widths.items():
         ws.column_dimensions[col_letter].width = width
@@ -375,15 +367,14 @@ def show(supabase):
         df_display = filtered_df.copy()
         df_display['date_essai'] = df_display['date_essai_dt'].dt.strftime('%Y-%m-%d')
 
-        cols_show = ["date_essai", "couche", "emplacement", "pk_profil", "z1", "z2", "ev1", "ev2", "k", "technicien"]
+        cols_show = ["date_essai", "couche", "emplacement", "pk_profil", "ev1", "ev2", "k"]
         for c in cols_show:
             if c not in df_display.columns:
                 df_display[c] = None
 
         df_display_clean = df_display[cols_show].rename(columns={
             "date_essai": "Date", "couche": "Couche", "emplacement": "Emplacement",
-            "pk_profil": "PK/Profil", "z1": "Z1 (mm)", "z2": "Z2 (mm)",
-            "ev1": "EV1 (MPa)", "ev2": "EV2 (MPa)", "k": "Coeff K", "technicien": "Technicien"
+            "pk_profil": "PK/Profil", "ev1": "EV1 (MPa)", "ev2": "EV2 (MPa)", "k": "Coeff K"
         })
 
         st.dataframe(df_display_clean, use_container_width=True, hide_index=True)
