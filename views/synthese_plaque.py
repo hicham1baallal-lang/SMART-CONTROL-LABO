@@ -69,13 +69,20 @@ def generate_excel_a4(df_filtered, filter_title="Synthèse Générale"):
     ws["A1"].font = font_title
     ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
 
+# --- 1. EN-TÊTE DU DOCUMENT ---
+    ws.merge_cells("A1:J1")
+    ws["A1"] = "LABORATOIRE LPEE — CENTRE TECHNIQUE RÉGIONAL"
+    ws["A1"].font = font_title
+    ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
+
     ws.merge_cells("A2:J2")
     ws["A2"] = f"SYNTHÈSE DES ESSAIS DE PORTANCE À LA PLAQUE — {filter_title.upper()}"
     ws["A2"].font = Font(name="Calibri", size=11, bold=True, color=BLUE_SUBHEADER)
     ws["A2"].alignment = Alignment(horizontal="center", vertical="center")
 
     ws.merge_cells("A3:J3")
-    ws["A3"] = "Norme : NF P 94-117-1 | Plaque Ø 600 mm | EV1 = 112.5/(2*Z1) | EV2 = 90/(2*Z2) | K = EV2/EV1"
+    # ✅ Modification : Suppression des formules EV1/EV2/K et ajout du Client + Projet
+    ws["A3"] = "Projet : LGV CASA SUD  |  Client : TGCC  |  Norme : NF P 94-117-1 (Plaque Ø 600 mm)"
     ws["A3"].font = font_subtitle
     ws["A3"].alignment = Alignment(horizontal="center", vertical="center")
 
