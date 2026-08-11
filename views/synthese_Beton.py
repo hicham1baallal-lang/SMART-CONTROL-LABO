@@ -9,10 +9,10 @@ from openpyxl.utils import get_column_letter
 
 
 # =========================================================
-# FONCTION GENERATION EXCEL FORMAT A4 PORTRAIT (TRÈS ESPACÉ & CALIBRI 12)
+# FONCTION GENERATION EXCEL FORMAT A4 PORTRAIT (ESPACÉ & PURGÉ)
 # =========================================================
 def generate_excel_synthesis(df_data, titre_periode):
-    """Génère un fichier Excel en A4 Portrait avec de grands espaces entre les lignes et police 12 Calibri."""
+    """Génère un fichier Excel en A4 Portrait sans les colonnes/KPIs Technicien, Observations et Éprouvettes."""
     output = io.BytesIO()
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -54,7 +54,7 @@ def generate_excel_synthesis(df_data, titre_periode):
     total_border = Border(top=Side(style='thin', color='000000'), bottom=Side(style='double', color='000000'))
 
     # Calcul des dimensions
-    nb_cols = max(len(df_data.columns), 8)
+    nb_cols = max(len(df_data.columns), 6)
     last_col_letter = get_column_letter(nb_cols)
     mid_col_idx = nb_cols // 2
     mid_col_letter = get_column_letter(mid_col_idx)
@@ -99,13 +99,12 @@ def generate_excel_synthesis(df_data, titre_periode):
     cell_d.fill = fill_card
     cell_d.alignment = Alignment(horizontal="left", vertical="center")
 
-    # 🔹 Hauteur de ligne augmentée pour le bloc info (32 pt)
     for r in range(4, 6):
         ws.row_dimensions[r].height = 32
         for c in range(1, nb_cols + 1):
             ws.cell(row=r, column=c).border = thin_border
 
-    # --- 5. RÉSUMÉ DES KPIs ---
+    # --- 5. RÉSUMÉ DU VOLUME TOTAL UNIQUEMENT ---
     row_idx = 7
     ws.merge_cells(f"A{row_idx}:{last_col_letter}{row_idx}")
     ws[f"A{row_idx}"] = "📊 RÉSUMÉ GLOBAL"
@@ -114,42 +113,26 @@ def generate_excel_synthesis(df_data, titre_periode):
 
     row_idx += 1
     vol_tot = df_data["Quantité (m³)"].sum() if "Quantité (m³)" in df_data.columns else 0
-    nb_coulages = len(df_data)
-    nb_eprouvettes = df_data["Nb Éprouvettes"].sum() if "Nb Éprouvettes" in df_data.columns else 0
 
-    kpi_items = [
-        ("Volume Total Béton", f"{vol_tot:.1f} m³"),
-        ("Nombre de Coulages / BL", f"{nb_coulages}"),
-        ("Total Éprouvettes", f"{int(nb_eprouvettes)}")
-    ]
+    # Titre KPI (Uniquement Volume Total)
+    ws.merge_cells(f"A{row_idx}:{last_col_letter}{row_idx}")
+    cell_k_lbl = ws[f"A{row_idx}"]
+    cell_k_lbl.value = "Volume Total Béton"
+    cell_k_lbl.font = font_bold
+    cell_k_lbl.fill = fill_kpi
+    cell_k_lbl.alignment = Alignment(horizontal="center", vertical="center")
 
-    cols_per_kpi = nb_cols // 3
-    for i, (lbl, val) in enumerate(kpi_items):
-        c_start_idx = i * cols_per_kpi + 1
-        c_end_idx = (i + 1) * cols_per_kpi if i < 2 else nb_cols
-        
-        c1 = get_column_letter(c_start_idx)
-        c2 = get_column_letter(c_end_idx)
-        
-        # Titre KPI
-        ws.merge_cells(f"{c1}{row_idx}:{c2}{row_idx}")
-        cell_k_lbl = ws[f"{c1}{row_idx}"]
-        cell_k_lbl.value = lbl
-        cell_k_lbl.font = font_bold
-        cell_k_lbl.fill = fill_kpi
-        cell_k_lbl.alignment = Alignment(horizontal="center", vertical="center")
+    # Valeur KPI
+    ws.merge_cells(f"A{row_idx+1}:{last_col_letter}{row_idx+1}")
+    cell_k_val = ws[f"A{row_idx+1}"]
+    cell_k_val.value = f"{vol_tot:.1f} m³"
+    cell_k_val.font = font_kpi_val
+    cell_k_val.fill = fill_kpi
+    cell_k_val.alignment = Alignment(horizontal="center", vertical="center")
 
-        # Valeur KPI
-        ws.merge_cells(f"{c1}{row_idx+1}:{c2}{row_idx+1}")
-        cell_k_val = ws[f"{c1}{row_idx+1}"]
-        cell_k_val.value = val
-        cell_k_val.font = font_kpi_val
-        cell_k_val.fill = fill_kpi
-        cell_k_val.alignment = Alignment(horizontal="center", vertical="center")
-
-        for r in range(row_idx, row_idx + 2):
-            for c in range(c_start_idx, c_end_idx + 1):
-                ws.cell(row=r, column=c).border = thin_border
+    for r in range(row_idx, row_idx + 2):
+        for c in range(1, nb_cols + 1):
+            ws.cell(row=r, column=c).border = thin_border
 
     ws.row_dimensions[row_idx].height = 28
     ws.row_dimensions[row_idx+1].height = 36
@@ -170,7 +153,6 @@ def generate_excel_synthesis(df_data, titre_periode):
         cell.fill = fill_th
         cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
-    # 🔹 Hauteur importante pour les en-têtes (42 pt)
     ws.row_dimensions[row_idx].height = 42
     row_idx += 1
 
@@ -186,7 +168,6 @@ def generate_excel_synthesis(df_data, titre_periode):
             else:
                 cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
         
-        # 🔹 Hauteur de ligne TRÈS aérée (36 pt)
         ws.row_dimensions[row_idx].height = 36
         row_idx += 1
 
@@ -207,9 +188,6 @@ def generate_excel_synthesis(df_data, titre_periode):
         if col_name == "Quantité (m³)":
             c.value = f"=SUM({col_ltr}{start_data_row}:{col_ltr}{end_data_row})"
             c.number_format = '0.0 "m³"'
-            c.alignment = Alignment(horizontal="right", vertical="center")
-        elif col_name == "Nb Éprouvettes":
-            c.value = f"=SUM({col_ltr}{start_data_row}:{col_ltr}{end_data_row})"
             c.alignment = Alignment(horizontal="right", vertical="center")
 
     row_idx += 3
@@ -246,28 +224,25 @@ def generate_excel_synthesis(df_data, titre_periode):
         for c in range(mid_col_idx + 1, nb_cols + 1):
             ws.cell(row=r, column=c).border = thin_border
 
-    # --- 8. LARGEUR SUR MESURE DES COLONNES ---
+    # --- 8. LARGEUR SUR MESURE DES COLONNES RESTANTES ---
     col_width_map = {
-        "Date Livraison": 15,
-        "Heure d'arrivée": 14,
-        "N° BL": 15,
-        "Ouvrage": 20,
-        "Quantité (m³)": 15,
-        "Classe": 13,
-        "Durée de transport": 17,
-        "Temp. Béton": 14,
-        "Temp. Ambiante": 15,
-        "Affaissement": 14,
+        "Date Livraison": 16,
+        "Heure d'arrivée": 15,
+        "N° BL": 16,
+        "Ouvrage": 22,
+        "Quantité (m³)": 16,
+        "Classe": 14,
+        "Durée de transport": 18,
+        "Temp. Béton": 15,
+        "Temp. Ambiante": 16,
+        "Affaissement": 15,
         "Prélèvement": 18,
-        "Nb Éprouvettes": 15,
-        "Observations": 25,
-        "Technicien": 17,
-        "Météo": 14
+        "Météo": 15
     }
 
     for col_idx, col_name in enumerate(headers, 1):
         col_letter = get_column_letter(col_idx)
-        width = col_width_map.get(col_name, 15)
+        width = col_width_map.get(col_name, 16)
         ws.column_dimensions[col_letter].width = width
 
     wb.save(output)
@@ -321,7 +296,8 @@ def show(supabase):
                                 return "-"
                         df["Durée de transport"] = df.apply(calc_duree, axis=1)
 
-                    cols_drop = [c for c in ["id", "created_at", "created", "heure_fin_coulage", "client", "centrale_beton"] if c in df.columns]
+                    # Suppression des colonnes indésirables (y compris technicien, observations, nb_eprouvettes)
+                    cols_drop = [c for c in ["id", "created_at", "created", "heure_fin_coulage", "client", "centrale_beton", "technicien", "observations", "nb_eprouvettes"] if c in df.columns]
                     df = df.drop(columns=cols_drop)
 
                     cols = list(df.columns)
@@ -338,17 +314,14 @@ def show(supabase):
                         "bl_num": "N° BL", "ouvrage": "Ouvrage", "quantite_m3": "Quantité (m³)",
                         "classe_beton": "Classe", "temperature": "Temp. Béton",
                         "temperature_ambiante": "Temp. Ambiante", "affaissement": "Affaissement",
-                        "prelevement": "Prélèvement", "nb_eprouvettes": "Nb Éprouvettes",
-                        "observations": "Observations", "technicien": "Technicien", "meteo": "Météo"
+                        "prelevement": "Prélèvement", "meteo": "Météo"
                     }
                     df_display = df.rename(columns=renames)
 
                     st.markdown("---")
-                    k1, k2, k3, k4 = st.columns(4)
+                    k1, k2 = st.columns(2)
                     k1.metric("Volume Total", f"{df_display['Quantité (m³)'].sum():.1f} m³")
-                    k2.metric("Nombre de Coulages", len(df_display))
-                    k3.metric("Affaissement Moyen", f"{df_display['Affaissement'].mean():.0f} mm")
-                    k4.metric("Éprouvettes Prélevées", int(df_display['Nb Éprouvettes'].sum()))
+                    k2.metric("Affaissement Moyen", f"{df_display['Affaissement'].mean():.0f} mm")
                     
                     st.markdown("---")
                     
@@ -413,7 +386,7 @@ def show(supabase):
                                 return "-"
                         df_m["Durée de transport"] = df_m.apply(calc_duree, axis=1)
 
-                    cols_drop = [c for c in ["id", "created_at", "created", "heure_fin_coulage", "client", "centrale_beton"] if c in df_m.columns]
+                    cols_drop = [c for c in ["id", "created_at", "created", "heure_fin_coulage", "client", "centrale_beton", "technicien", "observations", "nb_eprouvettes"] if c in df_m.columns]
                     df_m = df_m.drop(columns=cols_drop)
 
                     cols_m = list(df_m.columns)
@@ -430,16 +403,12 @@ def show(supabase):
                         "bl_num": "N° BL", "ouvrage": "Ouvrage", "quantite_m3": "Quantité (m³)",
                         "classe_beton": "Classe", "temperature": "Temp. Béton",
                         "temperature_ambiante": "Temp. Ambiante", "affaissement": "Affaissement",
-                        "prelevement": "Prélèvement", "nb_eprouvettes": "Nb Éprouvettes",
-                        "observations": "Observations", "technicien": "Technicien", "meteo": "Météo"
+                        "prelevement": "Prélèvement", "meteo": "Météo"
                     }
                     df_m_display = df_m.rename(columns=renames)
 
                     st.markdown("---")
-                    m1, m2, m3 = st.columns(3)
-                    m1.metric("Volume Cumulé du Mois", f"{df_m_display['Quantité (m³)'].sum():.1f} m³")
-                    m2.metric("Nombre Total de BL", len(df_m_display))
-                    m3.metric("Total Éprouvettes", int(df_m_display['Nb Éprouvettes'].sum()))
+                    st.metric("Volume Cumulé du Mois", f"{df_m_display['Quantité (m³)'].sum():.1f} m³")
                     
                     st.markdown("---")
                     
