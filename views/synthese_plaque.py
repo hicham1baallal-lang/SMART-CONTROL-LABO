@@ -397,3 +397,4 @@ def show(supabase):
             file_name=file_name_clean,
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True
+        )
