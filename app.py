@@ -69,22 +69,21 @@ with st.sidebar:
 
 # Routage des vues
 if page == "Accueil":
-    # En-tête de la page d'accueil
     st.title("🚄 Accueil - LGV CASA SUD")
     st.markdown("### Plateforme de Suivi et Contrôle Qualité - LPEE / TGCC")
     
     st.markdown("---")
     
-    # Affichage d'une photo de train LGV
-    train_image_url = "https://upload.wikimedia.org/wikipedia/commons/thumb/6/65/TGV_Duplex_SNCF_at_Gare_de_Lyon.jpg/800px-TGV_Duplex_SNCF_at_Gare_de_Lyon.jpg"
-    
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        st.image(
-            train_image_url, 
-            caption="Ligne à Grande Vitesse - Projet LGV CASA SUD", 
-            use_container_width=True
-        )
+    # Bannière visuelle stylisée (remplace l'image pour éviter les erreurs de liens)
+    st.markdown(
+        """
+        <div style='background: linear-gradient(90deg, #1F4E79 0%, #2E75B6 100%); padding: 30px; border-radius: 10px; color: white; text-align: center;'>
+            <h1 style='margin: 0; font-size: 2.5em;'>🚅 PROJET LGV CASA SUD</h1>
+            <p style='margin: 10px 0 0 0; font-size: 1.2em;'>Ligne à Grande Vitesse - Pôle Contrôle Qualité</p>
+        </div>
+        """, 
+        unsafe_allow_html=True
+    )
         
     st.markdown("---")
     
