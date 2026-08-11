@@ -14,8 +14,6 @@ SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # Import des vues
-from views import essai_plaque, synthese_plaque
-
 # --- MENU LATÉRAL (SIDEBAR) ---
 st.sidebar.image("https://via.placeholder.com/200x60?text=LPEE+CTR-CSB", use_column_width=True) # Remplacer par votre logo LPEE
 st.sidebar.title("📌 Menu Principal")
