@@ -14,27 +14,25 @@ if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
 # --- ÉCRAN DE CONNEXION ---
-if "role" not in st.session_state:
-    st.session_state.role = None  # Peut être None, "user", ou "admin"
-
-# --- ÉCRAN DE CONNEXION ---
-if st.session_state.role is None:
+if not st.session_state.authenticated:
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         st.markdown("<br><br>", unsafe_allow_html=True)
-        st.title("🔐 Connexion LPEE")
+        st.title("🔐 Accès Restreint - LPEE")
+        st.caption("Veuillez saisir le mot de passe pour accéder à la plateforme de suivi.")
         
-        password = st.text_input("Mot de passe", type="password")
+        # Champ mot de passe
+        password = st.text_input("Mot de passe", type="password", key="pwd_input")
         
-        if st.button("Se connecter"):
-            if password == "ctr2026": # Mot de passe Utilisateur
-                st.session_state.role = "user"
-                st.rerun()
-            elif password == "admin2026": # <-- CHANGEZ CE MOT DE PASSE ADMIN
-                st.session_state.role = "admin"
+        if st.button("Se connecter", use_container_width=True):
+            # Mot de passe défini : lpee2026
+            if password == "lpee2026": 
+                st.session_state.authenticated = True
                 st.rerun()
             else:
                 st.error("❌ Mot de passe incorrect.")
+    
+    # Stoppe l'exécution tant qu'on n'est pas connecté
     st.stop()
 
 # ==========================================
