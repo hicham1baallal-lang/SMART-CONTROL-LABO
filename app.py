@@ -70,7 +70,7 @@ with st.sidebar:
 # Routage des vues
 if page == "Accueil":
     st.title("🚄 Accueil - LGV CASA SUD")
-    st.markdown("### Plateforme de Suivi et Contrôle Qualité - LPEE / TGCC")
+    st.markdown("### Plateforme de Suivi et Contrôle Qualité - LPEE")
     
     st.markdown("---")
     
@@ -79,7 +79,7 @@ if page == "Accueil":
     with col2:
         try:
             st.image(
-                "al_boraq.jpg", 
+                "al boraq.jpg", 
                 caption="Al Boraq - Ligne à Grande Vitesse - Projet LGV CASA SUD", 
                 use_container_width=True
             )
