@@ -1,79 +1,101 @@
 import streamlit as st
-import datetime
+import pandas as pd
 
 def show(supabase):
     st.title("🏗️ Suivi et Contrôle Qualité Béton")
     
-    date_livraison = st.date_input("Date de livraison :", datetime.date.today())
+    # ---------------------------------------------------------
+    # 1. FORMULAIRE DE SAISIE
+    # ---------------------------------------------------------
+    st.subheader("Saisie d'un contrôle")
     
-    # Section Saisie du contrôle
-    st.subheader(f"📝 Saisie d'un contrôle ({date_livraison.strftime('%d/%m/%Y')})")
+    col1, col2, col3 = st.columns(3)
     
-    with st.form("form_betonnage", clear_on_submit=True):
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            tech = st.text_input("Nom du Technicien LPEE", value="Agent LPEE")
-            num_bl = st.text_input("N° B.L.", value="BL-2026-001")
-            ouvrage = st.text_input("Ouvrage", value="Voile / Semelle")
-            quantite = st.number_input("Quantité (m³)", min_value=0.0, value=8.0, step=0.5)
+    with col1:
+        technicien = st.text_input("Nom du Technicien LPEE", value="Agent LPEE")
+        bl_num = st.text_input("N° BL", value="BL-2026-001")
+        ouvrage = st.selectbox("Ouvrage", ["Voile / Semelle", "PRA 505 CHEVETRE", "PRA 025/DA2"])
+        quantite_m3 = st.number_input("Quantité (m³)", min_value=0.0, value=8.0, step=0.5)
         
-        with col2:
-            client = st.text_input("Client", value="TGCC")
-            h_fin_prod = st.time_input("Heure de fin de production", datetime.time(8, 30))
-            h_arrivee = st.time_input("Heure d'arrivée au chantier", datetime.time(8, 15))
-            classe = st.selectbox("Classe", ["C25/30", "C30/37", "C35/45", "C40/50"])
-            
-        with col3:
-            centrale = st.text_input("Centrale à Béton", value="TG PREFA")
-            meteo = st.selectbox("Météo", ["Ensoleillé ☀️", "Nuageux ☁️", "Pluie 🌧️"])
-            temp_beton = st.number_input("Température du Béton (°C)", value=20.0, step=0.5)
-            temp_amb = st.number_input("Température Ambiante (°C)", value=25.0, step=0.5)
-            affaissement = st.number_input("Affaissement (mm)", value=150.0, step=5.0)
-            prelevement = st.selectbox("Prélèvement", ["OUI - Conforme (NF EN 12350-2)", "NON"])
-            nb_eprouvettes = st.number_input("Nb d'éprouvettes", min_value=0, value=6)
+    with col2:
+        # 🔹 MODIFICATION 1 : Le champ Client est désactivé (disabled=True)
+        client = st.text_input("Client", value="TGCC", disabled=True)
+        
+        heure_fin = st.time_input("Heure de fin de production")
+        heure_arrivee = st.time_input("Heure d'arrivée au chantier")
+        classe_beton = st.selectbox("Classe", ["C25/30", "C30/37", "C35/45"])
+        
+    with col3:
+        centrale = st.text_input("Centrale à Béton", value="TG PREFA")
+        meteo = st.selectbox("Météo", ["Ensoleillé ☀️", "Nuageux ☁️", "Pluie 🌧️"])
+        temp_beton = st.number_input("Température du Béton (°C)", value=20.0)
+        temp_ambiante = st.number_input("Température Ambiante (°C)", value=25.0)
+        affaissement = st.number_input("Affaissement (mm)", value=150.0)
+        
+        # ---------------------------------------------------------
+        # 🔹 MODIFICATION 2 : Gestion dynamique du Prélèvement et Nb d'éprouvettes
+        # ---------------------------------------------------------
+        prelevement = st.selectbox(
+            "Prélèvement", 
+            ["OUI - Conforme (NF EN 12350-2)", "NON"]
+        )
+        
+        # Si 'NON' est sélectionné, on désactive le champ et force la valeur à 0
+        is_non_prelevement = "NON" in prelevement
+        
+        nb_eprouvettes = st.number_input(
+            "Nb d'éprouvettes", 
+            min_value=0, 
+            value=0 if is_non_prelevement else 6,
+            disabled=is_non_prelevement
+        )
 
-        obs = st.text_area("Observations", value="Béton conforme")
-        
-        btn_submit = st.form_submit_button("💾 Enregistrer")
-        
-        if btn_submit:
-            data = {
-                "date_livraison": str(date_livraison),
-                "technicien": tech,
-                "client": client,
-                "centrale_beton": centrale,
-                "bl_num": num_bl,
-                "heure_fin_coulage": str(h_fin_prod),
-                "heure_arrivee": str(h_arrivee),
-                "meteo": meteo,
-                "ouvrage": ouvrage,
-                "quantite_m3": quantite,
-                "classe_beton": classe,
-                "temperature": temp_beton,
-                "temperature_ambiante": temp_amb,
-                "affaissement": affaissement,
-                "prelevement": prelevement,
-                "nb_eprouvettes": nb_eprouvettes,
-                "observations": obs
-            }
-            if supabase:
-                try:
-                    supabase.table("suivi_betonnage").insert(data).execute()
-                    st.success("Données de bétonnage enregistrées avec succès !")
-                except Exception as e:
-                    st.error(f"Erreur d'enregistrement : {e}")
-            else:
-                st.warning("Mode hors-ligne : Données non envoyées à Supabase.")
+    observations = st.text_area("Observations", value="Béton conforme")
 
-    # Section Historique
-    st.markdown("---")
-    st.subheader("📋 Historique des contrôles béton")
-    if supabase:
+    # Bouton Enregistrer
+    if st.button("💾 Enregistrer"):
+        data = {
+            "bl_num": bl_num,
+            "ouvrage": ouvrage,
+            "quantite_m3": quantite_m3,
+            "client": client,
+            "classe_beton": classe_beton,
+            "centrale_beton": centrale,
+            "meteo": meteo,
+            "temperature": temp_beton,
+            "temperature_ambiante": temp_ambiante,
+            "affaissement": affaissement,
+            "prelevement": prelevement,
+            "nb_eprouvettes": nb_eprouvettes,
+            "observations": observations,
+            "technicien": technicien
+        }
+        
         try:
-            res = supabase.table("suivi_betonnage").select("*").order("id", desc=True).execute()
-            if res.data:
-                st.dataframe(res.data, use_container_width=True)
-            else:
-                st.info("Aucun enregistrement trouvé dans la table suivi_betonnage.")
+            supabase.table("suivi_betonnage").insert(data).execute()
+            st.success("Enregistrement réussi !")
+            st.rerun()
         except Exception as e:
-            st.error(f"Impossible de charger l'historique : {e}")
+            st.error(f"Erreur d'enregistrement : {e}")
+
+    # ---------------------------------------------------------
+    # 2. AFFICHAGE DE L'HISTORIQUE
+    # ---------------------------------------------------------
+    st.markdown("---")
+    st.subheader("📊 Historique")
+    
+    try:
+        res = supabase.table("suivi_betonnage").select("*").order("id", desc=True).execute()
+        if res.data:
+            df = pd.DataFrame(res.data)
+            
+            # 🔹 MODIFICATION 3 : Masquer la colonne created_at / created
+            cols_to_drop = [col for col in ["created_at", "created"] if col in df.columns]
+            if cols_to_drop:
+                df = df.drop(columns=cols_to_drop)
+                
+            st.dataframe(df, use_container_width=True)
+        else:
+            st.info("Aucune donnée enregistrée pour le moment.")
+    except Exception as e:
+        st.error(f"Erreur lors de la récupération de l'historique : {e}")
