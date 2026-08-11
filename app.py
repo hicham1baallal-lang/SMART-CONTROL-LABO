@@ -9,44 +9,40 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# 2. Gestion de l'état d'authentification
-if "authenticated" not in st.session_state:
-    st.session_state.authenticated = False
+# 2. Gestion des rôles
+if "role" not in st.session_state:
+    st.session_state.role = None # Peut être None, "user", ou "admin"
 
 # --- ÉCRAN DE CONNEXION ---
-if not st.session_state.authenticated:
+if st.session_state.role is None:
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         st.markdown("<br><br>", unsafe_allow_html=True)
         st.title("🔐 Accès Restreint - LPEE")
-        st.caption("Veuillez saisir le mot de passe pour accéder à la plateforme de suivi.")
+        st.caption("Veuillez saisir le mot de passe.")
         
-        # Champ mot de passe
-        password = st.text_input("Mot de passe", type="password", key="pwd_input")
+        password = st.text_input("Mot de passe", type="password")
         
         if st.button("Se connecter", use_container_width=True):
-            # Mot de passe défini : ctr2026
             if password == "ctr2026": 
-                st.session_state.authenticated = True
+                st.session_state.role = "user"
+                st.rerun()
+            elif password == "admin2026": # <-- MOT DE PASSE ADMIN
+                st.session_state.role = "admin"
                 st.rerun()
             else:
                 st.error("❌ Mot de passe incorrect.")
-    
-    # Stoppe l'exécution tant qu'on n'est pas connecté
     st.stop()
 
 # ==========================================
-# 3. CODE PRINCIPAL (Affiché uniquement si connecté)
+# 3. CODE PRINCIPAL (Affiché si connecté)
 # ==========================================
-
-# Importation des 4 vues
 try:
     from views import suivi_Betonnage, essai_Plaque, synthese_Beton, synthese_plaque
 except ImportError as e:
     st.error(f"❌ Erreur lors de l'importation des vues : {e}")
     st.stop()
 
-# Connexion Supabase
 try:
     SUPABASE_URL = st.secrets["SUPABASE_URL"]
     SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
@@ -55,46 +51,31 @@ except Exception as e:
     supabase = None
     st.error(f"❌ Erreur de connexion Supabase : {e}")
 
-# Style CSS
-st.markdown("""
-    <style>
-    .main { padding: 1rem 2rem; }
-    .stButton>button { background-color: #e63946; color: white; border-radius: 5px; border: none; }
-    .stButton>button:hover { background-color: #d62828; color: white; }
-    </style>
-""", unsafe_allow_html=True)
-
-# 4. Barre latérale (Sidebar)
+# Affichage du rôle dans la sidebar
 with st.sidebar:
     st.title("LPEE - CTR-CSB")
-    st.caption("Projet : LGV CASA SETTAT | Client : TGCC")
+    st.info(f"Connecté en tant que : **{st.session_state.role.upper()}**")
     st.markdown("---")
-    st.subheader("Menu Principal")
     
     page = st.radio(
-        "",
-        ["Accueil", "Essai à la Plaque", "Synthèse Plaque", "Suivi de Bétonnage", "Synthèse Béton"],
-        index=0
+        "Menu Principal",
+        ["Accueil", "Essai à la Plaque", "Synthèse Plaque", "Suivi de Bétonnage", "Synthèse Béton"]
     )
     
     st.markdown("---")
     if st.button("🚪 Déconnexion", use_container_width=True):
-        st.session_state.authenticated = False
+        st.session_state.role = None
         st.rerun()
 
-# 5. Routage des vues
+# Routage des vues
 if page == "Accueil":
     st.title("🏠 Accueil")
-    st.write("Bienvenue sur la plateforme de suivi de chantier LPEE.")
-
+    st.write("Bienvenue sur la plateforme.")
 elif page == "Essai à la Plaque":
     essai_Plaque.show(supabase)
-
 elif page == "Synthèse Plaque":
     synthese_plaque.show(supabase)
-
 elif page == "Suivi de Bétonnage":
     suivi_Betonnage.show(supabase)
-
 elif page == "Synthèse Béton":
     synthese_Beton.show(supabase)
