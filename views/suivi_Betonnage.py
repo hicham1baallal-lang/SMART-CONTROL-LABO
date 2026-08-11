@@ -100,12 +100,28 @@ def show(supabase):
         if res.data:
             df = pd.DataFrame(res.data)
             
-            # 🔹 MODIFICATION 1 : Suppression de la colonne 'id' et 'created_at'
-            cols_to_drop = [col for col in ["id", "created_at", "created"] if col in df.columns]
+            # 🔹 MODIFICATION 1 : Calcul de la colonne "Durée de transport" à partir des heures
+            if "heure_fin_coulage" in df.columns and "heure_arrivee" in df.columns:
+                def calculer_duree(row):
+                    try:
+                        h_fin = datetime.strptime(str(row["heure_fin_coulage"]), "%H:%M")
+                        h_arr = datetime.strptime(str(row["heure_arrivee"]), "%H:%M")
+                        diff = int((h_arr - h_fin).total_seconds() / 60)
+                        return f"{diff} min"
+                    except:
+                        return "-"
+                
+                df["Durée de transport"] = df.apply(calculer_duree, axis=1)
+
+            # 🔹 MODIFICATION 2 : Masquer les colonnes indésirables (id, dates et heures brutes)
+            cols_to_drop = [
+                col for col in ["id", "created_at", "created", "heure_arrivee", "heure_fin_coulage", "heure_fin"] 
+                if col in df.columns
+            ]
             if cols_to_drop:
                 df = df.drop(columns=cols_to_drop)
                 
-            # 🔹 MODIFICATION 2 : La numérotation des lignes (index) commence à 1 au lieu de 0
+            # Numérotation à partir de 1
             df.index = range(1, len(df) + 1)
                 
             st.dataframe(df, use_container_width=True)
