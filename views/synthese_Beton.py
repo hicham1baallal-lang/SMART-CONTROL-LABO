@@ -34,8 +34,8 @@ def generate_excel_synthesis(df_data, titre_periode):
     # --- 2. PALETTE DE COULEURS ET POLICES (CALIBRI 12) ---
     color_primary = "1F4E79"    # Bleu LPEE / Marine
     color_header = "2D572C"     # Vert/Gris foncé entête
-    color_card_bg = "F7F9FA"   # Fond clair cartes info
-    color_kpi_bg = "EDF2F8"    # Fond KPI
+    color_card_bg = "F7F9FA"    # Fond clair cartes info
+    color_kpi_bg = "EDF2F8"     # Fond KPI
 
     font_title = Font(name="Calibri", size=15, bold=True, color="FFFFFF")
     font_section = Font(name="Calibri", size=13, bold=True, color=color_primary)
@@ -73,28 +73,28 @@ def generate_excel_synthesis(df_data, titre_periode):
     # --- 4. BLOC INFOS CLIENT & PROJET ---
     ws.merge_cells(f"A4:{mid_col_letter}4")
     cell_c = ws["A4"]
-    cell_c.value = "  CLIENT :  TGCC"
+    cell_c.value = "   CLIENT :   TGCC"
     cell_c.font = font_bold
     cell_c.fill = fill_card
     cell_c.alignment = Alignment(horizontal="left", vertical="center")
 
     ws.merge_cells(f"{next_mid_letter}4:{last_col_letter}4")
     cell_p = ws[f"{next_mid_letter}4"]
-    cell_p.value = "  PROJET :  LGV CASA SUD"
+    cell_p.value = "   PROJET :   LGV CASA SUD"
     cell_p.font = font_bold
     cell_p.fill = fill_card
     cell_p.alignment = Alignment(horizontal="left", vertical="center")
 
     ws.merge_cells(f"A5:{mid_col_letter}5")
     cell_per = ws["A5"]
-    cell_per.value = f"  PÉRIODE :  {titre_periode}"
+    cell_per.value = f"   PÉRIODE :   {titre_periode}"
     cell_per.font = font_bold
     cell_per.fill = fill_card
     cell_per.alignment = Alignment(horizontal="left", vertical="center")
 
     ws.merge_cells(f"{next_mid_letter}5:{last_col_letter}5")
     cell_d = ws[f"{next_mid_letter}5"]
-    cell_d.value = f"  DATE ÉDITION :  {datetime.now().strftime('%d/%m/%Y')}"
+    cell_d.value = f"   DATE ÉDITION :   {datetime.now().strftime('%d/%m/%Y')}"
     cell_d.font = font_bold
     cell_d.fill = fill_card
     cell_d.alignment = Alignment(horizontal="left", vertical="center")
@@ -296,7 +296,6 @@ def show(supabase):
                                 return "-"
                         df["Durée de transport"] = df.apply(calc_duree, axis=1)
 
-                    # Suppression des colonnes indésirables (y compris technicien, observations, nb_eprouvettes)
                     cols_drop = [c for c in ["id", "created_at", "created", "heure_fin_coulage", "client", "centrale_beton", "technicien", "observations", "nb_eprouvettes"] if c in df.columns]
                     df = df.drop(columns=cols_drop)
 
