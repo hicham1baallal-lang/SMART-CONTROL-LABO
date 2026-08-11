@@ -42,7 +42,13 @@ def show(supabase):
                 "Type de couche", 
                 ["Remblai", "Assise", "PST", "Couche de forme"]
             )
-            emplacement = st.text_input("Emplacement PK / Profil", placeholder="Ex: PK 12+450 / Profil 12")
+
+        # --- SÉPARATION EN DEUX CASES : EMPLACEMENT ET PK / PROFIL ---
+        col_loc1, col_loc2 = st.columns(2)
+        with col_loc1:
+            emplacement = st.text_input("Emplacement", placeholder="Ex: Zone Nord / Voie 1")
+        with col_loc2:
+            pk_profil = st.text_input("PK / Profil", placeholder="Ex: PK 12+450 / Profil 12")
 
         st.markdown("### 📊 Données de Chargement (Enfoncements)")
         
@@ -86,6 +92,7 @@ def show(supabase):
                     "technicien": technicien,
                     "couche": couche,
                     "emplacement": emplacement,
+                    "pk_profil": pk_profil,
                     "z1": float(z1),
                     "z2": float(z2),
                     "ev1": float(ev1),
@@ -116,11 +123,12 @@ def show(supabase):
         if data:
             df = pd.DataFrame(data)
 
-            # Ordre précis des colonnes avec 'technicien' en DERNIÈRE position
+            # Ordre précis des colonnes du tableau
             cols_order = [
                 "date_essai",
                 "couche",
                 "emplacement",
+                "pk_profil",
                 "z1",
                 "z2",
                 "ev1",
@@ -137,7 +145,8 @@ def show(supabase):
             renames = {
                 "date_essai": "Date d'essai",
                 "couche": "Couche",
-                "emplacement": "PK / Profil",
+                "emplacement": "Emplacement",
+                "pk_profil": "PK / Profil",
                 "z1": "Z1 (mm)",
                 "z2": "Z2 (mm)",
                 "ev1": "EV1 (MPa)",
