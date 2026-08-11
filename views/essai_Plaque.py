@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from datetime import date
+from datetime import datetime, date
 
 def show(supabase):
     # --- EN-TÊTE : TITRE ET NORME CÔTE À CÔTE ---
@@ -180,41 +180,67 @@ def show(supabase):
                 st.subheader("🛠️ Espace Administration")
                 
                 record_options = {f"ID {r['id']} - {r.get('date_essai', 'N/A')} - {r.get('pk_profil', '')}": r for r in data}
-                selected_key = st.selectbox("Sélectionner l'essai à gérer", list(record_options.keys()))
+                selected_key = st.selectbox("Sélectionner l'essai à gérer", list(record_options.keys()), key="admin_select_plaque")
                 selected_item = record_options[selected_key]
                 
                 col_ed, col_del = st.columns(2)
                 
                 with col_ed:
-                    with st.expander("📝 Modifier cet essai"):
-                        with st.form("edit_form_saisie"):
-                            new_pk = st.text_input("PK / Profil", value=selected_item.get("pk_profil", ""))
-                            new_ev1 = st.number_input("EV1 (MPa)", value=float(selected_item.get("ev1", 0)))
-                            new_ev2 = st.number_input("EV2 (MPa)", value=float(selected_item.get("ev2", 0)))
+                    with st.expander("📝 Modifier cet essai (Tous les champs)"):
+                        with st.form("edit_form_saisie_complet"):
+                            # Conversion sécurisée de la date existante
+                            try:
+                                def_date_essai = datetime.strptime(str(selected_item.get("date_essai", date.today())), "%Y-%m-%d").date()
+                            except:
+                                def_date_essai = date.today()
+
+                            new_date_essai = st.date_input("Date de l'essai", value=def_date_essai, key="edit_ep_date")
+                            new_technicien = st.text_input("Technicien", value=selected_item.get("technicien", ""), key="edit_ep_tech")
                             
-                            if st.form_submit_button("Enregistrer les modifications"):
+                            current_couche = selected_item.get("couche", "Remblai")
+                            idx_c = couche_options.index(current_couche) if current_couche in couche_options else 0
+                            new_couche = st.selectbox("Type de couche", couche_options, index=idx_c, key="edit_ep_couche")
+                            
+                            new_emplacement = st.text_input("Emplacement", value=selected_item.get("emplacement", ""), key="edit_ep_emp")
+                            new_pk = st.text_input("PK / Profil", value=selected_item.get("pk_profil", ""), key="edit_ep_pk")
+                            
+                            new_z1 = st.number_input("Z1 - 1er chargement (mm)", value=float(selected_item.get("z1", 0.0)), step=0.01, format="%.2f", key="edit_ep_z1")
+                            new_z2 = st.number_input("Z2 - 2ème chargement (mm)", value=float(selected_item.get("z2", 0.0)), step=0.01, format="%.2f", key="edit_ep_z2")
+                            
+                            if st.form_submit_button("💾 Enregistrer toutes les modifications"):
                                 try:
-                                    new_k = new_ev2 / new_ev1 if new_ev1 > 0 else 0
+                                    # Recalcul automatique de EV1, EV2 et K
+                                    calc_ev1 = round(112.5 / (new_z1 * 2), 2) if new_z1 > 0 else 0.0
+                                    calc_ev2 = round(90.0 / (new_z2 * 2), 2) if new_z2 > 0 else 0.0
+                                    calc_k = round(calc_ev2 / calc_ev1, 2) if calc_ev1 > 0 else 0.0
+
                                     supabase.table("essai_plaque").update({
+                                        "date_essai": str(new_date_essai),
+                                        "technicien": new_technicien,
+                                        "couche": new_couche,
+                                        "emplacement": new_emplacement,
                                         "pk_profil": new_pk,
-                                        "ev1": new_ev1,
-                                        "ev2": new_ev2,
-                                        "k": new_k
+                                        "z1": float(new_z1),
+                                        "z2": float(new_z2),
+                                        "ev1": float(calc_ev1),
+                                        "ev2": float(calc_ev2),
+                                        "k": float(calc_k)
                                     }).eq("id", selected_item["id"]).execute()
-                                    st.success("Données mises à jour !")
+                                    
+                                    st.success("Données et calculs mis à jour avec succès !")
                                     st.rerun()
                                 except Exception as e:
-                                    st.error(f"Erreur : {e}")
-                                    
+                                    st.error(f"Erreur de mise à jour : {e}")
+                            
                 with col_del:
                     st.markdown("##### ⚠️ Suppression")
-                    if st.button("🗑️ Supprimer définitivement", type="primary"):
+                    if st.button("🗑️ Supprimer définitivement", type="primary", key="btn_supprimer_plaque_admin"):
                         try:
                             supabase.table("essai_plaque").delete().eq("id", selected_item["id"]).execute()
-                            st.success("Supprimé avec succès.")
+                            st.success("Essai supprimé avec succès.")
                             st.rerun()
                         except Exception as e:
-                            st.error(f"Erreur : {e}")
+                            st.error(f"Erreur de suppression : {e}")
 
         else:
             st.info("Aucun essai à la plaque n'a encore été enregistré.")
