@@ -69,8 +69,34 @@ with st.sidebar:
 
 # Routage des vues
 if page == "Accueil":
-    st.title("🏠 Accueil")
-    st.write("Bienvenue sur la plateforme.")
+    # En-tête de la page d'accueil
+    st.title("🚄 Accueil - LGV CASA SUD")
+    st.markdown("### Plateforme de Suivi et Contrôle Qualité - LPEE / TGCC")
+    
+    st.markdown("---")
+    
+    # Affichage d'une photo de train LGV
+    train_image_url = "https://upload.wikimedia.org/wikipedia/commons/thumb/6/65/TGV_Duplex_SNCF_at_Gare_de_Lyon.jpg/800px-TGV_Duplex_SNCF_at_Gare_de_Lyon.jpg"
+    
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        st.image(
+            train_image_url, 
+            caption="Ligne à Grande Vitesse - Projet LGV CASA SUD", 
+            use_container_width=True
+        )
+        
+    st.markdown("---")
+    
+    # Section de présentation
+    st.markdown("""
+    Bienvenue sur l'application centralisée de gestion des contrôles qualité pour le projet **LGV CASA SUD**. 
+    
+    Utilisez le menu de navigation latéral pour accéder aux différents modules de saisie et de suivi :
+    * **🏗️ Suivi Béton :** Gestion des livraisons, fiches de contrôle, températures, affaissements et prélèvements.
+    * **🧪 Essai à la Plaque :** Saisie des essais de portance (Norme NF P 94-117-1) avec calculs automatiques des modules $EV1$, $EV2$ et du coefficient $K$.
+    """)
+
 elif page == "Essai à la Plaque":
     essai_Plaque.show(supabase)
 elif page == "Synthèse Plaque":
