@@ -1,3 +1,4 @@
+import os
 import streamlit as st
 from supabase import create_client, Client
 
@@ -74,17 +75,18 @@ if page == "Accueil":
     
     st.markdown("---")
     
-    # Affichage de votre photo locale Al Boraq
+    # Affichage sécurisé de la photo Al Boraq
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        try:
+        image_path = os.path.join(os.path.dirname(__file__), "al_boraq.jpg")
+        if os.path.exists(image_path):
             st.image(
-                "al_boraq.jpg", 
+                image_path, 
                 caption="Al Boraq - Ligne à Grande Vitesse - Projet LGV CASA SUD", 
                 use_container_width=True
             )
-        except Exception as e:
-            st.warning(f"⚠️ Erreur de chargement de l'image : {e}")
+        else:
+            st.warning("⚠️ L'image 'al_boraq.jpg' est introuvable sur le serveur GitHub. Veuillez l'ajouter à votre dépôt.")
         
     st.markdown("---")
     
