@@ -1,4 +1,6 @@
 import streamlit as st
+from supabase import create_client
+from views import suivi_Betonnage, essai_Plaque
 
 # Configuration de la page
 st.set_page_config(
@@ -8,7 +10,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Style CSS personnalisé pour rapprocher l'apparence du modèle
+# Style CSS personnalisé
 st.markdown("""
     <style>
     .main { padding: 1rem 2rem; }
@@ -16,6 +18,21 @@ st.markdown("""
     .stButton>button:hover { background-color: #d62828; color: white; }
     </style>
 """, unsafe_allow_html=True)
+
+# Connexion Supabase
+SUPABASE_URL = "https://pfyfmfujccibiwfiwknu.supabase.co"
+# ⚠️ Remplacez la chaîne ci-dessous par votre clé COMPLÈTE copiée depuis Supabase
+SUPABASE_KEY = "sb_publishable_6h8ZUeV8ii5TjKUV9B1Ewg_eDawQRkW" 
+
+@st.cache_resource
+def init_supabase():
+    return create_client(SUPABASE_URL, SUPABASE_KEY)
+
+try:
+    supabase = init_supabase()
+except Exception as e:
+    supabase = None
+    st.error(f"Erreur de connexion Supabase : {e}")
 
 # Barre latérale (Sidebar)
 with st.sidebar:
@@ -34,23 +51,7 @@ with st.sidebar:
     if st.button("🚪 Déconnexion"):
         st.info("Déconnecté")
 
-# Connexion Supabase
-SUPABASE_URL = "https://pfyfmfujccibiwfiwknu.supabase.co/rest/v1/"
-SUPABASE_KEY = "sb_publishable_6h8ZUeV8ii5TjKUV9B1Ewg_"
-
-@st.cache_resource
-def init_supabase():
-    from supabase import create_client
-    return create_client(SUPABASE_URL, SUPABASE_KEY)
-
-try:
-    supabase = init_supabase()
-except Exception as e:
-    supabase = None
-
 # Routage des vues
-from views import suivi_Betonnage, essai_Plaque
-
 if page == "Accueil":
     st.title("🏠 Accueil")
     st.write("Bienvenue sur la plateforme de suivi de chantier LPEE.")
