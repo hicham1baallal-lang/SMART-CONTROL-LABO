@@ -9,14 +9,44 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# 2. Importation des 4 vues avec la CASSE EXACTE de votre GitHub
+# 2. Gestion de l'état d'authentification
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+
+# --- ÉCRAN DE CONNEXION ---
+if not st.session_state.authenticated:
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        st.markdown("<br><br>", unsafe_allow_html=True)
+        st.title("🔐 Accès Restreint - LPEE")
+        st.caption("Veuillez saisir le mot de passe pour accéder à la plateforme de suivi.")
+        
+        # Champ mot de passe
+        password = st.text_input("Mot de passe", type="password", key="pwd_input")
+        
+        if st.button("Se connecter", use_container_width=True):
+            # Changez "votre_mot_de_passe" par le mot de passe de votre choix
+            if password == "votre_mot_de_passe": 
+                st.session_state.authenticated = True
+                st.rerun()
+            else:
+                st.error("❌ Mot de passe incorrect. Veuillez réessayer.")
+    
+    # Stoppe l'exécution ici tant qu'on n'est pas connecté
+    st.stop()
+
+# ==========================================
+# 3. CODE PRINCIPAL (Affiché uniquement si connecté)
+# ==========================================
+
+# Importation des 4 vues avec la CASSE EXACTE de votre GitHub
 try:
     from views import suivi_Betonnage, essai_Plaque, synthese_Beton, synthese_plaque
 except ImportError as e:
     st.error(f"❌ Erreur lors de l'importation des vues : {e}")
     st.stop()
 
-# 3. Connexion Supabase
+# Connexion Supabase
 try:
     SUPABASE_URL = st.secrets["SUPABASE_URL"]
     SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
@@ -44,12 +74,13 @@ with st.sidebar:
     page = st.radio(
         "",
         ["Accueil", "Essai à la Plaque", "Synthèse Plaque", "Suivi de Bétonnage", "Synthèse Béton"],
-        index=2
+        index=0
     )
     
     st.markdown("---")
-    if st.button("🚪 Déconnexion"):
-        st.info("Déconnecté")
+    if st.button("🚪 Déconnexion", use_container_width=True):
+        st.session_state.authenticated = False
+        st.rerun()
 
 # 5. Routage des vues
 if page == "Accueil":
