@@ -9,17 +9,16 @@ from openpyxl.utils import get_column_letter
 
 
 # =========================================================
-# FONCTION GENERATION EXCEL FORMAT A4 PAYSAGE (IMPRESSION PARFAITE)
+# FONCTION GENERATION EXCEL FORMAT A4 PAYSAGE (ESPACÉ & POLICE 12)
 # =========================================================
 def generate_excel_synthesis(df_data, titre_periode):
-    """Génère un fichier Excel parfaitement mis en page au format A4 Paysage pour impression."""
+    """Génère un fichier Excel mis en page au format A4 Paysage avec police 12 Calibri et lignes espacées."""
     output = io.BytesIO()
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Synthèse Béton"
 
     # --- 1. CONFIGURATION D'IMPRESSION A4 PAYSAGE ---
-    # Le format Paysage est indispensable pour 12-15 colonnes sans écraser la police
     ws.page_setup.orientation = ws.ORIENTATION_LANDSCAPE
     ws.page_setup.paperSize = ws.PAPERSIZE_A4
     ws.sheet_properties.pageSetUpPr.fitToPage = True
@@ -32,18 +31,19 @@ def generate_excel_synthesis(df_data, titre_periode):
     ws.page_margins.top = 0.4
     ws.page_margins.bottom = 0.4
 
-    # --- 2. PALETTE DE COULEURS ET STYLES ---
+    # --- 2. PALETTE DE COULEURS ET POLICES (CALIBRI 12) ---
     color_primary = "1F4E79"    # Bleu LPEE / Marine
     color_header = "2D572C"     # Vert/Gris foncé entête
     color_card_bg = "F7F9FA"   # Fond clair cartes info
     color_kpi_bg = "EDF2F8"    # Fond KPI
 
-    font_title = Font(name="Calibri", size=14, bold=True, color="FFFFFF")
-    font_section = Font(name="Calibri", size=11, bold=True, color=color_primary)
-    font_bold = Font(name="Calibri", size=10, bold=True)
-    font_normal = Font(name="Calibri", size=10)
-    font_th = Font(name="Calibri", size=10, bold=True, color="FFFFFF")
-    font_kpi_val = Font(name="Calibri", size=13, bold=True, color=color_primary)
+    # 🔹 Polices ajustées en taille 12
+    font_title = Font(name="Calibri", size=15, bold=True, color="FFFFFF")
+    font_section = Font(name="Calibri", size=13, bold=True, color=color_primary)
+    font_bold = Font(name="Calibri", size=12, bold=True)
+    font_normal = Font(name="Calibri", size=12)
+    font_th = Font(name="Calibri", size=12, bold=True, color="FFFFFF")
+    font_kpi_val = Font(name="Calibri", size=14, bold=True, color=color_primary)
 
     fill_title = PatternFill(start_color=color_primary, end_color=color_primary, fill_type="solid")
     fill_th = PatternFill(start_color=color_header, end_color=color_header, fill_type="solid")
@@ -54,23 +54,24 @@ def generate_excel_synthesis(df_data, titre_periode):
     thin_border = Border(left=thin_border_side, right=thin_border_side, top=thin_border_side, bottom=thin_border_side)
     total_border = Border(top=Side(style='thin', color='000000'), bottom=Side(style='double', color='000000'))
 
-    # Calcul du nombre de colonnes réelles du tableau
+    # Calcul des dimensions
     nb_cols = max(len(df_data.columns), 8)
     last_col_letter = get_column_letter(nb_cols)
     mid_col_idx = nb_cols // 2
     mid_col_letter = get_column_letter(mid_col_idx)
     next_mid_letter = get_column_letter(mid_col_idx + 1)
 
-    # --- 3. BANNIÈRE EN-TÊTE LPEE (S'ÉTEND SUR TOUTE LA LARGEUR) ---
+    # --- 3. BANNIÈRE EN-TÊTE LPEE ---
     ws.merge_cells(f"A1:{last_col_letter}2")
     cell_title = ws["A1"]
     cell_title.value = "LABORATOIRE PUBLIC D'ESSAIS ET D'ÉTUDES (LPEE) - CTR-CSB\nRAPPORT DE SYNTHÈSE DU BÉTONNAGE"
     cell_title.font = font_title
     cell_title.fill = fill_title
     cell_title.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    ws.row_dimensions[1].height = 24
+    ws.row_dimensions[2].height = 24
 
-    # --- 4. BLOC INFOS CLIENT & PROJET (COUVRE 100% DE LA LARGEUR A -> LAST_COL) ---
-    # Ligne 4 : Client & Projet
+    # --- 4. BLOC INFOS CLIENT & PROJET ---
     ws.merge_cells(f"A4:{mid_col_letter}4")
     cell_c = ws["A4"]
     cell_c.value = "  CLIENT :  TGCC"
@@ -85,7 +86,6 @@ def generate_excel_synthesis(df_data, titre_periode):
     cell_p.fill = fill_card
     cell_p.alignment = Alignment(horizontal="left", vertical="center")
 
-    # Ligne 5 : Période & Date Édition
     ws.merge_cells(f"A5:{mid_col_letter}5")
     cell_per = ws["A5"]
     cell_per.value = f"  PÉRIODE :  {titre_periode}"
@@ -100,16 +100,18 @@ def generate_excel_synthesis(df_data, titre_periode):
     cell_d.fill = fill_card
     cell_d.alignment = Alignment(horizontal="left", vertical="center")
 
-    # Application des bordures au bloc info
+    # 🔹 Hauteur de ligne aérée pour le bloc info
     for r in range(4, 6):
+        ws.row_dimensions[r].height = 26
         for c in range(1, nb_cols + 1):
             ws.cell(row=r, column=c).border = thin_border
 
-    # --- 5. RÉSUMÉ DES KPIs (RÉPARTIS ÉGALEMENT SUR TOUTE LA LARGEUR) ---
+    # --- 5. RÉSUMÉ DES KPIs ---
     row_idx = 7
     ws.merge_cells(f"A{row_idx}:{last_col_letter}{row_idx}")
     ws[f"A{row_idx}"] = "📊 RÉSUMÉ GLOBAL"
     ws[f"A{row_idx}"].font = font_section
+    ws.row_dimensions[row_idx].height = 25
 
     row_idx += 1
     vol_tot = df_data["Quantité (m³)"].sum() if "Quantité (m³)" in df_data.columns else 0
@@ -150,12 +152,15 @@ def generate_excel_synthesis(df_data, titre_periode):
             for c in range(c_start_idx, c_end_idx + 1):
                 ws.cell(row=r, column=c).border = thin_border
 
+    ws.row_dimensions[row_idx].height = 24
+    ws.row_dimensions[row_idx+1].height = 30
     row_idx += 3
 
     # --- 6. TABLEAU DES DONNÉES ---
     ws.merge_cells(f"A{row_idx}:{last_col_letter}{row_idx}")
     ws[f"A{row_idx}"] = "📋 DÉTAIL DES CONTRÔLES"
     ws[f"A{row_idx}"].font = font_section
+    ws.row_dimensions[row_idx].height = 25
     row_idx += 1
 
     headers = list(df_data.columns)
@@ -166,7 +171,8 @@ def generate_excel_synthesis(df_data, titre_periode):
         cell.fill = fill_th
         cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
-    ws.row_dimensions[row_idx].height = 28
+    # 🔹 Hauteur importante pour les en-têtes
+    ws.row_dimensions[row_idx].height = 35
     row_idx += 1
 
     start_data_row = row_idx
@@ -174,17 +180,20 @@ def generate_excel_synthesis(df_data, titre_periode):
         for col_num, val in enumerate(row_data, 1):
             cell = ws.cell(row=row_idx, column=col_num)
             cell.value = val
-            cell.font = font_normal
+            cell.font = font_normal  # Calibri 12
             cell.border = thin_border
             if isinstance(val, (int, float)):
                 cell.alignment = Alignment(horizontal="right", vertical="center")
             else:
                 cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-        ws.row_dimensions[row_idx].height = 22
+        
+        # 🔹 Hauteur de ligne aérée (28pt au lieu de 22pt)
+        ws.row_dimensions[row_idx].height = 28
         row_idx += 1
 
     # Ligne de TOTAL
     end_data_row = row_idx - 1
+    ws.row_dimensions[row_idx].height = 30
     total_cell = ws.cell(row=row_idx, column=1)
     total_cell.value = "TOTAL"
     total_cell.font = font_bold
@@ -193,16 +202,16 @@ def generate_excel_synthesis(df_data, titre_periode):
     for col_num in range(1, len(headers) + 1):
         c = ws.cell(row=row_idx, column=col_num)
         c.border = total_border
-        c.font = font_bold
+        c.font = font_bold  # Calibri 12 Gras
         col_name = headers[col_num - 1]
         col_ltr = get_column_letter(col_num)
         if col_name == "Quantité (m³)":
             c.value = f"=SUM({col_ltr}{start_data_row}:{col_ltr}{end_data_row})"
             c.number_format = '0.0 "m³"'
-            c.alignment = Alignment(horizontal="right")
+            c.alignment = Alignment(horizontal="right", vertical="center")
         elif col_name == "Nb Éprouvettes":
             c.value = f"=SUM({col_ltr}{start_data_row}:{col_ltr}{end_data_row})"
-            c.alignment = Alignment(horizontal="right")
+            c.alignment = Alignment(horizontal="right", vertical="center")
 
     row_idx += 3
 
@@ -210,12 +219,13 @@ def generate_excel_synthesis(df_data, titre_periode):
     ws.merge_cells(f"A{row_idx}:{mid_col_letter}{row_idx}")
     ws[f"A{row_idx}"] = "Responsables d'essai"
     ws[f"A{row_idx}"].font = font_bold
-    ws[f"A{row_idx}"].alignment = Alignment(horizontal="center")
+    ws[f"A{row_idx}"].alignment = Alignment(horizontal="center", vertical="center")
 
     ws.merge_cells(f"{next_mid_letter}{row_idx}:{last_col_letter}{row_idx}")
     ws[f"{next_mid_letter}{row_idx}"] = "Chef du Laboratoire"
     ws[f"{next_mid_letter}{row_idx}"].font = font_bold
-    ws[f"{next_mid_letter}{row_idx}"].alignment = Alignment(horizontal="center")
+    ws[f"{next_mid_letter}{row_idx}"].alignment = Alignment(horizontal="center", vertical="center")
+    ws.row_dimensions[row_idx].height = 25
 
     row_idx += 1
     ws.merge_cells(f"A{row_idx}:{mid_col_letter}{row_idx+3}")
@@ -228,35 +238,34 @@ def generate_excel_synthesis(df_data, titre_periode):
     ws[f"{next_mid_letter}{row_idx}"].font = font_normal
     ws[f"{next_mid_letter}{row_idx}"].alignment = Alignment(horizontal="left", vertical="top")
 
-    # Application des bordures aux zones de signature
     for r in range(row_idx - 1, row_idx + 4):
         for c in range(1, mid_col_idx + 1):
             ws.cell(row=r, column=c).border = thin_border
         for c in range(mid_col_idx + 1, nb_cols + 1):
             ws.cell(row=r, column=c).border = thin_border
 
-    # --- 8. LARGEUR SUR MESURE DES COLONNES (GÉNÉREUSE ET LISIBLE) ---
+    # --- 8. LARGEUR SUR MESURE DES COLONNES (ADAPTÉE AUX POLICES 12) ---
     col_width_map = {
-        "Date Livraison": 15,
-        "Heure d'arrivée": 14,
-        "N° BL": 15,
-        "Ouvrage": 20,
-        "Quantité (m³)": 14,
-        "Classe": 12,
-        "Durée de transport": 16,
-        "Temp. Béton": 13,
-        "Temp. Ambiante": 14,
-        "Affaissement": 13,
-        "Prélèvement": 18,
-        "Nb Éprouvettes": 14,
-        "Observations": 25,
-        "Technicien": 16,
-        "Météo": 13
+        "Date Livraison": 16,
+        "Heure d'arrivée": 15,
+        "N° BL": 16,
+        "Ouvrage": 22,
+        "Quantité (m³)": 16,
+        "Classe": 14,
+        "Durée de transport": 18,
+        "Temp. Béton": 15,
+        "Temp. Ambiante": 16,
+        "Affaissement": 15,
+        "Prélèvement": 20,
+        "Nb Éprouvettes": 16,
+        "Observations": 28,
+        "Technicien": 18,
+        "Météo": 15
     }
 
     for col_idx, col_name in enumerate(headers, 1):
         col_letter = get_column_letter(col_idx)
-        width = col_width_map.get(col_name, 15)
+        width = col_width_map.get(col_name, 16)
         ws.column_dimensions[col_letter].width = width
 
     wb.save(output)
@@ -300,7 +309,6 @@ def show(supabase):
                 if df.empty:
                     st.info("Aucun coulage enregistré pour les critères sélectionnés.")
                 else:
-                    # Calcul de la Durée de transport
                     if "heure_fin_coulage" in df.columns and "heure_arrivee" in df.columns:
                         def calc_duree(row):
                             try:
@@ -311,11 +319,9 @@ def show(supabase):
                                 return "-"
                         df["Durée de transport"] = df.apply(calc_duree, axis=1)
 
-                    # Suppression des colonnes indésirables
                     cols_drop = [c for c in ["id", "created_at", "created", "heure_fin_coulage", "client", "centrale_beton"] if c in df.columns]
                     df = df.drop(columns=cols_drop)
 
-                    # Réorganisation des colonnes
                     cols = list(df.columns)
                     if "date_livraison" in cols and "heure_arrivee" in cols:
                         cols.remove("heure_arrivee")
@@ -325,7 +331,6 @@ def show(supabase):
                         cols.append("meteo")
                     df = df[cols]
 
-                    # Renommage
                     renames = {
                         "date_livraison": "Date Livraison", "heure_arrivee": "Heure d'arrivée",
                         "bl_num": "N° BL", "ouvrage": "Ouvrage", "quantite_m3": "Quantité (m³)",
@@ -336,7 +341,6 @@ def show(supabase):
                     }
                     df_display = df.rename(columns=renames)
 
-                    # KPIs Visuels
                     st.markdown("---")
                     k1, k2, k3, k4 = st.columns(4)
                     k1.metric("Volume Total", f"{df_display['Quantité (m³)'].sum():.1f} m³")
@@ -346,10 +350,9 @@ def show(supabase):
                     
                     st.markdown("---")
                     
-                    # 📥 Bouton de Téléchargement Excel
                     excel_file = generate_excel_synthesis(df_display, f"Journée du {selected_date.strftime('%d/%m/%Y')}")
                     st.download_button(
-                        label="📥 Télécharger la Synthèse Excel (Format A4 Paysage)",
+                        label="📥 Télécharger la Synthèse Excel (Format A4 - Calibri 12)",
                         data=excel_file,
                         file_name=f"Synthese_Beton_{selected_date}.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -438,10 +441,9 @@ def show(supabase):
                     
                     st.markdown("---")
                     
-                    # 📥 Bouton de Téléchargement Excel Mensuel
                     excel_file_m = generate_excel_synthesis(df_m_display, f"Mois de {mois_selected} {annee}")
                     st.download_button(
-                        label="📥 Télécharger la Synthèse Mensuelle Excel (Format A4 Paysage)",
+                        label="📥 Télécharger la Synthèse Mensuelle Excel (Format A4 - Calibri 12)",
                         data=excel_file_m,
                         file_name=f"Synthese_Mensuelle_{mois_selected}_{annee}.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
