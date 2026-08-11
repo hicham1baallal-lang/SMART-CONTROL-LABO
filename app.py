@@ -75,10 +75,10 @@ if page == "Accueil":
     
     st.markdown("---")
     
-    # Affichage sécurisé de la photo Al Boraq
+    # Affichage sécurisé de la photo Al Boraq (avec le nom exact du fichier sur GitHub)
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        image_path = os.path.join(os.path.dirname(__file__), "al_boraq.jpg")
+        image_path = os.path.join(os.path.dirname(__file__), "al_boraq.jpg.jpg")
         if os.path.exists(image_path):
             st.image(
                 image_path, 
@@ -86,7 +86,7 @@ if page == "Accueil":
                 use_container_width=True
             )
         else:
-            st.warning("⚠️ L'image 'al_boraq.jpg' est introuvable sur le serveur GitHub. Veuillez l'ajouter à votre dépôt.")
+            st.warning("⚠️ L'image 'al_boraq.jpg.jpg' est introuvable.")
         
     st.markdown("---")
     
