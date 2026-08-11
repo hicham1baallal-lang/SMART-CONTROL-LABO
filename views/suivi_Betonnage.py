@@ -10,47 +10,48 @@ def show(supabase):
     # ---------------------------------------------------------
     st.subheader("Saisie d'un contrôle")
     
-    # Champ Date de livraison
-    date_livraison = st.date_input("Date de livraison", value=date.today())
+    date_livraison = st.date_input("Date de livraison", value=date.today(), key="saisie_date")
     
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        technicien = st.text_input("Nom du Technicien LPEE", value="Agent LPEE")
-        bl_num = st.text_input("N° BL", value="BL-2026-001")
-        ouvrage = st.text_input("Ouvrage", value="Voile / Semelle")
-        quantite_m3 = st.number_input("Quantité (m³)", min_value=0.0, value=8.0, step=0.5)
+        technicien = st.text_input("Nom du Technicien LPEE", value="Agent LPEE", key="saisie_tech")
+        bl_num = st.text_input("N° BL", value="BL-2026-001", key="saisie_bl")
+        ouvrage = st.text_input("Ouvrage", value="Voile / Semelle", key="saisie_ouvrage")
+        quantite_m3 = st.number_input("Quantité (m³)", min_value=0.0, value=8.0, step=0.5, key="saisie_qte")
         
     with col2:
-        client = st.text_input("Client", value="TGCC", disabled=True)
+        client = st.text_input("Client", value="TGCC", disabled=True, key="saisie_client")
         
         # Saisie des heures
-        heure_fin = st.time_input("Heure de fin de production", value=datetime.strptime("08:00", "%H:%M").time())
-        heure_arrivee = st.time_input("Heure d'arrivée au chantier", value=datetime.strptime("08:35", "%H:%M").time())
+        heure_fin = st.time_input("Heure de fin de production", value=datetime.strptime("08:00", "%H:%M").time(), key="saisie_h_fin")
+        heure_arrivee = st.time_input("Heure d'arrivée au chantier", value=datetime.strptime("08:35", "%H:%M").time(), key="saisie_h_arr")
         
         # Calcul de la durée en minutes
         dt_fin = datetime.combine(date.today(), heure_fin)
         dt_arr = datetime.combine(date.today(), heure_arrivee)
         duree_minutes = int((dt_arr - dt_fin).total_seconds() / 60)
         
-        st.text_input("Durée de transport / attente (min)", value=f"{duree_minutes} min", disabled=True)
+        st.text_input("Durée de transport / attente (min)", value=f"{duree_minutes} min", disabled=True, key="saisie_duree")
         
         classe_beton = st.selectbox(
             "Classe", 
-            ["C25/30", "C30/37", "C35/45", "C40/50", "C45/55"]
+            ["C25/30", "C30/37", "C35/45", "C40/50", "C45/55"],
+            key="saisie_classe"
         )
         
     with col3:
-        centrale = st.text_input("Centrale à Béton", value="TG PREFA")
-        meteo = st.selectbox("Météo", ["Ensoleillé ☀️", "Nuageux ☁️", "Pluie 🌧️"])
+        centrale = st.text_input("Centrale à Béton", value="TG PREFA", key="saisie_centrale")
+        meteo = st.selectbox("Météo", ["Ensoleillé ☀️", "Nuageux ☁️", "Pluie 🌧️"], key="saisie_meteo")
         
-        temp_beton = st.number_input("Température du Béton (°C)", value=20.0, step=0.1, format="%.1f")
-        temp_ambiante = st.number_input("Température Ambiante (°C)", value=25.0, step=0.1, format="%.1f")
-        affaissement = st.number_input("Affaissement (mm)", min_value=0, value=150, step=10)
+        temp_beton = st.number_input("Température du Béton (°C)", value=20.0, step=0.1, format="%.1f", key="saisie_t_beton")
+        temp_ambiante = st.number_input("Température Ambiante (°C)", value=25.0, step=0.1, format="%.1f", key="saisie_t_amb")
+        affaissement = st.number_input("Affaissement (mm)", min_value=0, value=150, step=10, key="saisie_aff")
         
         prelevement = st.selectbox(
             "Prélèvement", 
-            ["OUI - Conforme (NF EN 12350-2)", "NON"]
+            ["OUI - Conforme (NF EN 12350-2)", "NON"],
+            key="saisie_prel"
         )
         
         is_non_prelevement = "NON" in prelevement
@@ -59,13 +60,14 @@ def show(supabase):
             "Nb d'éprouvettes", 
             min_value=0, 
             value=0 if is_non_prelevement else 6,
-            disabled=is_non_prelevement
+            disabled=is_non_prelevement,
+            key="saisie_eprov"
         )
 
-    observations = st.text_area("Observations", value="Béton conforme")
+    observations = st.text_area("Observations", value="Béton conforme", key="saisie_obs")
 
     # Bouton Enregistrer
-    if st.button("💾 Enregistrer"):
+    if st.button("💾 Enregistrer", key="btn_enregistrer"):
         data = {
             "date_livraison": str(date_livraison),
             "bl_num": bl_num,
@@ -168,7 +170,7 @@ def show(supabase):
                 st.subheader("🛠️ Espace Administration - Suivi Béton")
                 
                 record_options = {f"ID {r['id']} - BL: {r.get('bl_num', 'N/A')} - Ouvrage: {r.get('ouvrage', '')}": r for r in res.data}
-                selected_key = st.selectbox("Sélectionner l'enregistrement à gérer", list(record_options.keys()))
+                selected_key = st.selectbox("Sélectionner l'enregistrement à gérer", list(record_options.keys()), key="admin_select_record")
                 selected_item = record_options[selected_key]
                 
                 col_ed, col_del = st.columns(2)
@@ -193,10 +195,10 @@ def show(supabase):
                                     st.rerun()
                                 except Exception as e:
                                     st.error(f"Erreur de mise à jour : {e}")
-                                    
+                            
                 with col_del:
                     st.markdown("##### ⚠️ Suppression")
-                    if st.button("🗑️ Supprimer définitivement ce contrôle", type="primary"):
+                    if st.button("🗑️ Supprimer définitivement ce contrôle", type="primary", key="btn_supprimer_admin"):
                         try:
                             supabase.table("suivi_betonnage").delete().eq("id", selected_item["id"]).execute()
                             st.success("Enregistrement supprimé avec succès.")
@@ -206,5 +208,6 @@ def show(supabase):
 
         else:
             st.info("Aucune donnée enregistrée pour le moment.")
+            
     except Exception as e:
         st.error(f"Erreur lors de la récupération de l'historique : {e}")
