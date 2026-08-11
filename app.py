@@ -26,7 +26,7 @@ if not st.session_state.authenticated:
         
         if st.button("Se connecter", use_container_width=True):
             # Mot de passe défini : ctr2026
-            if password == "lpee2026": 
+            if password == "ctr2026": 
                 st.session_state.authenticated = True
                 st.rerun()
             else:
