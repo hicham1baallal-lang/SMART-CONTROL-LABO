@@ -79,12 +79,12 @@ if page == "Accueil":
     with col2:
         try:
             st.image(
-                "al boraq.jpg", 
+                "al_boraq.jpg", 
                 caption="Al Boraq - Ligne à Grande Vitesse - Projet LGV CASA SUD", 
                 use_container_width=True
             )
-        except Exception:
-            st.warning("⚠️ L'image 'al boraq.jpg' est introuvable dans le dossier du projet. Veuillez vérifier son nom et son emplacement.")
+        except Exception as e:
+            st.warning(f"⚠️ Erreur de chargement de l'image : {e}")
         
     st.markdown("---")
     
