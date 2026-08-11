@@ -40,7 +40,6 @@ def generate_excel_a4(df_filtered, filter_title="Synthèse Générale"):
     TEXT_ORANGE = "B25900"
 
     font_title = Font(name="Calibri", size=15, bold=True, color=NAVY_HEADER)
-    font_subtitle = Font(name="Calibri", size=11, italic=True, color="595959")
     font_th = Font(name="Calibri", size=12, bold=True, color="FFFFFF")
     
     fill_th = PatternFill(start_color=NAVY_HEADER, end_color=NAVY_HEADER, fill_type="solid")
@@ -63,23 +62,23 @@ def generate_excel_a4(df_filtered, filter_title="Synthèse Générale"):
 
     # --- 1. EN-TÊTE DU DOCUMENT ---
     ws.merge_cells("A1:G1")
-    ws["A1"] = "LABORATOIRE LPEE — CENTRE TECHNIQUE RÉGIONAL"
+    ws["A1"] = "LABORATOIRE LPEE — CENTRE TECHNIQUE RÉGIONAL  |  Norme : NF P 94-117-1 (Plaque Ø 600 mm)"
     ws["A1"].font = font_title
     ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
 
     ws.merge_cells("A2:G2")
-    ws["A2"] = f"SYNTHÈSE DES ESSAIS DE PORTANCE À LA PLAQUE — {filter_title.upper()}"
-    ws["A2"].font = Font(name="Calibri", size=12, bold=True, color=BLUE_SUBHEADER)
+    ws["A2"] = "Projet : LGV CASA SUD  |  Client : TGCC"
+    ws["A2"].font = Font(name="Calibri", size=14, bold=True, color=BLUE_SUBHEADER)
     ws["A2"].alignment = Alignment(horizontal="center", vertical="center")
 
     ws.merge_cells("A3:G3")
-    ws["A3"] = "Projet : LGV CASA SUD  |  Client : TGCC  |  Norme : NF P 94-117-1 (Plaque Ø 600 mm)"
-    ws["A3"].font = font_subtitle
+    ws["A3"] = f"SYNTHÈSE DES ESSAIS DE PORTANCE À LA PLAQUE — {filter_title.upper()}"
+    ws["A3"].font = Font(name="Calibri", size=12, italic=True, color="595959")
     ws["A3"].alignment = Alignment(horizontal="center", vertical="center")
 
-    ws.row_dimensions[1].height = 24
-    ws.row_dimensions[2].height = 20
-    ws.row_dimensions[3].height = 18
+    ws.row_dimensions[1].height = 26
+    ws.row_dimensions[2].height = 24
+    ws.row_dimensions[3].height = 20
     ws.row_dimensions[4].height = 8
 
     # --- 2. EN-TÊTES DE TABLEAU ---
