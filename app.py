@@ -25,21 +25,21 @@ if not st.session_state.authenticated:
         password = st.text_input("Mot de passe", type="password", key="pwd_input")
         
         if st.button("Se connecter", use_container_width=True):
-            # Changez "votre_mot_de_passe" par le mot de passe de votre choix
-            if password == "votre_mot_de_passe": 
+            # REMPLACEZ LES ... PAR VOTRE MOT DE PASSE RÉEL
+            if password == "...": 
                 st.session_state.authenticated = True
                 st.rerun()
             else:
-                st.error("❌ Mot de passe incorrect. Veuillez réessayer.")
+                st.error("❌ Mot de passe incorrect.")
     
-    # Stoppe l'exécution ici tant qu'on n'est pas connecté
+    # Stoppe l'exécution tant qu'on n'est pas connecté
     st.stop()
 
 # ==========================================
 # 3. CODE PRINCIPAL (Affiché uniquement si connecté)
 # ==========================================
 
-# Importation des 4 vues avec la CASSE EXACTE de votre GitHub
+# Importation des 4 vues
 try:
     from views import suivi_Betonnage, essai_Plaque, synthese_Beton, synthese_plaque
 except ImportError as e:
