@@ -84,7 +84,7 @@ if page == "Accueil":
                 use_container_width=True
             )
         except Exception:
-            st.warning("⚠️ L'image 'Al-boraq-get-on-board-scaled.jpg' est introuvable dans le dossier du projet. Veuillez vérifier son nom et son emplacement.")
+            st.warning("⚠️ L'image 'Al boraq-get-on-board-scaled.jpg' est introuvable dans le dossier du projet. Veuillez vérifier son nom et son emplacement.")
         
     st.markdown("---")
     
