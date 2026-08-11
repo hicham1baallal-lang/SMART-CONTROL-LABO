@@ -397,4 +397,36 @@ def show(supabase):
             file_name=file_name_clean,
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True
+            if st.session_state.role == "admin":
+        st.markdown("---")
+        st.subheader("🛠️ Zone Administration")
+        
+        # Récupérer les données pour permettre la sélection
+        data = supabase.table("votre_table").select("*").execute().data
+        
+        # Sélectionner la ligne à éditer/supprimer
+        options = {f"{item['id']} - {item.get('date_essai', '')}": item for item in data}
+        selected_key = st.selectbox("Sélectionner l'enregistrement à gérer", list(options.keys()))
+        selected_item = options[selected_key]
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            with st.expander("📝 Modifier"):
+                new_ev1 = st.number_input("Modifier EV1", value=float(selected_item.get("ev1", 0)))
+                new_ev2 = st.number_input("Modifier EV2", value=float(selected_item.get("ev2", 0)))
+                
+                if st.button("Valider la modification"):
+                    supabase.table("votre_table").update({
+                        "ev1": new_ev1, 
+                        "ev2": new_ev2
+                    }).eq("id", selected_item["id"]).execute()
+                    st.success("Modifié !")
+                    st.rerun()
+                    
+        with col2:
+            if st.button("🗑️ Supprimer définitivement", type="primary"):
+                supabase.table("votre_table").delete().eq("id", selected_item["id"]).execute()
+                st.success("Supprimé !")
+                st.rerun()
         )
