@@ -1,4 +1,0 @@
-﻿streamlit>=1.30.0
-supabase
-pandas
-matplotlib
