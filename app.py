@@ -11,7 +11,7 @@ st.set_page_config(
 
 # 2. Gestion des rôles
 if "role" not in st.session_state:
-    st.session_state.role = None # Peut être None, "user", ou "admin"
+    st.session_state.role = None  # Peut être None, "user", ou "admin"
 
 # --- ÉCRAN DE CONNEXION ---
 if st.session_state.role is None:
@@ -27,7 +27,7 @@ if st.session_state.role is None:
             if password == "ctr2026": 
                 st.session_state.role = "user"
                 st.rerun()
-            elif password == "admin2026": # <-- MOT DE PASSE ADMIN
+            elif password == "admin2026":  # <-- MOT DE PASSE ADMIN
                 st.session_state.role = "admin"
                 st.rerun()
             else:
