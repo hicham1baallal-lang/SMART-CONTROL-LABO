@@ -176,21 +176,78 @@ def show(supabase):
                 col_ed, col_del = st.columns(2)
                 
                 with col_ed:
-                    with st.expander("📝 Modifier ce contrôle"):
-                        with st.form("edit_form_beton"):
-                            new_bl = st.text_input("N° BL", value=selected_item.get("bl_num", ""))
-                            new_ouvrage = st.text_input("Ouvrage", value=selected_item.get("ouvrage", ""))
-                            new_quantite = st.number_input("Quantité (m³)", value=float(selected_item.get("quantite_m3", 0.0)))
-                            new_aff = st.number_input("Affaissement (mm)", value=int(selected_item.get("affaissement", 0)))
+                    with st.expander("📝 Modifier ce contrôle (Tous les champs)"):
+                        with st.form("edit_form_beton_complet"):
+                            # Valeurs par défaut sécurisées
+                            try:
+                                def_date = datetime.strptime(str(selected_item.get("date_livraison", date.today())), "%Y-%m-%d").date()
+                            except:
+                                def_date = date.today()
+
+                            try:
+                                def_h_fin = datetime.strptime(str(selected_item.get("heure_fin_coulage", "08:00")), "%H:%M").time()
+                            except:
+                                def_h_fin = datetime.strptime("08:00", "%H:%M").time()
+
+                            try:
+                                def_h_arr = datetime.strptime(str(selected_item.get("heure_arrivee", "08:35")), "%H:%M").time()
+                            except:
+                                def_h_arr = datetime.strptime("08:35", "%H:%M").time()
+
+                            new_date_livraison = st.date_input("Date de livraison", value=def_date, key="edit_date")
+                            new_technicien = st.text_input("Nom du Technicien LPEE", value=selected_item.get("technicien", "Agent LPEE"), key="edit_tech")
+                            new_bl = st.text_input("N° BL", value=selected_item.get("bl_num", ""), key="edit_bl")
+                            new_ouvrage = st.text_input("Ouvrage", value=selected_item.get("ouvrage", ""), key="edit_ouvrage")
+                            new_quantite = st.number_input("Quantité (m³)", value=float(selected_item.get("quantite_m3", 0.0)), key="edit_qte")
                             
-                            if st.form_submit_button("Enregistrer les modifications"):
+                            new_heure_fin = st.time_input("Heure de fin de production", value=def_h_fin, key="edit_h_fin")
+                            new_heure_arrivee = st.time_input("Heure d'arrivée au chantier", value=def_h_arr, key="edit_h_arr")
+                            
+                            classes_list = ["C25/30", "C30/37", "C35/45", "C40/50", "C45/55"]
+                            current_classe = selected_item.get("classe_beton", "C25/30")
+                            idx_classe = classes_list.index(current_classe) if current_classe in classes_list else 0
+                            new_classe = st.selectbox("Classe", classes_list, index=idx_classe, key="edit_classe")
+                            
+                            new_centrale = st.text_input("Centrale à Béton", value=selected_item.get("centrale_beton", "TG PREFA"), key="edit_centrale")
+                            
+                            meteo_list = ["Ensoleillé ☀️", "Nuageux ☁️", "Pluie 🌧️"]
+                            current_meteo = selected_item.get("meteo", "Ensoleillé ☀️")
+                            idx_meteo = meteo_list.index(current_meteo) if current_meteo in meteo_list else 0
+                            new_meteo = st.selectbox("Météo", meteo_list, index=idx_meteo, key="edit_meteo")
+                            
+                            new_temp_beton = st.number_input("Température du Béton (°C)", value=float(selected_item.get("temperature", 20.0)), step=0.1, format="%.1f", key="edit_t_beton")
+                            new_temp_amb = st.number_input("Température Ambiante (°C)", value=float(selected_item.get("temperature_ambiante", 25.0)), step=0.1, format="%.1f", key="edit_t_amb")
+                            new_affaissement = st.number_input("Affaissement (mm)", value=int(selected_item.get("affaissement", 150)), step=10, key="edit_aff")
+                            
+                            prelevement_list = ["OUI - Conforme (NF EN 12350-2)", "NON"]
+                            current_prel = selected_item.get("prelevement", "NON")
+                            idx_prel = prelevement_list.index(current_prel) if current_prel in prelevement_list else 1
+                            new_prelevement = st.selectbox("Prélèvement", prelevement_list, index=idx_prel, key="edit_prel")
+                            
+                            new_nb_eprouvettes = st.number_input("Nb d'éprouvettes", value=int(selected_item.get("nb_eprouvettes", 0)), min_value=0, key="edit_eprov")
+                            new_observations = st.text_area("Observations", value=selected_item.get("observations", ""), key="edit_obs")
+                            
+                            if st.form_submit_button("💾 Enregistrer toutes les modifications"):
                                 try:
                                     supabase.table("suivi_betonnage").update({
+                                        "date_livraison": str(new_date_livraison),
+                                        "technicien": new_technicien,
                                         "bl_num": new_bl,
                                         "ouvrage": new_ouvrage,
                                         "quantite_m3": float(new_quantite),
-                                        "affaissement": int(new_aff)
+                                        "heure_fin_coulage": new_heure_fin.strftime("%H:%M"),
+                                        "heure_arrivee": new_heure_arrivee.strftime("%H:%M"),
+                                        "classe_beton": new_classe,
+                                        "centrale_beton": new_centrale,
+                                        "meteo": new_meteo,
+                                        "temperature": float(new_temp_beton),
+                                        "temperature_ambiante": float(new_temp_amb),
+                                        "affaissement": int(new_affaissement),
+                                        "prelevement": new_prelevement,
+                                        "nb_eprouvettes": int(new_nb_eprouvettes),
+                                        "observations": new_observations
                                     }).eq("id", selected_item["id"]).execute()
+                                    
                                     st.success("Modifications enregistrées avec succès !")
                                     st.rerun()
                                 except Exception as e:
