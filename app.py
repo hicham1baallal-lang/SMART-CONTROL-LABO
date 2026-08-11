@@ -9,14 +9,14 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# 2. Importation sécurisée des 4 vues
+# 2. Importation des 4 vues avec la CASSE EXACTE de votre GitHub
 try:
-    from views import suivi_betonnage, essai_plaque, synthese_beton, synthese_plaque
+    from views import suivi_Betonnage, essai_Plaque, synthese_Beton, synthese_plaque
 except ImportError as e:
     st.error(f"❌ Erreur lors de l'importation des vues : {e}")
     st.stop()
 
-# 3. Connexion Supabase avec st.secrets
+# 3. Connexion Supabase
 try:
     SUPABASE_URL = st.secrets["SUPABASE_URL"]
     SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
@@ -25,7 +25,7 @@ except Exception as e:
     supabase = None
     st.error(f"❌ Erreur de connexion Supabase : {e}")
 
-# Style CSS personnalisé
+# Style CSS
 st.markdown("""
     <style>
     .main { padding: 1rem 2rem; }
@@ -44,7 +44,7 @@ with st.sidebar:
     page = st.radio(
         "",
         ["Accueil", "Essai à la Plaque", "Synthèse Plaque", "Suivi de Bétonnage", "Synthèse Béton"],
-        index=2  # Slectionne directement "Synthèse Plaque" par défaut
+        index=2
     )
     
     st.markdown("---")
@@ -57,13 +57,13 @@ if page == "Accueil":
     st.write("Bienvenue sur la plateforme de suivi de chantier LPEE.")
 
 elif page == "Essai à la Plaque":
-    essai_plaque.show(supabase)
+    essai_Plaque.show(supabase)
 
 elif page == "Synthèse Plaque":
     synthese_plaque.show(supabase)
 
 elif page == "Suivi de Bétonnage":
-    suivi_betonnage.show(supabase)
+    suivi_Betonnage.show(supabase)
 
 elif page == "Synthèse Béton":
-    synthese_beton.show(supabase)
+    synthese_Beton.show(supabase)
