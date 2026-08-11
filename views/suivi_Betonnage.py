@@ -25,12 +25,11 @@ def show(supabase):
         heure_fin = st.time_input("Heure de fin de production", value=datetime.strptime("08:00", "%H:%M").time())
         heure_arrivee = st.time_input("Heure d'arrivée au chantier", value=datetime.strptime("08:35", "%H:%M").time())
         
-        # 🔹 CALCUL DYNAMIQUE : Différence en minutes
+        # Calcul de la durée en minutes
         dt_fin = datetime.combine(date.today(), heure_fin)
         dt_arr = datetime.combine(date.today(), heure_arrivee)
         duree_minutes = int((dt_arr - dt_fin).total_seconds() / 60)
         
-        # Affichage du résultat calculé (lecture seule)
         st.text_input("Durée de transport / attente (min)", value=f"{duree_minutes} min", disabled=True)
         
         classe_beton = st.selectbox(
@@ -42,14 +41,10 @@ def show(supabase):
         centrale = st.text_input("Centrale à Béton", value="TG PREFA")
         meteo = st.selectbox("Météo", ["Ensoleillé ☀️", "Nuageux ☁️", "Pluie 🌧️"])
         
-        # 🔹 MODIFICATION : Températures à 1 chiffre après la virgule (step=0.1, format="%.1f")
         temp_beton = st.number_input("Température du Béton (°C)", value=20.0, step=0.1, format="%.1f")
         temp_ambiante = st.number_input("Température Ambiante (°C)", value=25.0, step=0.1, format="%.1f")
-        
-        # 🔹 MODIFICATION : Affaissement en nombre entier avec un pas de 10
         affaissement = st.number_input("Affaissement (mm)", min_value=0, value=150, step=10)
         
-        # Prélèvement et gestion dynamique des éprouvettes
         prelevement = st.selectbox(
             "Prélèvement", 
             ["OUI - Conforme (NF EN 12350-2)", "NON"]
@@ -105,10 +100,13 @@ def show(supabase):
         if res.data:
             df = pd.DataFrame(res.data)
             
-            # Masquer la colonne created_at / created
-            cols_to_drop = [col for col in ["created_at", "created"] if col in df.columns]
+            # 🔹 MODIFICATION 1 : Suppression de la colonne 'id' et 'created_at'
+            cols_to_drop = [col for col in ["id", "created_at", "created"] if col in df.columns]
             if cols_to_drop:
                 df = df.drop(columns=cols_to_drop)
+                
+            # 🔹 MODIFICATION 2 : La numérotation des lignes (index) commence à 1 au lieu de 0
+            df.index = range(1, len(df) + 1)
                 
             st.dataframe(df, use_container_width=True)
         else:
