@@ -3,7 +3,19 @@ import pandas as pd
 from datetime import date
 
 def show(supabase):
-    st.title("🧪 Saisie - Essai à la Plaque")
+    # --- EN-TÊTE : TITRE ET NORME CÔTE À CÔTE ---
+    col_header1, col_header2 = st.columns([2, 1])
+    with col_header1:
+        st.title("🧪 Saisie - Essai à la Plaque")
+    with col_header2:
+        st.markdown(
+            "<div style='text-align: right; padding-top: 15px; font-weight: bold; color: #1F4E79; font-size: 1.1em;'>"
+            "📋 Norme : NF P 94-117-1"
+            "</div>", 
+            unsafe_allow_html=True
+        )
+
+    st.markdown("---")
 
     # ---------------------------------------------------------
     # FORMULAIRE DE SAISIE
@@ -23,10 +35,8 @@ def show(supabase):
         col1, col2 = st.columns(2)
         with col1:
             date_selected = st.date_input("Date de l'essai", value=date.today())
-            norme = st.selectbox(
-                "Norme d'essai", 
-                ["NF P 94-117-1 (Plaque 600 mm)", "NF P 94-117-2 (Dynaplaque)", "Autre"]
-            )
+            technicien = st.text_input("Technicien :", placeholder="Nom du technicien")
+            
         with col2:
             couche = st.selectbox(
                 "Type de couche", 
@@ -72,7 +82,8 @@ def show(supabase):
                     "date_essai": str(date_selected),
                     "client": "TGCC",
                     "projet": "LGV CASA SUD",
-                    "norme": norme,
+                    "norme": "NF P 94-117-1",
+                    "technicien": technicien,
                     "couche": couche,
                     "emplacement": emplacement,
                     "z1": float(z1),
