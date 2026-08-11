@@ -7,15 +7,15 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
 def generate_excel_a4(df_filtered, filter_title="Synthèse Générale"):
     """
-    Génère un fichier Excel professionnel mis en page pour impression A4 Paysage
-    avec en-tête, pied de page, couleurs, formules et synthèse qualité.
+    Génère un fichier Excel professionnel mis en page pour impression A4 Portrait
+    avec en-tête, pied de page (Responsable d'essai & Chef du laboratoire), couleurs, formules et synthèse qualité.
     """
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Synthèse Essais Plaque"
 
-    # --- CONFIGURATION IMPRESSION A4 PAYSAGE ---
-    ws.page_setup.orientation = ws.ORIENTATION_LANDSCAPE
+    # --- CONFIGURATION IMPRESSION A4 PORTRAIT ---
+    ws.page_setup.orientation = ws.ORIENTATION_PORTRAIT
     ws.page_setup.paperSize = ws.PAPERSIZE_A4
     ws.page_setup.fitToPage = True
     ws.page_setup.fitToWidth = 1
@@ -23,13 +23,14 @@ def generate_excel_a4(df_filtered, filter_title="Synthèse Générale"):
     ws.sheet_properties.pageSetUpPr.fitToPage = True
 
     # --- EN-TÊTE ET PIED DE PAGE D'IMPRESSION (NATIVE EXCEL A4) ---
-    ws.oddHeader.left.text = "&\"Calibri,Bold\"&10LABORATOIRE LPEE - CTR-CSB\nProjet: LGV CASA SETTAT | Client: TGCC"
-    ws.oddHeader.center.text = f"&\"Calibri,Bold\"&13SYNTHÈSE DES ESSAIS À LA PLAQUE\n{filter_title}"
-    ws.oddHeader.right.text = "&\"Calibri,Regular\"&9Edité le: &D"
+    ws.oddHeader.left.text = "&\"Calibri,Bold\"&9LABORATOIRE LPEE - CTR-CSB\nProjet: LGV CASA SUD | Client: TGCC"
+    ws.oddHeader.center.text = f"&\"Calibri,Bold\"&11SYNTHÈSE DES ESSAIS À LA PLAQUE\n{filter_title}"
+    ws.oddHeader.right.text = "&\"Calibri,Regular\"&8Edité le: &D"
 
-    ws.oddFooter.left.text = "&\"Calibri,Italic\"&9Document Officiel - Contrôle Qualité Terrassement (NF P 94-117-1)"
-    ws.oddFooter.center.text = "&\"Calibri,Bold\"&10Page &P sur &N"
-    ws.oddFooter.right.text = "&\"Calibri,Regular\"&9Visa Laboratoire: _____________"
+    # Pied de page avec Responsable d'essai et Chef du laboratoire
+    ws.oddFooter.left.text = "&\"Calibri,Regular\"&8Responsable d'essai: ___________________"
+    ws.oddFooter.center.text = "&\"Calibri,Bold\"&9Page &P sur &N"
+    ws.oddFooter.right.text = "&\"Calibri,Regular\"&8Chef du Laboratoire: ___________________"
 
     # --- PALETTE DE COULEURS ET STYLES ---
     NAVY_HEADER = "1F4E79"
@@ -41,9 +42,9 @@ def generate_excel_a4(df_filtered, filter_title="Synthèse Générale"):
     ORANGE_WARN = "FFF2CC"
     TEXT_ORANGE = "B25900"
 
-    font_title = Font(name="Calibri", size=14, bold=True, color=NAVY_HEADER)
-    font_subtitle = Font(name="Calibri", size=10, italic=True, color="595959")
-    font_th = Font(name="Calibri", size=10, bold=True, color="FFFFFF")
+    font_title = Font(name="Calibri", size=13, bold=True, color=NAVY_HEADER)
+    font_subtitle = Font(name="Calibri", size=9, italic=True, color="595959")
+    font_th = Font(name="Calibri", size=9, bold=True, color="FFFFFF")
     
     fill_th = PatternFill(start_color=NAVY_HEADER, end_color=NAVY_HEADER, fill_type="solid")
     fill_zebra = PatternFill(start_color=ICE_BLUE_BG, end_color=ICE_BLUE_BG, fill_type="solid")
@@ -69,27 +70,20 @@ def generate_excel_a4(df_filtered, filter_title="Synthèse Générale"):
     ws["A1"].font = font_title
     ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
 
-# --- 1. EN-TÊTE DU DOCUMENT ---
-    ws.merge_cells("A1:J1")
-    ws["A1"] = "LABORATOIRE LPEE — CENTRE TECHNIQUE RÉGIONAL"
-    ws["A1"].font = font_title
-    ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
-
     ws.merge_cells("A2:J2")
     ws["A2"] = f"SYNTHÈSE DES ESSAIS DE PORTANCE À LA PLAQUE — {filter_title.upper()}"
-    ws["A2"].font = Font(name="Calibri", size=11, bold=True, color=BLUE_SUBHEADER)
+    ws["A2"].font = Font(name="Calibri", size=10, bold=True, color=BLUE_SUBHEADER)
     ws["A2"].alignment = Alignment(horizontal="center", vertical="center")
 
     ws.merge_cells("A3:J3")
-    # ✅ Modification : Suppression des formules EV1/EV2/K et ajout du Client + Projet
     ws["A3"] = "Projet : LGV CASA SUD  |  Client : TGCC  |  Norme : NF P 94-117-1 (Plaque Ø 600 mm)"
     ws["A3"].font = font_subtitle
     ws["A3"].alignment = Alignment(horizontal="center", vertical="center")
 
-    ws.row_dimensions[1].height = 22
-    ws.row_dimensions[2].height = 18
-    ws.row_dimensions[3].height = 16
-    ws.row_dimensions[4].height = 8
+    ws.row_dimensions[1].height = 20
+    ws.row_dimensions[2].height = 16
+    ws.row_dimensions[3].height = 15
+    ws.row_dimensions[4].height = 6
 
     # --- 2. EN-TÊTES DE TABLEAU ---
     headers = [
@@ -97,7 +91,7 @@ def generate_excel_a4(df_filtered, filter_title="Synthèse Générale"):
         "PK / Profil", "Z1 (mm)", "Z2 (mm)", "EV1 (MPa)", "EV2 (MPa)", "K (EV2/EV1)"
     ]
 
-    ws.row_dimensions[5].height = 25
+    ws.row_dimensions[5].height = 22
     for col_idx, text in enumerate(headers, 1):
         cell = ws.cell(row=5, column=col_idx, value=text)
         cell.font = font_th
@@ -108,7 +102,7 @@ def generate_excel_a4(df_filtered, filter_title="Synthèse Générale"):
     # --- 3. REMPLISSAGE DES DONNÉES ---
     start_row = 6
     for r_idx, (_, row) in enumerate(df_filtered.iterrows(), start=start_row):
-        ws.row_dimensions[r_idx].height = 20
+        ws.row_dimensions[r_idx].height = 18
         is_even = (r_idx % 2 == 0)
         current_fill = fill_zebra if is_even else PatternFill(fill_type=None)
 
@@ -129,7 +123,7 @@ def generate_excel_a4(df_filtered, filter_title="Synthèse Générale"):
 
         for c_idx, val in enumerate(values, start=1):
             cell = ws.cell(row=r_idx, column=c_idx, value=val)
-            cell.font = Font(name="Calibri", size=10)
+            cell.font = Font(name="Calibri", size=9)
             cell.border = thin_border
             cell.fill = current_fill
 
@@ -148,21 +142,21 @@ def generate_excel_a4(df_filtered, filter_title="Synthèse Générale"):
                 cell.number_format = "0.00"
                 if k_val >= 1.5:
                     cell.fill = PatternFill(start_color=GREEN_OK, end_color=GREEN_OK, fill_type="solid")
-                    cell.font = Font(name="Calibri", size=10, bold=True, color=TEXT_GREEN)
+                    cell.font = Font(name="Calibri", size=9, bold=True, color=TEXT_GREEN)
                 else:
                     cell.fill = PatternFill(start_color=ORANGE_WARN, end_color=ORANGE_WARN, fill_type="solid")
-                    cell.font = Font(name="Calibri", size=10, bold=True, color=TEXT_ORANGE)
+                    cell.font = Font(name="Calibri", size=9, bold=True, color=TEXT_ORANGE)
 
     end_row = start_row + len(df_filtered) - 1
 
     # --- 4. LIGNE DE MOYENNE AUTOMATIQUE ---
     if len(df_filtered) > 0:
         stat_row = end_row + 1
-        ws.row_dimensions[stat_row].height = 22
+        ws.row_dimensions[stat_row].height = 20
 
         ws.merge_cells(start_row=stat_row, start_column=1, end_row=stat_row, end_column=5)
         lbl_cell = ws.cell(row=stat_row, column=1, value="MOYENNE DES ESSAIS")
-        lbl_cell.font = Font(name="Calibri", size=10, bold=True, color=NAVY_HEADER)
+        lbl_cell.font = Font(name="Calibri", size=9, bold=True, color=NAVY_HEADER)
         lbl_cell.alignment = Alignment(horizontal="right", vertical="center")
 
         for col_idx in range(1, 6):
@@ -179,7 +173,7 @@ def generate_excel_a4(df_filtered, filter_title="Synthèse Générale"):
 
         for c_idx, form, num_fmt in formulas:
             c = ws.cell(row=stat_row, column=c_idx, value=form)
-            c.font = Font(name="Calibri", size=10, bold=True, color=NAVY_HEADER)
+            c.font = Font(name="Calibri", size=9, bold=True, color=NAVY_HEADER)
             c.alignment = Alignment(horizontal="right", vertical="center")
             c.border = thick_top_bottom
             c.fill = fill_kpi
@@ -187,14 +181,14 @@ def generate_excel_a4(df_filtered, filter_title="Synthèse Générale"):
 
         # --- 5. SYNTHÈSE QUALITÉ ---
         synth_start = stat_row + 2
-        ws.cell(row=synth_start, column=1, value="RÉSUMÉ STATISTIQUE QUALITÉ").font = Font(name="Calibri", size=11, bold=True, color=NAVY_HEADER)
+        ws.cell(row=synth_start, column=1, value="RÉSUMÉ STATISTIQUE QUALITÉ").font = Font(name="Calibri", size=10, bold=True, color=NAVY_HEADER)
 
         summary_headers = ["Indicateur", "EV1 (MPa)", "EV2 (MPa)", "Ratio K (EV2/EV1)"]
-        ws.row_dimensions[synth_start+1].height = 22
+        ws.row_dimensions[synth_start+1].height = 20
 
         for idx, header in enumerate(summary_headers, start=1):
             c = ws.cell(row=synth_start+1, column=idx, value=header)
-            c.font = Font(name="Calibri", size=10, bold=True, color="FFFFFF")
+            c.font = Font(name="Calibri", size=9, bold=True, color="FFFFFF")
             c.fill = PatternFill(start_color=BLUE_SUBHEADER, end_color=BLUE_SUBHEADER, fill_type="solid")
             c.alignment = Alignment(horizontal="center", vertical="center")
             c.border = thin_border
@@ -207,26 +201,26 @@ def generate_excel_a4(df_filtered, filter_title="Synthèse Générale"):
         ]
 
         for idx, (label, ev1_f, ev2_f, k_f) in enumerate(metrics, start=synth_start+2):
-            ws.row_dimensions[idx].height = 19
+            ws.row_dimensions[idx].height = 18
             c1 = ws.cell(row=idx, column=1, value=label)
             c2 = ws.cell(row=idx, column=2, value=ev1_f)
             c3 = ws.cell(row=idx, column=3, value=ev2_f)
             c4 = ws.cell(row=idx, column=4, value=k_f)
             
-            c1.font = Font(name="Calibri", size=10, bold=True)
+            c1.font = Font(name="Calibri", size=9, bold=True)
             c1.border = thin_border
             c1.alignment = Alignment(horizontal="left", vertical="center")
             
             for c, fmt in zip([c2, c3, c4], ["#,##0.00", "#,##0.00", "0.00" if "Nombre" not in label else "0"]):
-                c.font = Font(name="Calibri", size=10)
+                c.font = Font(name="Calibri", size=9)
                 c.border = thin_border
                 c.alignment = Alignment(horizontal="right", vertical="center")
                 c.number_format = fmt
 
-    # --- LARGEURS DE COLONNES ---
+    # --- LARGEURS DE COLONNES (Optimisées Portrait) ---
     col_widths = {
-        'A': 13, 'B': 14, 'C': 18, 'D': 20, 'E': 14,
-        'F': 10, 'G': 10, 'H': 13, 'I': 13, 'J': 13
+        'A': 11, 'B': 12, 'C': 15, 'D': 16, 'E': 12,
+        'F': 9, 'G': 9, 'H': 11, 'I': 11, 'J': 11
     }
     for col_letter, width in col_widths.items():
         ws.column_dimensions[col_letter].width = width
