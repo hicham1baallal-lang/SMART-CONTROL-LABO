@@ -35,7 +35,7 @@ with st.sidebar:
         st.info("Déconnecté")
 
 # Connexion Supabase
-SUPABASE_URL = "https://pfyfmfujccibiwfiwknu.supabase.co"
+SUPABASE_URL = "https://pfyfmfujccibiwfiwknu.supabase.co/rest/v1/"
 SUPABASE_KEY = "sb_publishable_6h8ZUeV8ii5TjKUV9B1Ewg_"
 
 @st.cache_resource
