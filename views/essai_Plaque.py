@@ -18,11 +18,11 @@ def show(supabase):
     st.markdown("---")
 
     # ---------------------------------------------------------
-    # FORMULAIRE DE SAISIE
+    # 1. FORMULAIRE DE SAISIE
     # ---------------------------------------------------------
-    with st.form("form_essai_plaque"):
+    with st.form("form_essai_plaque", clear_on_submit=True):
         
-        # --- 1. CHAMPS DÉSACTIVÉS (CLIENT & PROJET) ---
+        # --- CHAMPS DÉSACTIVÉS (CLIENT & PROJET) ---
         col_info1, col_info2 = st.columns(2)
         with col_info1:
             st.text_input("Client", value="TGCC", disabled=True)
@@ -31,7 +31,7 @@ def show(supabase):
 
         st.markdown("---")
 
-        # --- 2. INFORMATIONS GÉNÉRALES ---
+        # --- INFORMATIONS GÉNÉRALES ---
         col1, col2 = st.columns(2)
         with col1:
             date_selected = st.date_input("Date de l'essai", value=date.today())
@@ -46,14 +46,14 @@ def show(supabase):
 
         st.markdown("### 📊 Données de Chargement (Enfoncements)")
         
-        # --- 3. SAISIE Z1 ET Z2 ---
+        # --- SAISIE Z1 ET Z2 ---
         col_z1, col_z2 = st.columns(2)
         with col_z1:
             z1 = st.number_input("Z1 - 1er chargement (mm)", min_value=0.0, value=0.0, step=0.01, format="%.2f")
         with col_z2:
             z2 = st.number_input("Z2 - 2ème chargement (mm)", min_value=0.0, value=0.0, step=0.01, format="%.2f")
 
-        # --- 4. CALCULS AUTOMATIQUES ---
+        # --- CALCULS AUTOMATIQUES ---
         ev1 = round(112.5 / (z1 * 2), 2) if z1 > 0 else 0.0
         ev2 = round(90.0 / (z2 * 2), 2) if z2 > 0 else 0.0
         k_val = round(ev2 / ev1, 2) if ev1 > 0 else 0.0
@@ -71,7 +71,7 @@ def show(supabase):
         submitted = st.form_submit_button("💾 Enregistrer l'essai", use_container_width=True)
 
     # ---------------------------------------------------------
-    # ENREGISTREMENT DANS SUPABASE
+    # 2. ENREGISTREMENT DANS SUPABASE
     # ---------------------------------------------------------
     if submitted:
         if z1 <= 0 or z2 <= 0:
@@ -95,6 +95,58 @@ def show(supabase):
 
                 supabase.table("essai_plaque").insert(data_payload).execute()
                 st.success("✅ Essai à la plaque enregistré avec succès !")
+                
+                # 🔄 Force le rechargement de la page pour afficher l'essai instantanément dans le tableau ci-dessous
+                st.rerun()
 
             except Exception as e:
                 st.error(f"Erreur d'enregistrement : {e}")
+
+    # ---------------------------------------------------------
+    # 3. AFFICHAGE DES ESSAIS ENREGISTRÉS (HISTORIQUE)
+    # ---------------------------------------------------------
+    st.markdown("---")
+    st.markdown("### 📋 Historique des Essais à la Plaque Enregistrés")
+
+    try:
+        # Récupération des données depuis Supabase (les plus récents en premier)
+        res = supabase.table("essai_plaque").select("*").order("date_essai", desc=True).execute()
+        data = res.data if res else []
+
+        if data:
+            df = pd.DataFrame(data)
+
+            # Masquer les colonnes techniques
+            cols_to_drop = [c for c in ["id", "created_at"] if c in df.columns]
+            df_display = df.drop(columns=cols_to_drop)
+
+            # Noms lisibles pour l'en-tête du tableau
+            renames = {
+                "date_essai": "Date Essai",
+                "client": "Client",
+                "projet": "Projet",
+                "norme": "Norme",
+                "technicien": "Technicien",
+                "couche": "Couche",
+                "emplacement": "PK / Profil",
+                "z1": "Z1 (mm)",
+                "z2": "Z2 (mm)",
+                "ev1": "EV1 (MPa)",
+                "ev2": "EV2 (MPa)",
+                "k": "Coefficient K"
+            }
+            df_display = df_display.rename(columns=renames)
+
+            # Affichage du tableau
+            st.dataframe(
+                df_display, 
+                use_container_width=True,
+                hide_index=True
+            )
+            st.caption(f"Total des essais enregistrés : {len(df_display)}")
+
+        else:
+            st.info("Aucun essai à la plaque n'a encore été enregistré.")
+
+    except Exception as e:
+        st.error(f"Erreur lors du chargement des données : {e}")
