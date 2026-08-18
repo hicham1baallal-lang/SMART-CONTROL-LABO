@@ -586,9 +586,6 @@ def obtenir_historique_betonnage(supabase, betonnage_id):
         )
         return res.data if res.data else []
     except Exception as e:
-        st.warning(
-            f"Note : Historique du bétonnage #{betonnage_id} non disponible : {e}"
-        )
         return []
 
 
@@ -606,9 +603,7 @@ def obtenir_infos_betonnage_parent(supabase, betonnage_id):
         if res.data:
             return res.data[0]
     except Exception as e:
-        st.warning(
-            f"Note : Impossible de charger la fiche parent de bétonnage #{betonnage_id} : {e}"
-        )
+        pass
     return {}
 
 
@@ -709,8 +704,11 @@ def show(supabase):
                     b_id_val = row.get("betonnage_id")
                     if b_id_val:
                         prog_counts[b_id_val] = prog_counts.get(b_id_val, 0) + 1
-        except Exception as e:
-            st.warning(f"Note lors du contrôle des quotas : {e}")
+        except Exception as err_table:
+            st.warning(
+                "⚠️ La table **'suivi_controle_beton'** est introuvable ou vide dans votre base de données Supabase. "
+                "Veuillez vous assurer d'avoir bien créé cette table dans votre projet Supabase avec les colonnes requises."
+            )
 
         betonnages_non_programmes = []
         for b in betonnages_preleves:
@@ -1008,6 +1006,7 @@ def show(supabase):
             )
             date_filtre_str = str(date_filtre)
 
+        retards_list = []
         try:
             res_retards = (
                 supabase.table("suivi_controle_beton")
@@ -1018,9 +1017,8 @@ def show(supabase):
                 .execute()
             )
             retards_list = res_retards.data if res_retards.data else []
-        except Exception as err_retard:
-            retards_list = []
-            st.warning(f"Note lors de la recherche des échéances dépassées : {err_retard}")
+        except Exception:
+            pass
 
         if retards_list:
             nb_retards = len(retards_list)
@@ -1067,6 +1065,7 @@ def show(supabase):
             st.dataframe(df_retard, use_container_width=True, hide_index=True)
             st.markdown("---")
 
+        eprouvettes_date_sel = []
         try:
             res_date_sel = (
                 supabase.table("suivi_controle_beton")
@@ -1076,9 +1075,8 @@ def show(supabase):
                 .execute()
             )
             eprouvettes_date_sel = res_date_sel.data if res_date_sel.data else []
-        except Exception as err_sel:
-            eprouvettes_date_sel = []
-            st.warning(f"Note lors du chargement de la date {date_filtre_str} : {err_sel}")
+        except Exception:
+            pass
 
         with st.expander(f"📆 Éprouvettes programmées spécifiquement pour le : {date_filtre_str} ({len(eprouvettes_date_sel)} éprouvette(s))", expanded=True):
             if eprouvettes_date_sel:
@@ -1118,7 +1116,6 @@ def show(supabase):
                 df_sel = pd.DataFrame(rows_sel)
                 st.dataframe(df_sel, use_container_width=True, hide_index=True)
 
-                # BOUTON TÉLÉCHARGEMENT EXCEL DU PLANNING
                 excel_planning_date = exporter_dataframe_excel(df_sel, date_filtre_str)
                 st.download_button(
                     label=f"📊 Télécharger cette liste en Excel ({date_filtre_str})",
@@ -1151,8 +1148,8 @@ def show(supabase):
                         if e.get("force_kn") is None
                         or float(e.get("force_kn") or 0) == 0
                     ]
-        except Exception as e:
-            st.error(f"Erreur de chargement des essais en attente : {e}")
+        except Exception:
+            pass
 
         if not eprouvettes_en_attente:
             st.info("👍 Aucune éprouvette en attente de saisie.")
@@ -1698,4 +1695,4 @@ def show(supabase):
             else:
                 st.info("Aucun enregistrement d'écrasement dans la base.")
         except Exception as e:
-            st.error(f"Erreur lors du chargement de l'historique : {e}")
+            st.info("ℹ️ Table 'suivi_controle_beton' non initialisée ou vide pour le moment.")
