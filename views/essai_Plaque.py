@@ -3,6 +3,12 @@ import pandas as pd
 from datetime import datetime, date
 
 def show(supabase):
+    # --- RÉCUPÉRATION DU CHANTIER ACTIF ---
+    chantier_actif = st.session_state.get("selected_chantier")
+    chantier_id = chantier_actif["id"] if chantier_actif else None
+    client_name = chantier_actif["client"] if chantier_actif else "SOGEA / TGCC"
+    projet_name = chantier_actif["nom_chantier"] if chantier_actif else "LGV CASA SUD"
+
     # --- EN-TÊTE : TITRE ET NORME CÔTE À CÔTE ---
     col_header1, col_header2 = st.columns([2, 1])
     with col_header1:
@@ -54,9 +60,9 @@ def show(supabase):
         
         col_info1, col_info2 = st.columns(2)
         with col_info1:
-            st.text_input("Client", value="TGCC", disabled=True)
+            st.text_input("Client", value=client_name, disabled=True)
         with col_info2:
-            st.text_input("Projet", value="LGV CASA SUD", disabled=True)
+            st.text_input("Chantier / Projet", value=projet_name, disabled=True)
 
         st.markdown("---")
 
@@ -103,7 +109,7 @@ def show(supabase):
         submitted = st.form_submit_button("💾 Enregistrer l'essai", use_container_width=True)
 
     # ---------------------------------------------------------
-    # 2. ENREGISTREMENT DANS SUPABASE
+    # 2. ENREGISTREMENT DANS SUPABASE (TABLE: essais_plaque)
     # ---------------------------------------------------------
     if submitted:
         if z1 <= 0 or z2 <= 0:
@@ -120,8 +126,8 @@ def show(supabase):
 
                 data_payload = {
                     "date_essai": str(date_selected),
-                    "client": "TGCC",
-                    "projet": "LGV CASA SUD",
+                    "client": client_name,
+                    "projet": projet_name,
                     "norme": "NF P 94-117-1",
                     "technicien": technicien,
                     "couche": couche,
@@ -133,8 +139,12 @@ def show(supabase):
                     "ev2": float(ev2),
                     "k": float(k_val)
                 }
+                
+                if chantier_id:
+                    data_payload["chantier_id"] = chantier_id
 
-                supabase.table("essai_plaque").insert(data_payload).execute()
+                # Utilisation du nom au pluriel : essais_plaque
+                supabase.table("essais_plaque").insert(data_payload).execute()
                 st.success("✅ Essai à la plaque enregistré avec succès !")
                 st.rerun()
 
@@ -148,7 +158,13 @@ def show(supabase):
     st.markdown("### 📋 Historique des Essais à la Plaque Enregistrés")
 
     try:
-        res = supabase.table("essai_plaque").select("*").order("date_essai", desc=True).execute()
+        query = supabase.table("essais_plaque").select("*").order("date_essai", desc=True)
+        
+        # Filtrage par chantier s'il est sélectionné
+        if chantier_id:
+            query = query.eq("chantier_id", chantier_id)
+            
+        res = query.execute()
         data = res.data if res else []
 
         if data:
@@ -197,7 +213,6 @@ def show(supabase):
                 with col_ed:
                     with st.expander("📝 Modifier cet essai (Tous les champs)"):
                         with st.form("edit_form_saisie_complet"):
-                            # Conversion sécurisée de la date existante
                             try:
                                 def_date_essai = datetime.strptime(str(selected_item.get("date_essai", date.today())), "%Y-%m-%d").date()
                             except:
@@ -218,12 +233,11 @@ def show(supabase):
                             
                             if st.form_submit_button("💾 Enregistrer toutes les modifications"):
                                 try:
-                                    # Recalcul automatique de EV1, EV2 et K
                                     calc_ev1 = round(112.5 / (new_z1 * 2), 2) if new_z1 > 0 else 0.0
                                     calc_ev2 = round(90.0 / (new_z2 * 2), 2) if new_z2 > 0 else 0.0
                                     calc_k = round(calc_ev2 / calc_ev1, 2) if calc_ev1 > 0 else 0.0
 
-                                    supabase.table("essai_plaque").update({
+                                    supabase.table("essais_plaque").update({
                                         "date_essai": str(new_date_essai),
                                         "technicien": new_technicien,
                                         "couche": new_couche,
@@ -245,14 +259,14 @@ def show(supabase):
                     st.markdown("##### ⚠️ Suppression")
                     if st.button("🗑️ Supprimer définitivement", type="primary", key="btn_supprimer_plaque_admin"):
                         try:
-                            supabase.table("essai_plaque").delete().eq("id", selected_item["id"]).execute()
+                            supabase.table("essais_plaque").delete().eq("id", selected_item["id"]).execute()
                             st.success("Essai supprimé avec succès.")
                             st.rerun()
                         except Exception as e:
                             st.error(f"Erreur de suppression : {e}")
 
         else:
-            st.info("Aucun essai à la plaque n'a encore été enregistré.")
+            st.info("Aucun essai à la plaque n'a encore été enregistré pour ce chantier.")
 
     except Exception as e:
         st.error(f"Erreur lors du chargement des données : {e}")
