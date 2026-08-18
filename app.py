@@ -1,4 +1,5 @@
 import os
+import pandas as pd
 import streamlit as st
 from supabase import create_client, Client
 
@@ -15,7 +16,6 @@ st.set_page_config(
 # ==========================================
 # 2. GESTION DES SESSIONS & AUTHENTIFICATION
 # ==========================================
-# Stockage de la base utilisateurs en session pour permettre la modification dynamique
 if "users_db" not in st.session_state:
     st.session_state["users_db"] = {
         # Administrateur
@@ -41,6 +41,10 @@ if "role" not in st.session_state:
     st.session_state["role"] = None
 if "can_edit" not in st.session_state:
     st.session_state["can_edit"] = False
+
+# Stockage du chantier sélectionné
+if "selected_chantier" not in st.session_state:
+    st.session_state["selected_chantier"] = None
 
 # --- ÉCRAN DE CONNEXION ---
 if st.session_state["user"] is None:
@@ -112,7 +116,7 @@ with st.sidebar:
     st.markdown(f"👤 **{current_username}**")
     
     # Affichage du rôle
-    if current_role == "laboratoire" or current_role == "technicien":
+    if current_role in ["laboratoire", "technicien"]:
         if current_username == "HANINE":
             st.info("Rôle : **RESPONSABLE DE DOSSIER**")
         elif current_username == "AMINA":
@@ -160,7 +164,52 @@ with st.sidebar:
     
     st.markdown("---")
     
-    # --- MODULE DE MODIFICATION DE MOT DE PASSE (Pour tous les utilisateurs) ---
+    # =========================================================
+    # MODULE : SÉLECTION DYNAMIQUE CLIENT & CHANTIER
+    # =========================================================
+    if supabase:
+        try:
+            res_chantiers = supabase.table("chantiers").select("*").execute()
+            chantiers_data = res_chantiers.data if res_chantiers else []
+            
+            if chantiers_data:
+                df_c = pd.DataFrame(chantiers_data)
+                
+                st.subheader("🏗️ Sélection du Chantier")
+                
+                # 1. Filtre par Client (SOGEA, TGCC, etc.)
+                clients_list = ["Tous"] + sorted(list(df_c["client"].dropna().unique()))
+                selected_client = st.selectbox("Client :", clients_list)
+                
+                if selected_client != "Tous":
+                    df_filtered = df_c[df_c["client"] == selected_client]
+                else:
+                    df_filtered = df_c
+
+                # 2. Sélecteur de Chantier (GARE CASA SUD, etc.)
+                chantiers_list = sorted(list(df_filtered["nom_chantier"].dropna().unique()))
+                selected_nom_chantier = st.selectbox("Chantier :", chantiers_list)
+                
+                # Récupération de l'objet chantier sélectionné
+                selected_row = df_filtered[df_filtered["nom_chantier"] == selected_nom_chantier].iloc[0]
+                
+                st.session_state["selected_chantier"] = {
+                    "id": selected_row["id"],
+                    "nom_chantier": selected_row["nom_chantier"],
+                    "client": selected_row["client"]
+                }
+                
+                st.caption(f"📌 Client : **{selected_row['client']}**")
+            else:
+                st.warning("⚠️ Aucune donnée dans la table `chantiers`.")
+                st.session_state["selected_chantier"] = None
+        except Exception as err:
+            st.caption(f"Info : Module chantier inacessible ({err})")
+            st.session_state["selected_chantier"] = None
+
+    st.markdown("---")
+
+    # --- MODULE DE MODIFICATION DE MOT DE PASSE ---
     with st.expander("🔑 Changer mon mot de passe"):
         with st.form("change_pwd_form", clear_on_submit=True):
             old_pwd = st.text_input("Ancien mot de passe", type="password")
@@ -186,9 +235,17 @@ with st.sidebar:
         st.session_state["user"] = None
         st.session_state["role"] = None
         st.session_state["can_edit"] = False
+        st.session_state["selected_chantier"] = None
         st.rerun()
 
-# Routage des vues
+# ==========================================
+# 4. ROUTAGE DES VUES
+# ==========================================
+# En-tête indiquant le chantier actif si sélectionné
+if st.session_state.get("selected_chantier") and page != "Accueil":
+    c_info = st.session_state["selected_chantier"]
+    st.info(f"📍 **Chantier Actif :** {c_info['nom_chantier']} | 🏢 **Client :** {c_info['client']}")
+
 if page == "Accueil":
     st.title("🚄 Accueil - LGV CASA SUD")
     st.markdown("### Plateforme de Suivi et Contrôle Qualité - LPEE")
@@ -220,7 +277,6 @@ elif page == "Gestion Utilisateurs" and current_role == "admin":
     st.title("👥 Gestion des Utilisateurs & Mots de Passe")
     st.caption("Consultez ci-dessous la liste de tous les utilisateurs et leurs mots de passe actuels.")
     
-    # Transformation de USERS_DB en tableau lisible
     data_users = []
     for user, details in st.session_state["users_db"].items():
         data_users.append({
