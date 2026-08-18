@@ -1,272 +1,133 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime, date
+from datetime import datetime
 
-def show(supabase):
-    # --- RÉCUPÉRATION DU CHANTIER ACTIF ---
-    chantier_actif = st.session_state.get("selected_chantier")
-    chantier_id = chantier_actif["id"] if chantier_actif else None
-    client_name = chantier_actif["client"] if chantier_actif else "SOGEA / TGCC"
-    projet_name = chantier_actif["nom_chantier"] if chantier_actif else "LGV CASA SUD"
-
-    # --- EN-TÊTE : TITRE ET NORME CÔTE À CÔTE ---
-    col_header1, col_header2 = st.columns([2, 1])
-    with col_header1:
-        st.title("🧪 Saisie - Essai à la Plaque")
-    with col_header2:
-        st.markdown(
-            "<div style='text-align: right; padding-top: 15px; font-weight: bold; color: #1F4E79; font-size: 1.1em;'>"
-            "📋 Norme : NF P 94-117-1"
-            "</div>", 
-            unsafe_allow_html=True
-        )
-
+def show(supabase, active_chantier=None):
+    st.title("🚜 Essai à la Plaque (NF P 94-117-1)")
+    
+    # 1. Récupération et vérification du chantier actif
+    if active_chantier is None:
+        active_chantier = st.session_state.get("selected_chantier")
+        
+    if not active_chantier or "id" not in active_chantier:
+        st.error("⚠️ Aucun chantier sélectionné ou affecté. Veuillez vous reconnecter.")
+        st.stop()
+        
+    chantier_id = active_chantier["id"]
+    nom_chantier = active_chantier.get("nom_chantier", "N/A")
+    client_name = active_chantier.get("client", "N/A")
+    
+    st.caption(f"🔒 **Chantier Actif :** {nom_chantier} | **Client :** {client_name}")
     st.markdown("---")
 
-    # Fonction de sécurité pour éviter les erreurs NoneType
-    def safe_float(val, default=0.0):
-        if val is None:
-            return default
-        try:
-            return float(val)
-        except:
-            return default
+    # ==========================================
+    # 2. SAISIE D'UN NOUVEL ESSAI À LA PLAQUE
+    # ==========================================
+    st.subheader("➕ Saisie d'un Essai à la Plaque")
+    
+    can_edit = st.session_state.get("can_edit", True) or st.session_state.get("role") in ["admin", "laboratoire", "technicien"]
 
-    # ---------------------------------------------------------
-    # GESTION DES VALEURS EN MÉMOIRE (SESSION STATE)
-    # ---------------------------------------------------------
-    if 'ep_date' not in st.session_state:
-        st.session_state['ep_date'] = date.today()
-    if 'ep_technicien' not in st.session_state:
-        st.session_state['ep_technicien'] = ""
-    if 'ep_couche' not in st.session_state:
-        st.session_state['ep_couche'] = "Remblai"
-    if 'ep_emplacement' not in st.session_state:
-        st.session_state['ep_emplacement'] = ""
-    if 'ep_pk_profil' not in st.session_state:
-        st.session_state['ep_pk_profil'] = ""
-    if 'ep_z1' not in st.session_state:
-        st.session_state['ep_z1'] = 0.0
-    if 'ep_z2' not in st.session_state:
-        st.session_state['ep_z2'] = 0.0
-
-    couche_options = ["Remblai", "Assise", "PST", "Couche de forme"]
-    couche_idx = couche_options.index(st.session_state['ep_couche']) if st.session_state['ep_couche'] in couche_options else 0
-
-    # ---------------------------------------------------------
-    # 1. FORMULAIRE DE SAISIE
-    # ---------------------------------------------------------
-    with st.form("form_essai_plaque", clear_on_submit=False):
+    with st.form("form_essai_plaque", clear_on_submit=True):
+        col1, col2, col3 = st.columns(3)
         
-        col_info1, col_info2 = st.columns(2)
-        with col_info1:
-            st.text_input("Client", value=client_name, disabled=True)
-        with col_info2:
-            st.text_input("Chantier / Projet", value=projet_name, disabled=True)
-
-        st.markdown("---")
-
-        col1, col2 = st.columns(2)
         with col1:
-            date_selected = st.date_input("Date de l'essai", value=st.session_state['ep_date'])
-            technicien = st.text_input("Technicien :", value=st.session_state['ep_technicien'], placeholder="Nom du technicien")
-            
+            date_essai = st.date_input("Date de l'essai", value=datetime.today())
+            repere_point = st.text_input("Repère / Point d'essai (ex: P1, PK 12+500)")
+            couche = st.selectbox("Couche / Support", ["PST", "Forme", "Fondation", "Base", "Remblai"])
+
         with col2:
-            couche = st.selectbox(
-                "Type de couche", 
-                couche_options,
-                index=couche_idx
-            )
+            ev1 = st.number_input("EV1 (MPa)", min_value=0.0, max_value=300.0, step=0.1, format="%.1f")
+            ev2 = st.number_input("EV2 (MPa)", min_value=0.0, max_value=300.0, step=0.1, format="%.1f")
+            k_exige = st.number_input("EV2 Exigé / Objectif (MPa)", min_value=0.0, max_value=300.0, step=5.0, value=50.0)
 
-        col_loc1, col_loc2 = st.columns(2)
-        with col_loc1:
-            emplacement = st.text_input("Emplacement", value=st.session_state['ep_emplacement'], placeholder="Ex: Zone Nord / Voie 1")
-        with col_loc2:
-            pk_profil = st.text_input("PK / Profil", value=st.session_state['ep_pk_profil'], placeholder="Ex: PK 12+450 / Profil 12")
+        with col3:
+            remarques = st.text_area("Remarques / Localisation précise", height=100)
 
-        st.markdown("### 📊 Données de Chargement (Enfoncements)")
-        
-        col_z1, col_z2 = st.columns(2)
-        with col_z1:
-            z1 = st.number_input("Z1 - 1er chargement (mm)", min_value=0.0, value=st.session_state['ep_z1'], step=0.01, format="%.2f")
-        with col_z2:
-            z2 = st.number_input("Z2 - 2ème chargement (mm)", min_value=0.0, value=st.session_state['ep_z2'], step=0.01, format="%.2f")
+        # Calcul automatique du rapport K = EV2 / EV1
+        k_ratio = round(ev2 / ev1, 2) if ev1 > 0 else 0.0
+        st.info(f"📊 **Rapport K (EV2/EV1) :** {k_ratio}")
 
-        ev1 = round(112.5 / (z1 * 2), 2) if z1 > 0 else 0.0
-        ev2 = round(90.0 / (z2 * 2), 2) if z2 > 0 else 0.0
-        k_val = round(ev2 / ev1, 2) if ev1 > 0 else 0.0
+        submit_btn = st.form_submit_button("💾 Enregistrer l'essai", type="primary", disabled=not can_edit)
 
-        st.markdown("### 📈 Résultats Calculés Automatiquement")
-        col_res1, col_res2, col_res3 = st.columns(3)
-        with col_res1:
-            st.metric("EV1 (MPa)", f"{ev1:.2f}")
-        with col_res2:
-            st.metric("EV2 (MPa)", f"{ev2:.2f}")
-        with col_res3:
-            st.metric("Coefficient K (EV2/EV1)", f"{k_val:.2f}")
-
-        st.markdown("---")
-        submitted = st.form_submit_button("💾 Enregistrer l'essai", use_container_width=True)
-
-    # ---------------------------------------------------------
-    # 2. ENREGISTREMENT DANS SUPABASE (TABLE: essais_plaque)
-    # ---------------------------------------------------------
-    if submitted:
-        if z1 <= 0 or z2 <= 0:
-            st.warning("⚠️ Veuillez saisir des valeurs supérieures à 0 pour Z1 et Z2 afin d'effectuer les calculs.")
-        else:
-            try:
-                st.session_state['ep_date'] = date_selected
-                st.session_state['ep_technicien'] = technicien
-                st.session_state['ep_couche'] = couche
-                st.session_state['ep_emplacement'] = emplacement
-                st.session_state['ep_pk_profil'] = pk_profil
-                st.session_state['ep_z1'] = z1
-                st.session_state['ep_z2'] = z2
-
-                data_payload = {
-                    "date_essai": str(date_selected),
-                    "client": client_name,
-                    "projet": projet_name,
-                    "norme": "NF P 94-117-1",
-                    "technicien": technicien,
+        if submit_btn:
+            if not repere_point:
+                st.warning("⚠️ Veuillez renseigner le repère ou le point d'essai.")
+            elif ev1 <= 0 or ev2 <= 0:
+                st.warning("⚠️ EV1 et EV2 doivent être supérieurs à 0.")
+            else:
+                conforme = (ev2 >= k_exige) and (k_ratio <= 2.0 if ev1 > 0 else True)
+                
+                # Attachement obligatoire du chantier_id
+                new_record = {
+                    "chantier_id": chantier_id,
+                    "date_essai": str(date_essai),
+                    "repere_point": repere_point,
                     "couche": couche,
-                    "emplacement": emplacement,
-                    "pk_profil": pk_profil,
-                    "z1": float(z1),
-                    "z2": float(z2),
-                    "ev1": float(ev1),
-                    "ev2": float(ev2),
-                    "k": float(k_val)
+                    "ev1": ev1,
+                    "ev2": ev2,
+                    "k_ratio": k_ratio,
+                    "ev2_exige": k_exige,
+                    "conforme": conforme,
+                    "remarques": remarques,
+                    "saisi_par": st.session_state.get("user", {}).get("username", "Inconnu")
                 }
                 
-                if chantier_id:
-                    data_payload["chantier_id"] = chantier_id
+                try:
+                    if supabase:
+                        supabase.table("essais_plaque").insert(new_record).execute()
+                        st.success("✅ Essai à la plaque enregistré avec succès !")
+                        st.rerun()
+                    else:
+                        st.error("❌ Connexion Supabase indisponible.")
+                except Exception as e:
+                    st.error(f"❌ Erreur lors de l'enregistrement dans Supabase : {e}")
 
-                # Utilisation du nom au pluriel : essais_plaque
-                supabase.table("essais_plaque").insert(data_payload).execute()
-                st.success("✅ Essai à la plaque enregistré avec succès !")
-                st.rerun()
-
-            except Exception as e:
-                st.error(f"Erreur d'enregistrement : {e}")
-
-    # ---------------------------------------------------------
-    # 3. AFFICHAGE DES ESSAIS ENREGISTRÉS & BLOC ADMIN
-    # ---------------------------------------------------------
     st.markdown("---")
-    st.markdown("### 📋 Historique des Essais à la Plaque Enregistrés")
 
-    try:
-        query = supabase.table("essais_plaque").select("*").order("date_essai", desc=True)
+    # ==========================================
+    # 3. LECTURE : DONNÉES FILTRÉES PAR CHANTIER
+    # ==========================================
+    st.subheader("📋 Historique des Essais à la Plaque du Chantier")
+
+    records = []
+    if supabase:
+        try:
+            # Requete strictement filtrée sur le chantier_id actif
+            res = supabase.table("essais_plaque") \
+                .select("*") \
+                .eq("chantier_id", chantier_id) \
+                .order("date_essai", descending=True) \
+                .execute()
+            records = res.data if res and res.data else []
+        except Exception as e:
+            st.error(f"❌ Erreur de chargement des données : {e}")
+
+    if records:
+        df = pd.DataFrame(records)
         
-        # Filtrage par chantier s'il est sélectionné
-        if chantier_id:
-            query = query.eq("chantier_id", chantier_id)
-            
-        res = query.execute()
-        data = res.data if res else []
+        # Mise en forme des colonnes pour l'affichage
+        cols_display = {
+            "date_essai": "Date",
+            "repere_point": "Point/Repère",
+            "couche": "Couche",
+            "ev1": "EV1 (MPa)",
+            "ev2": "EV2 (MPa)",
+            "k_ratio": "K (EV2/EV1)",
+            "ev2_exige": "EV2 Exigé",
+            "conforme": "Conformité",
+            "saisi_par": "Opérateur",
+            "remarques": "Remarques"
+        }
+        
+        present_cols = [c for c in cols_display.keys() if c in df.columns]
+        df_show = df[present_cols].rename(columns=cols_display)
+        
+        if "Conformité" in df_show.columns:
+            df_show["Conformité"] = df_show["Conformité"].apply(lambda x: "✅ Conforme" if x else "❌ Non Conforme")
 
-        if data:
-            df = pd.DataFrame(data)
+        st.dataframe(df_show, use_container_width=True)
+    else:
+        st.info("ℹ️ Aucun essai à la plaque enregistré pour ce chantier.")
 
-            cols_order = [
-                "date_essai", "couche", "emplacement", "pk_profil", 
-                "z1", "z2", "ev1", "ev2", "k", "technicien"
-            ]
-
-            cols_present = [c for c in cols_order if c in df.columns]
-            df_display = df[cols_present]
-
-            renames = {
-                "date_essai": "Date d'essai",
-                "couche": "Couche",
-                "emplacement": "Emplacement",
-                "pk_profil": "PK / Profil",
-                "z1": "Z1 (mm)",
-                "z2": "Z2 (mm)",
-                "ev1": "EV1 (MPa)",
-                "ev2": "EV2 (MPa)",
-                "k": "Coefficient K",
-                "technicien": "Technicien"
-            }
-            df_display = df_display.rename(columns=renames)
-
-            st.dataframe(
-                df_display, 
-                use_container_width=True,
-                hide_index=True
-            )
-            st.caption(f"Total des essais enregistrés : {len(df_display)}")
-
-            # --- BLOC D'ADMINISTRATION (MODIFIER / SUPPRIMER) ---
-            if st.session_state.get("role") == "admin":
-                st.markdown("---")
-                st.subheader("🛠️ Espace Administration")
-                
-                record_options = {f"ID {r['id']} - {r.get('date_essai', 'N/A')} - {r.get('pk_profil', '')}": r for r in data}
-                selected_key = st.selectbox("Sélectionner l'essai à gérer", list(record_options.keys()), key="admin_select_plaque")
-                selected_item = record_options[selected_key]
-                
-                col_ed, col_del = st.columns(2)
-                
-                with col_ed:
-                    with st.expander("📝 Modifier cet essai (Tous les champs)"):
-                        with st.form("edit_form_saisie_complet"):
-                            try:
-                                def_date_essai = datetime.strptime(str(selected_item.get("date_essai", date.today())), "%Y-%m-%d").date()
-                            except:
-                                def_date_essai = date.today()
-
-                            new_date_essai = st.date_input("Date de l'essai", value=def_date_essai, key="edit_ep_date")
-                            new_technicien = st.text_input("Technicien", value=selected_item.get("technicien") or "", key="edit_ep_tech")
-                            
-                            current_couche = selected_item.get("couche") or "Remblai"
-                            idx_c = couche_options.index(current_couche) if current_couche in couche_options else 0
-                            new_couche = st.selectbox("Type de couche", couche_options, index=idx_c, key="edit_ep_couche")
-                            
-                            new_emplacement = st.text_input("Emplacement", value=selected_item.get("emplacement") or "", key="edit_ep_emp")
-                            new_pk = st.text_input("PK / Profil", value=selected_item.get("pk_profil") or "", key="edit_ep_pk")
-                            
-                            new_z1 = st.number_input("Z1 - 1er chargement (mm)", value=safe_float(selected_item.get("z1"), 0.0), step=0.01, format="%.2f", key="edit_ep_z1")
-                            new_z2 = st.number_input("Z2 - 2ème chargement (mm)", value=safe_float(selected_item.get("z2"), 0.0), step=0.01, format="%.2f", key="edit_ep_z2")
-                            
-                            if st.form_submit_button("💾 Enregistrer toutes les modifications"):
-                                try:
-                                    calc_ev1 = round(112.5 / (new_z1 * 2), 2) if new_z1 > 0 else 0.0
-                                    calc_ev2 = round(90.0 / (new_z2 * 2), 2) if new_z2 > 0 else 0.0
-                                    calc_k = round(calc_ev2 / calc_ev1, 2) if calc_ev1 > 0 else 0.0
-
-                                    supabase.table("essais_plaque").update({
-                                        "date_essai": str(new_date_essai),
-                                        "technicien": new_technicien,
-                                        "couche": new_couche,
-                                        "emplacement": new_emplacement,
-                                        "pk_profil": new_pk,
-                                        "z1": float(new_z1),
-                                        "z2": float(new_z2),
-                                        "ev1": float(calc_ev1),
-                                        "ev2": float(calc_ev2),
-                                        "k": float(calc_k)
-                                    }).eq("id", selected_item["id"]).execute()
-                                    
-                                    st.success("Données et calculs mis à jour avec succès !")
-                                    st.rerun()
-                                except Exception as e:
-                                    st.error(f"Erreur de mise à jour : {e}")
-                            
-                with col_del:
-                    st.markdown("##### ⚠️ Suppression")
-                    if st.button("🗑️ Supprimer définitivement", type="primary", key="btn_supprimer_plaque_admin"):
-                        try:
-                            supabase.table("essais_plaque").delete().eq("id", selected_item["id"]).execute()
-                            st.success("Essai supprimé avec succès.")
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"Erreur de suppression : {e}")
-
-        else:
-            st.info("Aucun essai à la plaque n'a encore été enregistré pour ce chantier.")
-
-    except Exception as e:
-        st.error(f"Erreur lors du chargement des données : {e}")
+if __name__ == "__main__":
+    st.error("Ce fichier doit être appelé depuis app.py.")
