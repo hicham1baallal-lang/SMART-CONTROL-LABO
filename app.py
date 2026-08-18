@@ -204,7 +204,7 @@ with st.sidebar:
                 st.warning("⚠️ Aucune donnée dans la table `chantiers`.")
                 st.session_state["selected_chantier"] = None
         except Exception as err:
-            st.caption(f"Info : Module chantier inacessible ({err})")
+            st.caption(f"Info : Module chantier inaccessible ({err})")
             st.session_state["selected_chantier"] = None
 
     st.markdown("---")
