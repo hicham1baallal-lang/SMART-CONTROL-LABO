@@ -125,7 +125,7 @@ def show(supabase):
                         if diff < 0:
                             diff += 1440
                         return f"{diff} min"
-                    except:
+                    except Exception:
                         return "-"
                 
                 df["Durée de transport"] = df.apply(calculer_duree, axis=1)
@@ -189,10 +189,9 @@ def show(supabase):
                 with col_ed:
                     with st.expander("📝 Modifier ce contrôle (Tous les champs)"):
                         with st.form("edit_form_beton_complet"):
-                            # Helper pour parser les dates et heures en toute sécurité
                             try:
                                 def_date = datetime.strptime(str(selected_item.get("date_livraison", date.today())), "%Y-%m-%d").date()
-                            except:
+                            except Exception:
                                 def_date = date.today()
 
                             def parse_heure_safe(val_str, default_str):
@@ -200,7 +199,7 @@ def show(supabase):
                                     clean_str = str(val_str).split(".")[0]
                                     fmt = "%H:%M:%S" if len(clean_str.split(":")) == 3 else "%H:%M"
                                     return datetime.strptime(clean_str, fmt).time()
-                                except:
+                                except Exception:
                                     return datetime.strptime(default_str, "%H:%M").time()
 
                             def_h_fin = parse_heure_safe(selected_item.get("heure_fin_coulage"), "08:00")
