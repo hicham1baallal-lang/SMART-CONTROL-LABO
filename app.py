@@ -239,12 +239,13 @@ with st.sidebar:
         st.rerun()
 
 # ==========================================
-# 4. ROUTAGE DES VUES
+# 4. ROUTAGE DES VUES (AVEC TRANSMISSION DU CHANTIER ACTIF)
 # ==========================================
+selected_chantier = st.session_state.get("selected_chantier")
+
 # En-tête indiquant le chantier actif si sélectionné
-if st.session_state.get("selected_chantier") and page != "Accueil":
-    c_info = st.session_state["selected_chantier"]
-    st.info(f"📍 **Chantier Actif :** {c_info['nom_chantier']} | 🏢 **Client :** {c_info['client']}")
+if selected_chantier and page != "Accueil":
+    st.info(f"📍 **Chantier Actif :** {selected_chantier['nom_chantier']} | 🏢 **Client :** {selected_chantier['client']}")
 
 if page == "Accueil":
     st.title("🚄 Accueil - LGV CASA SUD")
@@ -288,13 +289,14 @@ elif page == "Gestion Utilisateurs" and current_role == "admin":
     
     st.dataframe(data_users, use_container_width=True)
 
+# Appels des vues en passant l'objet selected_chantier en 2ème argument
 elif page == "Essai à la Plaque":
-    essai_Plaque.show(supabase)
+    essai_Plaque.show(supabase, selected_chantier)
 elif page == "Synthèse Plaque":
-    synthese_plaque.show(supabase)
+    synthese_plaque.show(supabase, selected_chantier)
 elif page == "Suivi de Bétonnage":
-    suivi_Betonnage.show(supabase)
+    suivi_Betonnage.show(supabase, selected_chantier)
 elif page == "Suivi Contrôle Béton":
-    suivi_controle_beton.show(supabase)
+    suivi_controle_beton.show(supabase, selected_chantier)
 elif page == "Synthèse Béton":
-    synthese_Beton.show(supabase)
+    synthese_Beton.show(supabase, selected_chantier)
