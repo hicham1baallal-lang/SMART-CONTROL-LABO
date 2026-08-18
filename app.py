@@ -94,10 +94,10 @@ except ImportError as e:
     st.error(f"❌ Erreur lors de l'importation des vues : {e}")
     st.stop()
 
-# Connexion à Supabase (URL propre sans /rest/v1/ et clé secrète configurée)
+# Connexion à Supabase
 try:
-    SUPABASE_URL = st.secrets.get("SUPABASE_URL", "https://piumzzxhyxrzodienska.supabase.co")
-    SUPABASE_KEY = st.secrets.get("SUPABASE_KEY", "sb_publishable_-nBHsJjhFrcTluqNumK9pA_-NCC0xwi")
+    SUPABASE_URL = "https://piumzzxhyxrzodienska.supabase.co"
+    SUPABASE_KEY = "sb_publishable_-nBHsJjhFrcTluqNumK9pA_-NCC0xwi"
     supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 except Exception as e:
     supabase = None
