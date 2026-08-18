@@ -72,7 +72,7 @@ def show(supabase):
     if st.button("💾 Enregistrer", key="btn_enregistrer"):
         data = {
             "date_livraison": str(date_livraison),
-            "bl_num": bl_num,
+            "numero_bl": bl_num,
             "ouvrage": ouvrage,
             "quantite_m3": float(quantite_m3),
             "client": client,
@@ -156,7 +156,7 @@ def show(supabase):
             df = df.rename(columns={
                 "date_livraison": "Date Livraison",
                 "heure_arrivee": "Heure d'arrivée",
-                "bl_num": "N° BL",
+                "numero_bl": "N° BL",
                 "ouvrage": "Ouvrage",
                 "quantite_m3": "Quantité (m³)",
                 "classe_beton": "Classe",
@@ -180,7 +180,7 @@ def show(supabase):
                 st.markdown("---")
                 st.subheader("🛠️ Espace Administration - Suivi Béton")
                 
-                record_options = {f"ID {r['id']} - BL: {r.get('bl_num', 'N/A')} - Ouvrage: {r.get('ouvrage', '')}": r for r in res.data}
+                record_options = {f"ID {r['id']} - BL: {r.get('numero_bl', 'N/A')} - Ouvrage: {r.get('ouvrage', '')}": r for r in res.data}
                 selected_key = st.selectbox("Sélectionner l'enregistrement à gérer", list(record_options.keys()), key="admin_select_record")
                 selected_item = record_options[selected_key]
                 
@@ -208,7 +208,7 @@ def show(supabase):
 
                             new_date_livraison = st.date_input("Date de livraison", value=def_date, key="edit_date")
                             new_technicien = st.text_input("Nom du Technicien LPEE", value=selected_item.get("technicien", "Agent LPEE"), key="edit_tech")
-                            new_bl = st.text_input("N° BL", value=selected_item.get("bl_num", ""), key="edit_bl")
+                            new_bl = st.text_input("N° BL", value=selected_item.get("numero_bl", ""), key="edit_bl")
                             new_ouvrage = st.text_input("Ouvrage", value=selected_item.get("ouvrage", ""), key="edit_ouvrage")
                             new_quantite = st.number_input("Quantité (m³)", value=float(selected_item.get("quantite_m3", 0.0)), key="edit_qte")
                             
@@ -244,7 +244,7 @@ def show(supabase):
                                     supabase.table("suivi_betonnage").update({
                                         "date_livraison": str(new_date_livraison),
                                         "technicien": new_technicien,
-                                        "bl_num": new_bl,
+                                        "numero_bl": new_bl,
                                         "ouvrage": new_ouvrage,
                                         "quantite_m3": float(new_quantite),
                                         "heure_fin_coulage": new_heure_fin.strftime("%H:%M"),
