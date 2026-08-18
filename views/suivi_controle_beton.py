@@ -70,15 +70,38 @@ def extraire_num_bl(*sources):
 
 
 # =========================================================
-# 1. GÉNÉRATION DU PROCÈS-VERBAL EXCEL (FORMAT EXACT LPEE A4 PAYSAGE)
+# FONCTION UTILITAIRE : EXTRACTION DYNAMIQUE DU CLIENT
+# =========================================================
+def extraire_client(*sources, defaut="SOGEA"):
+    """Extrait dynamiquement le nom du client depuis les objets ou dictionnaires fournis."""
+    clefs_possibles = ["client", "nom_client", "client_nom", "entreprise"]
+    for source in sources:
+        if isinstance(source, dict):
+            for key in clefs_possibles:
+                val = source.get(key)
+                if val is not None:
+                    val_str = str(val).strip()
+                    if val_str and val_str.upper() not in ["N/A", "NONE", "NAN", "-", ""]:
+                        return val_str
+        elif isinstance(source, str):
+            match = re.search(r"Client\s*:\s*([^\|]+)", source, re.IGNORECASE)
+            if match:
+                val_str = match.group(1).strip()
+                if val_str and val_str.upper() not in ["N/A", "NONE", "NAN", "-", ""]:
+                    return val_str
+    return defaut
+
+
+# =========================================================
+# 1. GÉNÉRATION DU PROCÈS-VERBAL EXCEL (FORMAT EXACT LPEE)
 # =========================================================
 def generer_pv_excel(export_data, infos_header):
-    """Génère un Procès-Verbal (PV) d'écrasement de béton répliquant le modèle LPEE en orientation paysage."""
+    """Génère un Procès-Verbal (PV) d'écrasement de béton répliquant le modèle LPEE."""
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "PV Écrasement LPEE"
 
-    ws.page_setup.orientation = ws.ORIENTATION_LANDSCAPE
+    ws.page_setup.orientation = ws.ORIENTATION_PORTRAIT
     ws.page_setup.paperSize = ws.PAPERSIZE_A4
     ws.sheet_properties.pageSetUpPr.fitToPage = True
     ws.page_setup.fitToWidth = 1
@@ -115,6 +138,7 @@ def generer_pv_excel(export_data, infos_header):
     )
 
     default_bl = extraire_num_bl(infos_header)
+    client_valeur = extraire_client(infos_header)
 
     def remplacer_na(valeur, fallback=None):
         val_str = str(valeur).strip() if valeur is not None else ""
@@ -152,7 +176,7 @@ def generer_pv_excel(export_data, infos_header):
     ws["E3"] = "CLIENT :"
     ws["E3"].font = font_bold
     ws.merge_cells("F3:H3")
-    ws["F3"] = remplacer_na(infos_header.get("client"), "TGCC")
+    ws["F3"] = client_valeur
     ws["F3"].font = font_bold
 
     for r in range(1, 4):
@@ -538,14 +562,14 @@ def generer_pv_excel(export_data, infos_header):
             ws.row_dimensions[r].height = 28
 
     col_widths = {
-        "A": 18,
-        "B": 14,
-        "C": 14,
-        "D": 12,
-        "E": 20,
-        "F": 16,
-        "G": 14,
-        "H": 14,
+        "A": 16,
+        "B": 12,
+        "C": 12,
+        "D": 10,
+        "E": 18,
+        "F": 14,
+        "G": 12,
+        "H": 12,
     }
     for col_letter, width in col_widths.items():
         ws.column_dimensions[col_letter].width = width
@@ -728,6 +752,7 @@ def show(supabase):
         else:
             options_beton = {
                 (
+                    f"Client: {extraire_client(b)} | "
                     f"Classe: {b.get('classe_beton', b.get('classe', 'N/A'))} | "
                     f"Date: {b.get('date_coulee', b.get('date_livraison', 'N/A'))} | "
                     f"Ouvrage: {b.get('ouvrage', 'N/A')} | "
@@ -745,6 +770,7 @@ def show(supabase):
 
             b_id = beton_p.get("id")
             num_bl_p = extraire_num_bl(beton_p, choix_label_p)
+            client_p = extraire_client(beton_p, choix_label_p)
 
             ouvrage_p = str(beton_p.get("ouvrage") or "-")
             classe_beton_p = str(
@@ -958,6 +984,7 @@ def show(supabase):
                     for rep in reperes_p:
                         payload_prog = {
                             "betonnage_id": b_id,
+                            "client": client_p,
                             "num_bl": num_bl_p,
                             "ouvrage": ouvrage_p,
                             "classe_beton": classe_beton_p,
@@ -1051,6 +1078,7 @@ def show(supabase):
 
                 rows_retard.append({
                     "Priorité": statut_urgence,
+                    "Client": extraire_client(ep),
                     "Date Écrasement Prévue": dt_ecras_str,
                     "Référence / Repère": rep_complet,
                     "N° BL": extraire_num_bl(ep),
@@ -1103,6 +1131,7 @@ def show(supabase):
 
                     rows_sel.append({
                         "ID": ep.get("id"),
+                        "Client": extraire_client(ep),
                         "Référence / Repère": rep_complet,
                         "N° BL": extraire_num_bl(ep),
                         "Ouvrage": ep.get("ouvrage", "-"),
@@ -1163,12 +1192,13 @@ def show(supabase):
                 classe_ep = ep.get("classe_beton", "-")
 
                 info_b_temp = obtenir_infos_betonnage_parent(supabase, b_id_ep)
+                client_ep = extraire_client(ep, info_b_temp)
                 ref_ctrl = determiner_ref_controle(supabase, b_id_ep, info_b_temp, ep)
                 if not classe_ep or classe_ep == "-":
                     classe_ep = (info_b_temp.get("classe_beton") or info_b_temp.get("classe") or "-") if info_b_temp else "-"
 
                 cle_groupe = (
-                    f"Référence : {ref_ctrl} | Classe : {classe_ep} | Ouvrage : {ouv_ep}"
+                    f"Client : {client_ep} | Référence : {ref_ctrl} | Classe : {classe_ep} | Ouvrage : {ouv_ep}"
                     f" | Échéance : {ech_ep} (Date Prévue : {dt_ecras}) | Lot ID #{b_id_ep}"
                 )
 
@@ -1195,9 +1225,10 @@ def show(supabase):
             )
 
             exact_bl_phase1 = extraire_num_bl(sample, info_betonnage or {}, choix_lot)
+            exact_client_phase2 = extraire_client(sample, info_betonnage or {}, choix_lot)
 
             col_l1, col_l2, col_l3, col_l4 = st.columns(4)
-            col_l1.metric("Client", "TGCC")
+            col_l1.metric("Client", exact_client_phase2)
             col_l2.metric("N° Bon Livraison", exact_bl_phase1)
             col_l3.metric("Ouvrage", str((info_betonnage.get("ouvrage") if info_betonnage else None) or sample.get("ouvrage") or "-"))
             col_l4.metric("Échéance Visée", str(sample.get("echeance", "-")))
@@ -1407,7 +1438,7 @@ def show(supabase):
             infos_header = {
                 "re_num": "25/260/LGV/ B/01",
                 "dossier": "2025-260-05985-2025-0247",
-                "client": "TGCC",
+                "client": exact_client_phase2,
                 "num_bl": num_bl_valeur,
                 "ouvrage": ouvrage_saisi,
                 "lieu_prelevement": ouvrage_saisi,
@@ -1422,7 +1453,7 @@ def show(supabase):
             }
 
             excel_file = generer_pv_excel(export_data, infos_header)
-            filename = f"PV_Ecrasement_LPEE_{num_bl_valeur if num_bl_valeur != '-' else 'BL'}.xlsx"
+            filename = f"PV_Ecrasement_LPEE_{exact_client_phase2}_{num_bl_valeur if num_bl_valeur != '-' else 'BL'}.xlsx"
 
             st.markdown("---")
             col_b1, col_b2 = st.columns(2)
@@ -1515,12 +1546,13 @@ def show(supabase):
                         classe_ep = row.get("classe_beton", "-")
 
                         info_b_temp = obtenir_infos_betonnage_parent(supabase, b_id_ep)
+                        client_ep = extraire_client(row.to_dict(), info_b_temp)
                         ref_ctrl = determiner_ref_controle(supabase, b_id_ep, info_b_temp, row.to_dict())
                         if not classe_ep or classe_ep == "-":
                             classe_ep = (info_b_temp.get("classe_beton") or info_b_temp.get("classe") or "-") if info_b_temp else "-"
 
                         cle_pv = (
-                            f"Référence : {ref_ctrl} | Classe : {classe_ep} | Ouvrage : {ouv_ep}"
+                            f"Client : {client_ep} | Référence : {ref_ctrl} | Classe : {classe_ep} | Ouvrage : {ouv_ep}"
                             f" | Échéance : {ech_ep} (Date : {dt_ecras}) | Lot ID #{b_id_ep}"
                         )
 
@@ -1579,6 +1611,7 @@ def show(supabase):
                         })
 
                     num_bl_h = extraire_num_bl(sample_h, info_beton_h or {}, choix_pv_hist)
+                    client_h = extraire_client(sample_h, info_beton_h or {}, choix_pv_hist)
                     aff_h = (
                         (info_beton_h.get("affaissement") or info_beton_h.get("slump"))
                         if info_beton_h
@@ -1618,7 +1651,7 @@ def show(supabase):
                     infos_header_h = {
                         "re_num": "25/260/LGV/ B/01",
                         "dossier": "2025-260-05985-2025-0247",
-                        "client": "TGCC",
+                        "client": client_h,
                         "num_bl": num_bl_h,
                         "ouvrage": ouv_h,
                         "lieu_prelevement": ouv_h,
@@ -1638,7 +1671,7 @@ def show(supabase):
                     excel_pv_hist = generer_pv_excel(
                         export_data_h, infos_header_h
                     )
-                    file_name_h = f"PV_Ecrasement_RE-EXPORT_{num_bl_h if num_bl_h != '-' else 'BL'}.xlsx"
+                    file_name_h = f"PV_Ecrasement_{client_h}_{num_bl_h if num_bl_h != '-' else 'BL'}.xlsx"
 
                     st.download_button(
                         label="📄 Télécharger le PV (Excel Format LPEE)",
@@ -1675,6 +1708,7 @@ def show(supabase):
 
                 colonnes_ordre = [
                     "id",
+                    "client",
                     "ref_controle",
                     "repere_eprouvette",
                     "date_coulee",
