@@ -18,19 +18,67 @@ st.set_page_config(
 # ==========================================
 if "users_db" not in st.session_state:
     st.session_state["users_db"] = {
-        # Administrateur
-        "BAALLAL": {"password": "arwa2020", "role": "admin", "can_edit": True},
+        # Administrateur (accès global)
+        "BAALLAL": {
+            "password": "arwa2020", 
+            "role": "admin", 
+            "can_edit": True, 
+            "allowed_client": "ALL", 
+            "allowed_chantier": "ALL"
+        },
         
-        # Techniciens Laboratoire & Responsable de dossier
-        "AMINA": {"password": "amina2026", "role": "laboratoire", "can_edit": False},
-        "HANINE": {"password": "hanine2026", "role": "laboratoire", "can_edit": False},
-        "IKKEN": {"password": "ikken2026", "role": "laboratoire", "can_edit": False},
-        "ELHAMDANI": {"password": "elhamdani2026", "role": "laboratoire", "can_edit": False},
+        # Techniciens Laboratoire & Responsable de dossier (Limités par chantier)
+        "AMINA": {
+            "password": "amina2026", 
+            "role": "laboratoire", 
+            "can_edit": False, 
+            "allowed_client": "SOGEA", 
+            "allowed_chantier": "GARE CASA SUD"
+        },
+        "HANINE": {
+            "password": "hanine2026", 
+            "role": "laboratoire", 
+            "can_edit": False, 
+            "allowed_client": "SOGEA", 
+            "allowed_chantier": "GARE CASA SUD"
+        },
+        "IKKEN": {
+            "password": "ikken2026", 
+            "role": "laboratoire", 
+            "can_edit": False, 
+            "allowed_client": "TGCC", 
+            "allowed_chantier": "VIADUC"
+        },
+        "ELHAMDANI": {
+            "password": "elhamdani2026", 
+            "role": "laboratoire", 
+            "can_edit": False, 
+            "allowed_client": "TGCC", 
+            "allowed_chantier": "VIADUC"
+        },
         
         # Opérateurs Bétonnage
-        "ADAM": {"password": "ctr2026", "role": "restricted_betonnage", "can_edit": False},
-        "LAHCEN": {"password": "ctr2026", "role": "restricted_betonnage", "can_edit": False},
-        "ELIDRISSI": {"password": "ctr2026", "role": "restricted_betonnage", "can_edit": False}
+        "ADAM": {
+            "password": "ctr2026", 
+            "role": "restricted_betonnage", 
+            "can_edit": False, 
+            "allowed_client": "SOGEA", 
+            "allowed_chantier": "GARE CASA SUD"
+        },
+        "LAHCEN": {
+            "password": "ctr2026", 
+            "role": "restricted_betonnage", 
+            "can_edit": False, 
+            "allowed_client": "TGCC", 
+            "allowed_chantier": "VIADUC"
+        },
+        "ELIDRISSI": {
+            "password": "ctr2026", 
+            "role": "restricted_betonnage", 
+            "can_edit": False, 
+            "allowed_client": "SOGEA", 
+            "allowed_chantier": "GARE CASA SUD"
+        }
     }
 
 USERS_DB = st.session_state["users_db"]
@@ -41,12 +89,19 @@ if "role" not in st.session_state:
     st.session_state["role"] = None
 if "can_edit" not in st.session_state:
     st.session_state["can_edit"] = False
-
-# Stockage du chantier sélectionné
 if "selected_chantier" not in st.session_state:
     st.session_state["selected_chantier"] = None
 
-# --- ÉCRAN DE CONNEXION ---
+# Connexion à Supabase
+try:
+    SUPABASE_URL = "https://piumzzxhyxrzodienska.supabase.co"
+    SUPABASE_KEY = "sb_publishable_-nBHsJjhFrcTluqNumK9pA_-NCC0xwi"
+    supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+except Exception as e:
+    supabase = None
+    st.error(f"❌ Erreur de connexion Supabase : {e}")
+
+# --- ÉCRAN 1 : CONNEXION ---
 if st.session_state["user"] is None:
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
@@ -61,30 +116,104 @@ if st.session_state["user"] is None:
             
             if submit_btn:
                 if username_input in USERS_DB and USERS_DB[username_input]["password"] == password_input:
-                    user_role = USERS_DB[username_input]["role"]
-                    can_edit = USERS_DB[username_input]["can_edit"]
-                    st.session_state["user"] = {"username": username_input, "role": user_role}
-                    st.session_state["role"] = user_role
-                    st.session_state["can_edit"] = can_edit
+                    user_info = USERS_DB[username_input]
+                    st.session_state["user"] = {
+                        "username": username_input, 
+                        "role": user_info["role"],
+                        "allowed_client": user_info["allowed_client"],
+                        "allowed_chantier": user_info["allowed_chantier"]
+                    }
+                    st.session_state["role"] = user_info["role"]
+                    st.session_state["can_edit"] = user_info["can_edit"]
                     st.rerun()
                 elif password_input == "admin2026":
                     username = username_input if username_input else "ADMIN"
-                    st.session_state["user"] = {"username": username, "role": "admin"}
+                    st.session_state["user"] = {
+                        "username": username, 
+                        "role": "admin", 
+                        "allowed_client": "ALL", 
+                        "allowed_chantier": "ALL"
+                    }
                     st.session_state["role"] = "admin"
                     st.session_state["can_edit"] = True
-                    st.rerun()
-                elif password_input == "ctr2026":
-                    username = username_input if username_input else "USER"
-                    st.session_state["user"] = {"username": username, "role": "user"}
-                    st.session_state["role"] = "user"
-                    st.session_state["can_edit"] = False
                     st.rerun()
                 else:
                     st.error("❌ Nom d'utilisateur ou mot de passe incorrect.")
     st.stop()
 
+# --- ÉCRAN 2 : SÉLECTION DU CHANTIER / AFFECTATION OBLIGATOIRE ---
+user_data = st.session_state["user"]
+
+if st.session_state["selected_chantier"] is None:
+    # Récupération des chantiers depuis Supabase
+    chantiers_list_db = []
+    if supabase:
+        try:
+            res_c = supabase.table("chantiers").select("*").execute()
+            chantiers_list_db = res_c.data if res_c else []
+        except Exception as e:
+            st.error(f"Erreur de chargement des chantiers : {e}")
+
+    df_chantiers = pd.DataFrame(chantiers_list_db) if chantiers_list_db else pd.DataFrame()
+
+    # Utilisateur Administrateur : choix du chantier d'intervention
+    if user_data["allowed_client"] == "ALL":
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            st.title("🏗️ Sélection du Chantier de Travail")
+            st.caption("En tant qu'administrateur, veuillez choisir le chantier sur lequel vous allez opérer.")
+            
+            if not df_chantiers.empty:
+                clients_avail = sorted(list(df_chantiers["client"].dropna().unique()))
+                sel_client = st.selectbox("Sélectionnez le Client :", clients_avail)
+                
+                df_sub = df_chantiers[df_chantiers["client"] == sel_client]
+                chantiers_avail = sorted(list(df_sub["nom_chantier"].dropna().unique()))
+                sel_chantier = st.selectbox("Sélectionnez le Chantier :", chantiers_avail)
+                
+                if st.button("Valider et Accéder au Dashboard", type="primary", use_container_width=True):
+                    row_sel = df_sub[df_sub["nom_chantier"] == sel_chantier].iloc[0]
+                    st.session_state["selected_chantier"] = {
+                        "id": row_sel["id"],
+                        "nom_chantier": row_sel["nom_chantier"],
+                        "client": row_sel["client"]
+                    }
+                    st.rerun()
+            else:
+                st.warning("⚠️ Aucun chantier enregistré dans la base de données.")
+        st.stop()
+        
+    # Utilisateur Restreint : Affectation Automatique selon ses droits
+    else:
+        req_client = user_data["allowed_client"]
+        req_chantier = user_data["allowed_chantier"]
+        
+        found_row = None
+        if not df_chantiers.empty:
+            match = df_chantiers[
+                (df_chantiers["client"].str.upper() == req_client.upper()) & 
+                (df_chantiers["nom_chantier"].str.upper() == req_chantier.upper())
+            ]
+            if not match.empty:
+                found_row = match.iloc[0]
+        
+        if found_row is not None:
+            st.session_state["selected_chantier"] = {
+                "id": found_row["id"],
+                "nom_chantier": found_row["nom_chantier"],
+                "client": found_row["client"]
+            }
+        else:
+            # Reconstitution de secours si la table `chantiers` n'est pas remplie
+            st.session_state["selected_chantier"] = {
+                "id": 1,
+                "nom_chantier": req_chantier,
+                "client": req_client
+            }
+        st.rerun()
+
 # ==========================================
-# 3. CODE PRINCIPAL (Utilisateur connecté)
+# 3. CODE PRINCIPAL (Chantier Actif Déterminé)
 # ==========================================
 try:
     from views import (
@@ -98,14 +227,7 @@ except ImportError as e:
     st.error(f"❌ Erreur lors de l'importation des vues : {e}")
     st.stop()
 
-# Connexion à Supabase
-try:
-    SUPABASE_URL = "https://piumzzxhyxrzodienska.supabase.co"
-    SUPABASE_KEY = "sb_publishable_-nBHsJjhFrcTluqNumK9pA_-NCC0xwi"
-    supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-except Exception as e:
-    supabase = None
-    st.error(f"❌ Erreur de connexion Supabase : {e}")
+active_chantier = st.session_state["selected_chantier"]
 
 # Menu latéral (Sidebar)
 with st.sidebar:
@@ -115,7 +237,7 @@ with st.sidebar:
 
     st.markdown(f"👤 **{current_username}**")
     
-    # Affichage du rôle
+    # Affichage du Rôle
     if current_role in ["laboratoire", "technicien"]:
         if current_username == "HANINE":
             st.info("Rôle : **RESPONSABLE DE DOSSIER**")
@@ -164,45 +286,15 @@ with st.sidebar:
     
     st.markdown("---")
     
-    # =========================================================
-    # MODULE : SÉLECTION DYNAMIQUE CLIENT & CHANTIER
-    # =========================================================
-    if supabase:
-        try:
-            res_chantiers = supabase.table("chantiers").select("*").execute()
-            chantiers_data = res_chantiers.data if res_chantiers else []
-            
-            if chantiers_data:
-                df_c = pd.DataFrame(chantiers_data)
-                
-                st.subheader("🏗️ Sélection du Chantier")
-                
-                # 1. Filtre par Client (SOGEA, TGCC, etc.)
-                clients_list = sorted(list(df_c["client"].dropna().unique()))
-                selected_client = st.selectbox("Client :", clients_list)
-                
-                df_filtered = df_c[df_c["client"] == selected_client]
-
-                # 2. Sélecteur de Chantier (GARE CASA SUD, etc.)
-                chantiers_list = sorted(list(df_filtered["nom_chantier"].dropna().unique()))
-                selected_nom_chantier = st.selectbox("Chantier :", chantiers_list)
-                
-                # Récupération de l'objet chantier sélectionné
-                selected_row = df_filtered[df_filtered["nom_chantier"] == selected_nom_chantier].iloc[0]
-                
-                st.session_state["selected_chantier"] = {
-                    "id": selected_row["id"],
-                    "nom_chantier": selected_row["nom_chantier"],
-                    "client": selected_row["client"]
-                }
-                
-                st.caption(f"📌 Client : **{selected_row['client']}**")
-            else:
-                st.warning("⚠️ Aucune donnée dans la table `chantiers`.")
-                st.session_state["selected_chantier"] = None
-        except Exception as err:
-            st.caption(f"Info : Module chantier inaccessible ({err})")
+    # --- AFFICHAGE VERROUILLÉ DU CHANTIER ACTIF ---
+    st.subheader("🏗️ Chantier Affecté")
+    st.success(f"🏢 Client : **{active_chantier['client']}**\n\n📍 Chantier : **{active_chantier['nom_chantier']}**")
+    
+    # Possibilité de changer de chantier uniquement pour l'admin
+    if st.session_state["user"]["allowed_client"] == "ALL":
+        if st.button("🔄 Changer de chantier", use_container_width=True):
             st.session_state["selected_chantier"] = None
+            st.rerun()
 
     st.markdown("---")
 
@@ -216,7 +308,6 @@ with st.sidebar:
             
             if submit_pwd:
                 user_record = st.session_state["users_db"].get(current_username)
-                
                 if user_record and old_pwd != user_record["password"]:
                     st.error("❌ L'ancien mot de passe est incorrect.")
                 elif new_pwd == "":
@@ -236,18 +327,24 @@ with st.sidebar:
         st.rerun()
 
 # ==========================================
-# 4. ROUTAGE DES VUES
+# 4. ROUTAGE DES VUES AVEC ISOLEMENT CLIENT
 # ==========================================
-selected_chantier = st.session_state.get("selected_chantier")
+if page != "Accueil":
+    st.info(f"📍 **Chantier Actif :** {active_chantier['nom_chantier']} | 🏢 **Client :** {active_chantier['client']}")
 
-# En-tête indiquant le chantier actif si sélectionné
-if selected_chantier and page != "Accueil":
-    st.info(f"📍 **Chantier Actif :** {selected_chantier['nom_chantier']} | 🏢 **Client :** {selected_chantier['client']}")
+def call_view_safe(view_module, supabase_obj, chantier_obj):
+    """
+    Appelle la vue en lui passant 'selected_chantier' si supporté,
+    ou bascule sur la signature standard à 1 argument sans générer de TypeError.
+    """
+    try:
+        view_module.show(supabase_obj, chantier_obj)
+    except TypeError:
+        view_module.show(supabase_obj)
 
 if page == "Accueil":
     st.title("🚄 Accueil - LGV CASA SUD")
     st.markdown("### Plateforme de Suivi et Contrôle Qualité - LPEE")
-    
     st.markdown("---")
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
@@ -262,18 +359,17 @@ if page == "Accueil":
             st.warning("⚠️ L'image 'al_boraq.jpg.jpg' est introuvable à la racine.")
         
     st.markdown("---")
-    st.markdown("""
-    Bienvenue sur l'application centralisée de gestion des contrôles qualité pour le projet **LGV CASA SUD**.
+    st.markdown(f"""
+    Bienvenue **{current_username}** sur l'application de gestion des contrôles qualité pour le projet **LGV CASA SUD**.
     
-    Utilisez le menu de navigation latéral pour accéder aux différents modules :
-    * **🏗️ Suivi Béton :** Gestion des livraisons, fiches de contrôle, températures, affaissements et prélèvements.
-    * **🧪 Suivi Contrôle Béton :** Saisie des écrasements d'éprouvettes de béton (3j, 7j, 28j, 90j) associées aux prélèvements.
-    * **🚜 Essai à la Plaque :** Saisie des essais de portance (Norme NF P 94-117-1) avec calculs automatiques des modules $EV_1$, $EV_2$ et du coefficient $K$.
+    Vous êtes actuellement connecté sur le dossier client **{active_chantier['client']}** (*Chantier : {active_chantier['nom_chantier']}*).
+    
+    Utilisez le menu latéral pour naviguer dans vos modules de contrôle.
     """)
 
 elif page == "Gestion Utilisateurs" and current_role == "admin":
     st.title("👥 Gestion des Utilisateurs & Mots de Passe")
-    st.caption("Consultez ci-dessous la liste de tous les utilisateurs et leurs mots de passe actuels.")
+    st.caption("Consultez la liste des utilisateurs, leurs rôles et leurs affectations de chantiers.")
     
     data_users = []
     for user, details in st.session_state["users_db"].items():
@@ -281,18 +377,19 @@ elif page == "Gestion Utilisateurs" and current_role == "admin":
             "Utilisateur": user,
             "Mot de Passe": details["password"],
             "Rôle": details["role"],
-            "Droit de modification (can_edit)": details["can_edit"]
+            "Client Affecté": details.get("allowed_client", "ALL"),
+            "Chantier Affecté": details.get("allowed_chantier", "ALL"),
+            "Droit de modification": details["can_edit"]
         })
-    
     st.dataframe(data_users, use_container_width=True)
 
 elif page == "Essai à la Plaque":
-    essai_Plaque.show(supabase)
+    call_view_safe(essai_Plaque, supabase, active_chantier)
 elif page == "Synthèse Plaque":
-    synthese_plaque.show(supabase)
+    call_view_safe(synthese_plaque, supabase, active_chantier)
 elif page == "Suivi de Bétonnage":
-    suivi_Betonnage.show(supabase)
+    call_view_safe(suivi_Betonnage, supabase, active_chantier)
 elif page == "Suivi Contrôle Béton":
-    suivi_controle_beton.show(supabase)
+    call_view_safe(suivi_controle_beton, supabase, active_chantier)
 elif page == "Synthèse Béton":
-    synthese_Beton.show(supabase)
+    call_view_safe(synthese_Beton, supabase, active_chantier)
