@@ -16,7 +16,7 @@ def show(supabase):
     
     with col1:
         technicien = st.text_input("Nom du Technicien LPEE", value="Agent LPEE", key="saisie_tech")
-        bl_num = st.text_input("N° BL", value="BL-2026-001", key="saisie_bl")
+        numero_bl = st.text_input("N° BL", value="BL-2026-001", key="saisie_bl")
         ouvrage = st.text_input("Ouvrage", value="Voile / Semelle", key="saisie_ouvrage")
         quantite_m3 = st.number_input("Quantité (m³)", min_value=0.0, value=8.0, step=0.5, key="saisie_qte")
         
@@ -72,7 +72,7 @@ def show(supabase):
     if st.button("💾 Enregistrer", key="btn_enregistrer"):
         data = {
             "date_livraison": str(date_livraison),
-            "bl": bl_num,
+            "numero_bl": numero_bl,
             "ouvrage": ouvrage,
             "quantite_m3": float(quantite_m3),
             "client": client,
@@ -152,7 +152,7 @@ def show(supabase):
 
             df = df[cols]
 
-            # 4. Renommage propre des colonnes pour l'affichage (gère 'bl' ou 'numero_bl' si présent)
+            # 4. Renommage propre des colonnes pour l'affichage
             rename_dict = {
                 "date_livraison": "Date Livraison",
                 "heure_arrivee": "Heure d'arrivée",
@@ -166,12 +166,10 @@ def show(supabase):
                 "nb_eprouvettes": "Nb Éprouvettes",
                 "observations": "Observations",
                 "technicien": "Technicien",
-                "meteo": "Météo"
+                "meteo": "Météo",
+                "numero_bl": "N° BL",
+                "bl": "N° BL"
             }
-            if "bl" in df.columns:
-                rename_dict["bl"] = "N° BL"
-            elif "numero_bl" in df.columns:
-                rename_dict["numero_bl"] = "N° BL"
 
             df = df.rename(columns=rename_dict)
                 
@@ -186,7 +184,7 @@ def show(supabase):
                 st.subheader("🛠️ Espace Administration - Suivi Béton")
                 
                 def get_bl_value(r):
-                    return r.get('bl') or r.get('numero_bl') or 'N/A'
+                    return r.get('numero_bl') or r.get('bl') or 'N/A'
 
                 record_options = {f"ID {r['id']} - BL: {get_bl_value(r)} - Ouvrage: {r.get('ouvrage', '')}": r for r in res.data}
                 selected_key = st.selectbox("Sélectionner l'enregistrement à gérer", list(record_options.keys()), key="admin_select_record")
@@ -197,7 +195,6 @@ def show(supabase):
                 with col_ed:
                     with st.expander("📝 Modifier ce contrôle (Tous les champs)"):
                         with st.form("edit_form_beton_complet"):
-                            # Helper pour parser les dates et heures en toute sécurité
                             try:
                                 def_date = datetime.strptime(str(selected_item.get("date_livraison", date.today())), "%Y-%m-%d").date()
                             except:
@@ -252,7 +249,7 @@ def show(supabase):
                                     supabase.table("suivi_betonnage").update({
                                         "date_livraison": str(new_date_livraison),
                                         "technicien": new_technicien,
-                                        "bl": new_bl,
+                                        "numero_bl": new_bl,
                                         "ouvrage": new_ouvrage,
                                         "quantite_m3": float(new_quantite),
                                         "heure_fin_coulage": new_heure_fin.strftime("%H:%M"),
