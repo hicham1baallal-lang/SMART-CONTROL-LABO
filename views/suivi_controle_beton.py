@@ -70,15 +70,15 @@ def extraire_num_bl(*sources):
 
 
 # =========================================================
-# 1. GÉNÉRATION DU PROCÈS-VERBAL EXCEL (FORMAT EXACT LPEE)
+# 1. GÉNÉRATION DU PROCÈS-VERBAL EXCEL (FORMAT EXACT LPEE A4 PAYSAGE)
 # =========================================================
 def generer_pv_excel(export_data, infos_header):
-    """Génère un Procès-Verbal (PV) d'écrasement de béton répliquant le modèle LPEE."""
+    """Génère un Procès-Verbal (PV) d'écrasement de béton répliquant le modèle LPEE en orientation paysage."""
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "PV Écrasement LPEE"
 
-    ws.page_setup.orientation = ws.ORIENTATION_PORTRAIT
+    ws.page_setup.orientation = ws.ORIENTATION_LANDSCAPE
     ws.page_setup.paperSize = ws.PAPERSIZE_A4
     ws.sheet_properties.pageSetUpPr.fitToPage = True
     ws.page_setup.fitToWidth = 1
@@ -538,14 +538,14 @@ def generer_pv_excel(export_data, infos_header):
             ws.row_dimensions[r].height = 28
 
     col_widths = {
-        "A": 16,
-        "B": 12,
-        "C": 12,
-        "D": 10,
-        "E": 18,
-        "F": 14,
-        "G": 12,
-        "H": 12,
+        "A": 18,
+        "B": 14,
+        "C": 14,
+        "D": 12,
+        "E": 20,
+        "F": 16,
+        "G": 14,
+        "H": 14,
     }
     for col_letter, width in col_widths.items():
         ws.column_dimensions[col_letter].width = width
@@ -1025,7 +1025,7 @@ def show(supabase):
             st.error(
                 f"🚨 **ATTENTION : {nb_retards} éprouvette(s) non écrasée(s) ont atteint ou dépassé leur date d'échéance !**"
             )
-            
+
             rows_retard = []
             for ep in retards_list:
                 dt_coul_str = ep.get("date_coulee")
