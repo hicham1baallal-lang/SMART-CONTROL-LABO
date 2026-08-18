@@ -1,408 +1,214 @@
-import os
-import pandas as pd
 import streamlit as st
-from supabase import create_client, Client
+import pandas as pd
+from datetime import date, datetime
 
-# ==========================================
-# 1. CONFIGURATION DE LA PAGE STREAMLIT
-# ==========================================
-st.set_page_config(
-    page_title="LPEE - CTR-CSB",
-    page_icon="🏗️",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+def show(supabase):
+    st.title("🚜 Essai à la Plaque (NF P 94-117-1)")
 
-# ==========================================
-# 2. BASE DE DONNÉES UTILISATEURS & SESSION
-# ==========================================
-DEFAULT_USERS = {
-    # Administrateur (accès global)
-    "BAALLAL": {
-        "password": "arwa2020", 
-        "role": "admin", 
-        "can_edit": True, 
-        "allowed_client": "ALL", 
-        "allowed_chantier": "ALL"
-    },
-    
-    # Techniciens Laboratoire & Responsable de dossier
-    "AMINA": {
-        "password": "amina2026", 
-        "role": "laboratoire", 
-        "can_edit": False, 
-        "allowed_client": "SOGEA", 
-        "allowed_chantier": "GARE CASA SUD"
-    },
-    "HANINE": {
-        "password": "hanine2026", 
-        "role": "laboratoire", 
-        "can_edit": False, 
-        "allowed_client": "SOGEA", 
-        "allowed_chantier": "GARE CASA SUD"
-    },
-    "IKKEN": {
-        "password": "ikken2026", 
-        "role": "laboratoire", 
-        "can_edit": False, 
-        "allowed_client": "TGCC", 
-        "allowed_chantier": "VIADUC"
-    },
-    "ELHAMDANI": {
-        "password": "elhamdani2026", 
-        "role": "laboratoire", 
-        "can_edit": False, 
-        "allowed_client": "TGCC", 
-        "allowed_chantier": "VIADUC"
-    },
-    
-    # Opérateurs Bétonnage
-    "ADAM": {
-        "password": "ctr2026", 
-        "role": "restricted_betonnage", 
-        "can_edit": False, 
-        "allowed_client": "SOGEA", 
-        "allowed_chantier": "GARE CASA SUD"
-    },
-    "LAHCEN": {
-        "password": "ctr2026", 
-        "role": "restricted_betonnage", 
-        "can_edit": False, 
-        "allowed_client": "TGCC", 
-        "allowed_chantier": "VIADUC"
-    },
-    "ELIDRISSI": {
-        "password": "ctr2026", 
-        "role": "restricted_betonnage", 
-        "can_edit": False, 
-        "allowed_client": "SOGEA", 
-        "allowed_chantier": "GARE CASA SUD"
-    }
-}
+    # Vérification du rôle d'administrateur
+    is_admin = st.session_state.get("is_admin", False) or st.session_state.get("role") == "admin"
 
-# Mise à jour transparente du dictionnaire en session
-if "users_db" not in st.session_state:
-    st.session_state["users_db"] = DEFAULT_USERS
-else:
-    # Fusion sécurisée pour éviter KeyError en cas de rechargement
-    for u, data in DEFAULT_USERS.items():
-        if u not in st.session_state["users_db"]:
-            st.session_state["users_db"][u] = data
-        else:
-            st.session_state["users_db"][u].setdefault("allowed_client", data.get("allowed_client", "ALL"))
-            st.session_state["users_db"][u].setdefault("allowed_chantier", data.get("allowed_chantier", "ALL"))
+    # ---------------------------------------------------------
+    # 1. GESTION DU MOTEUR D'ÉDITION / MODIFICATION (ADMIN)
+    # ---------------------------------------------------------
+    editing_item = st.session_state.get("edit_plaque_item", None)
 
-USERS_DB = st.session_state["users_db"]
-
-if "user" not in st.session_state:
-    st.session_state["user"] = None
-if "role" not in st.session_state:
-    st.session_state["role"] = None
-if "can_edit" not in st.session_state:
-    st.session_state["can_edit"] = False
-if "selected_chantier" not in st.session_state:
-    st.session_state["selected_chantier"] = None
-
-# Connexion Supabase
-try:
-    SUPABASE_URL = "https://piumzzxhyxrzodienska.supabase.co"
-    SUPABASE_KEY = "sb_publishable_-nBHsJjhFrcTluqNumK9pA_-NCC0xwi"
-    supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-except Exception as e:
-    supabase = None
-    st.error(f"❌ Erreur de connexion Supabase : {e}")
-
-# --- ÉCRAN 1 : CONNEXION ---
-if st.session_state["user"] is None:
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        st.markdown("<br><br>", unsafe_allow_html=True)
-        st.title("🔐 Accès Restreint - LPEE")
-        st.caption("Veuillez saisir vos identifiants pour accéder à la plateforme.")
+    if editing_item:
+        st.info(f"✏️ **Mode Modification** - Essai ID #{editing_item['id']}")
         
-        with st.form("login_form", clear_on_submit=False):
-            username_input = st.text_input("Nom d'utilisateur").strip().upper()
-            password_input = st.text_input("Mot de passe", type="password")
-            submit_btn = st.form_submit_button("Se connecter", use_container_width=True, type="primary")
-            
-            if submit_btn:
-                if username_input in USERS_DB and USERS_DB[username_input]["password"] == password_input:
-                    user_info = USERS_DB[username_input]
-                    
-                    # Utilisation sécurisée de .get() pour éviter KeyError
-                    st.session_state["user"] = {
-                        "username": username_input, 
-                        "role": user_info.get("role", "user"),
-                        "allowed_client": user_info.get("allowed_client", "SOGEA"),
-                        "allowed_chantier": user_info.get("allowed_chantier", "GARE CASA SUD")
-                    }
-                    st.session_state["role"] = user_info.get("role", "user")
-                    st.session_state["can_edit"] = user_info.get("can_edit", False)
-                    st.rerun()
-                elif password_input == "admin2026":
-                    username = username_input if username_input else "ADMIN"
-                    st.session_state["user"] = {
-                        "username": username, 
-                        "role": "admin", 
-                        "allowed_client": "ALL", 
-                        "allowed_chantier": "ALL"
-                    }
-                    st.session_state["role"] = "admin"
-                    st.session_state["can_edit"] = True
-                    st.rerun()
-                else:
-                    st.error("❌ Nom d'utilisateur ou mot de passe incorrect.")
-    st.stop()
+        # Valeurs pré-remplies pour l'édition
+        default_date = datetime.strptime(editing_item["date_essai"], "%Y-%m-%d").date() if isinstance(editing_item.get("date_essai"), str) else date.today()
+        default_client = editing_item.get("client", "TGCC")
+        default_projet = editing_item.get("projet", "LGV CASA SUD")
+        default_empl = editing_item.get("emplacement", "")
+        default_pk = editing_item.get("pk_profil", editing_item.get("pkl", ""))
+        default_couche = editing_item.get("couche", "Assise")
+        default_mat = editing_item.get("nature_materiau", "")
+        default_z1 = float(editing_item.get("z1", 0.53))
+        default_z2 = float(editing_item.get("z2", 0.52))
+        default_tech = editing_item.get("technicien", "")
+        default_obs = editing_item.get("observations", "")
+    else:
+        # Valeurs par défaut pour une nouvelle saisie
+        default_date = date.today()
+        default_client = "TGCC"
+        default_projet = "LGV CASA SUD"
+        default_empl = "Voie B"
+        default_pk = "PK 1+200"
+        default_couche = "Assise"
+        default_mat = "GNT 0/31.5 Classée B2"
+        default_z1 = 0.53
+        default_z2 = 0.52
+        default_tech = "Agent LPEE"
+        default_obs = "Portance conforme aux exigences du CPT."
 
-# --- ÉCRAN 2 : SÉLECTION / AFFECTATION DU CHANTIER ---
-user_data = st.session_state["user"]
+    # ---------------------------------------------------------
+    # 2. FORMULAIRE DE SAISIE / ÉDITION
+    # ---------------------------------------------------------
+    st.subheader("📝 " + ("Modifier l'essai" if editing_item else "Saisie d'un nouvel essai"))
 
-if st.session_state["selected_chantier"] is None:
-    chantiers_list_db = []
-    if supabase:
-        try:
-            res_c = supabase.table("chantiers").select("*").execute()
-            chantiers_list_db = res_c.data if res_c else []
-        except Exception as e:
-            st.error(f"Erreur de chargement des chantiers : {e}")
+    col1, col2, col3 = st.columns(3)
 
-    df_chantiers = pd.DataFrame(chantiers_list_db) if chantiers_list_db else pd.DataFrame()
+    with col1:
+        date_essai = st.date_input("Date de l'essai", value=default_date, key="plaque_date")
+        client = st.text_input("Client / Organisme", value=default_client, key="plaque_client")
+        projet = st.text_input("Chantier / Projet", value=default_projet, key="plaque_projet")
+        
+    with col2:
+        emplacement = st.text_input("Emplacement / Zone", value=default_empl, key="plaque_empl")
+        pk_profil = st.text_input("PK / Profil", value=default_pk, key="plaque_pk")
+        couche_options = ["Assise", "Remblai", "PST", "Couche de forme", "Autre"]
+        couche_idx = couche_options.index(default_couche) if default_couche in couche_options else 0
+        couche = st.selectbox("Couche testée", couche_options, index=couche_idx, key="plaque_couche")
+        nature_materiau = st.text_input("Nature du matériau", value=default_mat, key="plaque_mat")
 
-    allowed_client = user_data.get("allowed_client", "ALL")
+    with col3:
+        st.markdown("##### 📏 Données de Chargement (Enfoncements)")
+        z1 = st.number_input("Z1 - 1er chargement (mm)", min_value=0.01, max_value=10.0, value=default_z1, step=0.01, format="%.2f", key="plaque_z1")
+        z2 = st.number_input("Z2 - 2ème chargement (mm)", min_value=0.01, max_value=10.0, value=default_z2, step=0.01, format="%.2f", key="plaque_z2")
+        technicien = st.text_input("Technicien LPEE", value=default_tech, key="plaque_tech")
+
+    # Calculs automatiques (NF P 94-117-1)
+    ev1 = round(112.5 / (z1 * 2), 2) if z1 > 0 else 0.0
+    ev2 = round(90.0 / (z2 * 2), 2) if z2 > 0 else 0.0
+    k_ratio = round(ev2 / ev1, 2) if ev1 > 0 else 0.0
+
+    st.markdown("---")
+    st.subheader("📈 Résultats Calculés Automatiquement")
     
-    # Cas Admin : Sélection manuelle du chantier
-    if allowed_client == "ALL":
-        col1, col2, col3 = st.columns([1, 2, 1])
-        with col2:
-            st.title("🏗️ Sélection du Chantier de Travail")
-            st.caption("En tant qu'administrateur, veuillez choisir le chantier sur lequel vous allez opérer.")
-            
-            if not df_chantiers.empty:
-                clients_avail = sorted(list(df_chantiers["client"].dropna().unique()))
-                sel_client = st.selectbox("Sélectionnez le Client :", clients_avail)
-                
-                df_sub = df_chantiers[df_chantiers["client"] == sel_client]
-                chantiers_avail = sorted(list(df_sub["nom_chantier"].dropna().unique()))
-                sel_chantier = st.selectbox("Sélectionnez le Chantier :", chantiers_avail)
-                
-                if st.button("Valider et Accéder au Dashboard", type="primary", use_container_width=True):
-                    row_sel = df_sub[df_sub["nom_chantier"] == sel_chantier].iloc[0]
-                    st.session_state["selected_chantier"] = {
-                        "id": row_sel["id"],
-                        "nom_chantier": row_sel["nom_chantier"],
-                        "client": row_sel["client"]
-                    }
-                    st.rerun()
-            else:
-                # Chantier par défaut si la table Supabase est vide
-                st.session_state["selected_chantier"] = {
-                    "id": 1,
-                    "nom_chantier": "GARE CASA SUD",
-                    "client": "SOGEA"
-                }
+    res_col1, res_col2, res_col3 = st.columns(3)
+    res_col1.metric("EV1 (MPa)", f"{ev1:.2f}")
+    res_col2.metric("EV2 (MPa)", f"{ev2:.2f}")
+    
+    k_delta = "Conforme (K ≤ 2.0)" if k_ratio <= 2.0 else "Attention (K > 2.0)"
+    res_col3.metric("Coefficient K (EV2/EV1)", f"{k_ratio:.2f}", delta=k_delta, delta_color="normal" if k_ratio <= 2.0 else "inverse")
+
+    observations = st.text_area("Observations / Remarques", value=default_obs, key="plaque_obs")
+
+    # ---------------------------------------------------------
+    # 3. ENREGISTREMENT OU MISE À JOUR SÉCURISÉE
+    # ---------------------------------------------------------
+    btn_col1, btn_col2 = st.columns([3, 1])
+
+    with btn_col1:
+        button_label = "🔄 Mettre à jour l'essai" if editing_item else "💾 Enregistrer l'essai"
+        if st.button(button_label, key="btn_enregistrer_plaque", type="primary", use_container_width=True):
+            payload = {
+                "date_essai": str(date_essai),
+                "client": client,
+                "projet": projet,
+                "emplacement": emplacement,
+                "pk_profil": pk_profil,
+                "couche": couche,
+                "nature_materiau": nature_materiau,
+                "z1": float(z1),
+                "z2": float(z2),
+                "ev1": float(ev1),
+                "ev2": float(ev2),
+                "k_ratio": float(k_ratio),
+                "technicien": technicien,
+                "observations": observations
+            }
+
+            try:
+                # Filtrage des colonnes valides
+                sample_query = supabase.table("essais_plaque").select("*").limit(1).execute()
+                if sample_query.data and len(sample_query.data) > 0:
+                    valid_columns = set(sample_query.data[0].keys())
+                    safe_payload = {k: v for k, v in payload.items() if k in valid_columns}
+                else:
+                    safe_payload = payload
+
+                if editing_item:
+                    supabase.table("essais_plaque").update(safe_payload).eq("id", editing_item["id"]).execute()
+                    st.success(f"✅ Essai #{editing_item['id']} mis à jour avec succès !")
+                    st.session_state["edit_plaque_item"] = None
+                else:
+                    supabase.table("essais_plaque").insert(safe_payload).execute()
+                    st.success("✅ Essai enregistré avec succès !")
+
                 st.rerun()
-        st.stop()
-        
-    # Cas Technicien / Opérateur : Affectation automatique
-    else:
-        req_client = allowed_client
-        req_chantier = user_data.get("allowed_chantier", "GARE CASA SUD")
-        
-        found_row = None
-        if not df_chantiers.empty and "client" in df_chantiers.columns and "nom_chantier" in df_chantiers.columns:
-            match = df_chantiers[
-                (df_chantiers["client"].str.upper() == req_client.upper()) & 
-                (df_chantiers["nom_chantier"].str.upper() == req_chantier.upper())
-            ]
-            if not match.empty:
-                found_row = match.iloc[0]
-        
-        if found_row is not None:
-            st.session_state["selected_chantier"] = {
-                "id": found_row["id"],
-                "nom_chantier": found_row["nom_chantier"],
-                "client": found_row["client"]
-            }
-        else:
-            st.session_state["selected_chantier"] = {
-                "id": 1,
-                "nom_chantier": req_chantier,
-                "client": req_client
-            }
-        st.rerun()
 
-# ==========================================
-# 3. ROUTAGE ET CHARGEMENT DES VUES
-# ==========================================
-try:
-    from views import (
-        suivi_Betonnage,
-        suivi_controle_beton,
-        essai_Plaque,
-        synthese_Beton,
-        synthese_plaque
-    )
-except ImportError as e:
-    st.error(f"❌ Erreur lors de l'importation des vues : {e}")
-    st.stop()
+            except Exception as e:
+                st.error(f"Erreur lors de l'enregistrement : {e}")
 
-active_chantier = st.session_state["selected_chantier"]
+    with btn_col2:
+        if editing_item:
+            if st.button("❌ Annuler l'édition", use_container_width=True):
+                st.session_state["edit_plaque_item"] = None
+                st.rerun()
 
-# Menu latéral (Sidebar)
-with st.sidebar:
-    st.title("LPEE - CTR-CSB")
-    current_username = st.session_state["user"]["username"]
-    current_role = st.session_state["role"]
-
-    st.markdown(f"👤 **{current_username}**")
-    
-    if current_role in ["laboratoire", "technicien"]:
-        if current_username == "HANINE":
-            st.info("Rôle : **RESPONSABLE DE DOSSIER**")
-        elif current_username == "AMINA":
-            st.info("Rôle : **TECHNICIENNE LABORATOIRE**")
-        else:
-            st.info("Rôle : **TECHNICIEN LABORATOIRE**")
-        st.markdown("---")
-        available_pages = [
-            "Accueil", 
-            "Suivi Contrôle Béton", 
-            "Suivi de Bétonnage", 
-            "Essai à la Plaque", 
-            "Synthèse Béton", 
-            "Synthèse Plaque"
-        ]
-    elif current_role == "restricted_betonnage":
-        st.info("Rôle : **OPÉRATEUR BÉTONNAGE**")
-        st.markdown("---")
-        available_pages = ["Suivi de Bétonnage"]
-    elif current_role == "admin":
-        st.info("Rôle : **ADMINISTRATEUR**")
-        st.markdown("---")
-        available_pages = [
-            "Accueil", 
-            "Gestion Utilisateurs",
-            "Essai à la Plaque", 
-            "Synthèse Plaque", 
-            "Suivi de Bétonnage", 
-            "Suivi Contrôle Béton", 
-            "Synthèse Béton"
-        ]
-    else:
-        st.info(f"Rôle : **{current_role.upper()}**")
-        st.markdown("---")
-        available_pages = [
-            "Accueil", 
-            "Essai à la Plaque", 
-            "Synthèse Plaque", 
-            "Suivi de Bétonnage", 
-            "Suivi Contrôle Béton", 
-            "Synthèse Béton"
-        ]
-    
-    page = st.radio("Menu Principal", available_pages)
-    
+    # ---------------------------------------------------------
+    # 4. HISTORIQUE - COLONNES STRICTEMENT SÉLECTIONNÉES ET TRIÉES
+    # ---------------------------------------------------------
     st.markdown("---")
-    
-    # Affichage verrouillé du chantier affecté
-    st.subheader("🏗️ Chantier Affecté")
-    st.success(f"🏢 Client : **{active_chantier['client']}**\n\n📍 Chantier : **{active_chantier['nom_chantier']}**")
-    
-    if st.session_state["user"].get("allowed_client") == "ALL":
-        if st.button("🔄 Changer de chantier", use_container_width=True):
-            st.session_state["selected_chantier"] = None
-            st.rerun()
+    st.subheader("📋 Historique des Essais Enregistrés")
 
-    st.markdown("---")
-
-    # Changement de mot de passe
-    with st.expander("🔑 Changer mon mot de passe"):
-        with st.form("change_pwd_form", clear_on_submit=True):
-            old_pwd = st.text_input("Ancien mot de passe", type="password")
-            new_pwd = st.text_input("Nouveau mot de passe", type="password")
-            confirm_pwd = st.text_input("Confirmer le mot de passe", type="password")
-            submit_pwd = st.form_submit_button("Mettre à jour", use_container_width=True)
-            
-            if submit_pwd:
-                user_record = st.session_state["users_db"].get(current_username)
-                if user_record and old_pwd != user_record["password"]:
-                    st.error("❌ L'ancien mot de passe est incorrect.")
-                elif new_pwd == "":
-                    st.warning("⚠️ Le nouveau mot de passe ne peut pas être vide.")
-                elif new_pwd != confirm_pwd:
-                    st.error("❌ Les nouveaux mots de passe ne correspondent pas.")
-                else:
-                    st.session_state["users_db"][current_username]["password"] = new_pwd
-                    st.success("✅ Mot de passe modifié avec succès !")
-
-    st.markdown("---")
-    if st.button("🚪 Déconnexion", use_container_width=True):
-        st.session_state["user"] = None
-        st.session_state["role"] = None
-        st.session_state["can_edit"] = False
-        st.session_state["selected_chantier"] = None
-        st.rerun()
-
-# ==========================================
-# 4. EXÉCUTION DE LA PAGE
-# ==========================================
-if page != "Accueil":
-    st.info(f"📍 **Chantier Actif :** {active_chantier['nom_chantier']} | 🏢 **Client :** {active_chantier['client']}")
-
-def call_view_safe(view_module, supabase_obj, chantier_obj):
     try:
-        view_module.show(supabase_obj, chantier_obj)
-    except TypeError:
-        view_module.show(supabase_obj)
+        res = supabase.table("essais_plaque").select("*").order("id", desc=True).execute()
+        if res.data and len(res.data) > 0:
+            
+            # Reconstruction d'une liste de dictionnaires propre ligne par ligne
+            clean_rows = []
+            for row in res.data:
+                # Récupération de la valeur K (gestion k_ratio ou k)
+                k_val = row.get("k_ratio") if row.get("k_ratio") is not None else row.get("k")
+                # Récupération de la valeur PK/Profil (gestion pk_profil ou pkl)
+                pk_val = row.get("pk_profil") if row.get("pk_profil") is not None else row.get("pkl")
 
-if page == "Accueil":
-    st.title("🚄 Accueil - LGV CASA SUD")
-    st.markdown("### Plateforme de Suivi et Contrôle Qualité - LPEE")
-    st.markdown("---")
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        image_path = os.path.join(os.path.dirname(__file__), "al_boraq.jpg.jpg")
-        if os.path.exists(image_path):
-            st.image(
-                image_path, 
-                caption="Al Boraq - Ligne à Grande Vitesse - Projet LGV CASA SUD", 
-                use_container_width=True
-            )
+                clean_rows.append({
+                    "ID": row.get("id"),
+                    "Date d'essai": row.get("date_essai"),
+                    "Client": row.get("client"),
+                    "Projet": row.get("projet"),
+                    "Emplacement": row.get("emplacement"),
+                    "PK/profil": pk_val,
+                    "Couche": row.get("couche"),
+                    "Nature de matériaux": row.get("nature_materiau"),
+                    "Z1": row.get("z1"),
+                    "Z2": row.get("z2"),
+                    "EV1": row.get("ev1"),
+                    "EV2": row.get("ev2"),
+                    "K": k_val,
+                    "Technicien": row.get("technicien")
+                })
+
+            # Création directe du DataFrame avec l'ordre exact demandé
+            df_display = pd.DataFrame(clean_rows)
+
+            st.dataframe(df_display, use_container_width=True, hide_index=True)
+
+            # --- ACTIONS RESERVÉES À L'ADMINISTRATEUR ---
+            if is_admin:
+                st.markdown("### ⚙️ Actions Administrateur (Modifier / Supprimer)")
+                
+                selected_id = st.selectbox(
+                    "Sélectionnez un essai par son ID :", 
+                    options=[item["id"] for item in res.data],
+                    key="admin_select_plaque_id"
+                )
+
+                act_col1, act_col2 = st.columns(2)
+
+                with act_col1:
+                    if st.button("✏️ Modifier cet essai", type="secondary", use_container_width=True):
+                        selected_item = next((item for item in res.data if item["id"] == selected_id), None)
+                        if selected_item:
+                            st.session_state["edit_plaque_item"] = selected_item
+                            st.rerun()
+
+                with act_col2:
+                    if st.button("🗑️ Supprimer cet essai", type="primary", use_container_width=True):
+                        try:
+                            supabase.table("essais_plaque").delete().eq("id", selected_id).execute()
+                            st.success(f"🗑️ Essai #{selected_id} supprimé avec succès.")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Erreur lors de la suppression : {e}")
+            else:
+                st.caption("🔒 *Connectez-vous en tant qu'administrateur pour modifier ou supprimer des enregistrements.*")
+
         else:
-            st.warning("⚠️ L'image 'al_boraq.jpg.jpg' est introuvable à la racine.")
-        
-    st.markdown("---")
-    st.markdown(f"""
-    Bienvenue **{current_username}** sur l'application de gestion des contrôles qualité pour le projet **LGV CASA SUD**.
-    
-    Vous êtes actuellement connecté sur le dossier client **{active_chantier['client']}** (*Chantier : {active_chantier['nom_chantier']}*).
-    
-    Utilisez le menu latéral pour naviguer dans vos modules de contrôle.
-    """)
-
-elif page == "Gestion Utilisateurs" and current_role == "admin":
-    st.title("👥 Gestion des Utilisateurs & Mots de Passe")
-    st.caption("Consultez la liste des utilisateurs, leurs rôles et leurs affectations de chantiers.")
-    
-    data_users = []
-    for user, details in st.session_state["users_db"].items():
-        data_users.append({
-            "Utilisateur": user,
-            "Mot de Passe": details["password"],
-            "Rôle": details["role"],
-            "Client Affecté": details.get("allowed_client", "ALL"),
-            "Chantier Affecté": details.get("allowed_chantier", "ALL"),
-            "Droit de modification": details.get("can_edit", False)
-        })
-    st.dataframe(data_users, use_container_width=True)
-
-elif page == "Essai à la Plaque":
-    call_view_safe(essai_Plaque, supabase, active_chantier)
-elif page == "Synthèse Plaque":
-    call_view_safe(synthese_plaque, supabase, active_chantier)
-elif page == "Suivi de Bétonnage":
-    call_view_safe(suivi_Betonnage, supabase, active_chantier)
-elif page == "Suivi Contrôle Béton":
-    call_view_safe(suivi_controle_beton, supabase, active_chantier)
-elif page == "Synthèse Béton":
-    call_view_safe(synthese_Beton, supabase, active_chantier)
+            st.info("Aucun essai à la plaque n'a encore été enregistré.")
+    except Exception as e:
+        st.warning(f"Impossible de charger l'historique : {e}")
