@@ -289,14 +289,14 @@ elif page == "Gestion Utilisateurs" and current_role == "admin":
     
     st.dataframe(data_users, use_container_width=True)
 
-# Transmission systématique de 'selected_chantier' aux modules de vues
+# Appel classique à 1 argument (résout l'erreur TypeError)
 elif page == "Essai à la Plaque":
-    essai_Plaque.show(supabase, selected_chantier)
+    essai_Plaque.show(supabase)
 elif page == "Synthèse Plaque":
-    synthese_plaque.show(supabase, selected_chantier)
+    synthese_plaque.show(supabase)
 elif page == "Suivi de Bétonnage":
-    suivi_Betonnage.show(supabase, selected_chantier)
+    suivi_Betonnage.show(supabase)
 elif page == "Suivi Contrôle Béton":
-    suivi_controle_beton.show(supabase, selected_chantier)
+    suivi_controle_beton.show(supabase)
 elif page == "Synthèse Béton":
-    synthese_Beton.show(supabase, selected_chantier)
+    synthese_Beton.show(supabase)
