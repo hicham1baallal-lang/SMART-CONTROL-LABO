@@ -21,7 +21,7 @@ def show(supabase):
         quantite_m3 = st.number_input("Quantité (m³)", min_value=0.0, value=8.0, step=0.5, key="saisie_qte")
         
     with col2:
-        client = st.text_input("Client", value="TGCC", disabled=True, key="saisie_client")
+        st.text_input("Client", value="TGCC", disabled=True, key="saisie_client")
         
         # Saisie des heures
         heure_fin = st.time_input("Heure de fin de production", value=datetime.strptime("08:00", "%H:%M").time(), key="saisie_h_fin")
@@ -43,7 +43,7 @@ def show(supabase):
         )
         
     with col3:
-        centrale = st.text_input("Centrale à Béton", value="TG PREFA", key="saisie_centrale")
+        st.text_input("Centrale à Béton", value="TG PREFA", key="saisie_centrale")
         meteo = st.selectbox("Météo", ["Ensoleillé ☀️", "Nuageux ☁️", "Pluie 🌧️"], key="saisie_meteo")
         
         temp_beton = st.number_input("Température du Béton (°C)", value=20.0, step=0.1, format="%.1f", key="saisie_t_beton")
@@ -75,9 +75,7 @@ def show(supabase):
             "numero_bl": numero_bl,
             "ouvrage": ouvrage,
             "quantite_m3": float(quantite_m3),
-            "client": client,
             "classe_beton": classe_beton,
-            "centrale_beton": centrale,
             "meteo": meteo,
             "heure_fin_coulage": heure_fin.strftime("%H:%M"),
             "heure_arrivee": heure_arrivee.strftime("%H:%M"),
@@ -225,8 +223,6 @@ def show(supabase):
                             idx_classe = classes_list.index(current_classe) if current_classe in classes_list else 0
                             new_classe = st.selectbox("Classe", classes_list, index=idx_classe, key="edit_classe")
                             
-                            new_centrale = st.text_input("Centrale à Béton", value=selected_item.get("centrale_beton", "TG PREFA"), key="edit_centrale")
-                            
                             meteo_list = ["Ensoleillé ☀️", "Nuageux ☁️", "Pluie 🌧️"]
                             current_meteo = selected_item.get("meteo", "Ensoleillé ☀️")
                             idx_meteo = meteo_list.index(current_meteo) if current_meteo in meteo_list else 0
@@ -255,7 +251,6 @@ def show(supabase):
                                         "heure_fin_coulage": new_heure_fin.strftime("%H:%M"),
                                         "heure_arrivee": new_heure_arrivee.strftime("%H:%M"),
                                         "classe_beton": new_classe,
-                                        "centrale_beton": new_centrale,
                                         "meteo": new_meteo,
                                         "temperature": float(new_temp_beton),
                                         "temperature_ambiante": float(new_temp_amb),
