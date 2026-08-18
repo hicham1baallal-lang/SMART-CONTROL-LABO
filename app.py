@@ -178,13 +178,10 @@ with st.sidebar:
                 st.subheader("🏗️ Sélection du Chantier")
                 
                 # 1. Filtre par Client (SOGEA, TGCC, etc.)
-                clients_list = ["Tous"] + sorted(list(df_c["client"].dropna().unique()))
+                clients_list = sorted(list(df_c["client"].dropna().unique()))
                 selected_client = st.selectbox("Client :", clients_list)
                 
-                if selected_client != "Tous":
-                    df_filtered = df_c[df_c["client"] == selected_client]
-                else:
-                    df_filtered = df_c
+                df_filtered = df_c[df_c["client"] == selected_client]
 
                 # 2. Sélecteur de Chantier (GARE CASA SUD, etc.)
                 chantiers_list = sorted(list(df_filtered["nom_chantier"].dropna().unique()))
@@ -289,7 +286,6 @@ elif page == "Gestion Utilisateurs" and current_role == "admin":
     
     st.dataframe(data_users, use_container_width=True)
 
-# Appel classique à 1 argument (résout l'erreur TypeError)
 elif page == "Essai à la Plaque":
     essai_Plaque.show(supabase)
 elif page == "Synthèse Plaque":
