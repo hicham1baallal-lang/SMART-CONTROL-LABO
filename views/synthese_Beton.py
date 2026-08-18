@@ -224,9 +224,9 @@ def generate_excel_synthesis_betonnage(df_data, titre_periode):
             ws.cell(row=r, column=c).border = thin_border
 
     col_width_map = {
-        "Date Livraison": 16, "Heure d'arrivée": 15, "N° BL": 16, "Ouvrage": 22,
+        "Date Livraison": 16, "date_coulee": 16, "Heure d'arrivée": 15, "N° BL": 16, "Ouvrage": 22,
         "Quantité (m³)": 16, "Classe": 14, "Durée de transport": 18, "Temp. Béton": 15,
-        "Temp. Ambiante": 16, "Affaissement": 15, "Prélèvement": 18, "Météo": 15
+        "Temp. Ambiante": 16, "Affaissement": 15, "Prélèvement": 18, "Météo": 15, "centrale": 16
     }
 
     for col_idx, col_name in enumerate(headers, 1):
@@ -244,7 +244,6 @@ def generate_excel_synthesis_controle(df_data, titre_periode):
     ws = wb.active
     ws.title = "Synthèse Contrôle Béton"
 
-    # Configuration A4
     ws.page_setup.orientation = ws.ORIENTATION_PORTRAIT
     ws.page_setup.paperSize = ws.PAPERSIZE_A4
     ws.sheet_properties.pageSetUpPr.fitToPage = True
@@ -284,7 +283,6 @@ def generate_excel_synthesis_controle(df_data, titre_periode):
     mid_col_letter = get_column_letter(mid_col_idx)
     next_mid_letter = get_column_letter(mid_col_idx + 1)
 
-    # Entête - Titre
     ws.merge_cells(f"A1:{last_col_letter}2")
     ws["A1"].value = "LABORATOIRE PUBLIC D'ESSAIS ET D'ÉTUDES (LPEE) - CTR-CSB\nRAPPORT DE SYNTHÈSE DU CONTRÔLE BÉTON"
     ws["A1"].font = font_title
@@ -323,7 +321,6 @@ def generate_excel_synthesis_controle(df_data, titre_periode):
         for c in range(1, nb_cols + 1):
             ws.cell(row=r, column=c).border = thin_border
 
-    # Résumé
     row_idx = 7
     ws.merge_cells(f"A{row_idx}:{last_col_letter}{row_idx}")
     ws[f"A{row_idx}"] = "📊 RÉSUMÉ GLOBAL"
@@ -346,7 +343,6 @@ def generate_excel_synthesis_controle(df_data, titre_periode):
         for c in range(1, nb_cols + 1):
             ws.cell(row=r, column=c).border = thin_border
 
-    # Tableau Données
     row_idx += 3
     ws.merge_cells(f"A{row_idx}:{last_col_letter}{row_idx}")
     ws[f"A{row_idx}"] = "📋 MOYENNE DES ÉCRASEMENTS PAR ÉCHÉANCE"
@@ -379,9 +375,6 @@ def generate_excel_synthesis_controle(df_data, titre_periode):
         row_idx += 1
     end_data_row = row_idx - 1
 
-    # =========================================================
-    # TABLEAU DE SYNTHÈSE STATISTIQUE DANS EXCEL
-    # =========================================================
     row_idx += 2
     ws.merge_cells(f"A{row_idx}:{last_col_letter}{row_idx}")
     ws[f"A{row_idx}"] = "📈 SYNTHÈSE STATISTIQUE DES PARAMÈTRES"
@@ -419,7 +412,6 @@ def generate_excel_synthesis_controle(df_data, titre_periode):
         "fc28": "I"
     }
 
-    # Calcul dynamique des lignes dans la table statistique
     row_moy = row_idx + 1
     row_std = row_idx + 3
 
@@ -440,7 +432,6 @@ def generate_excel_synthesis_controle(df_data, titre_periode):
         f_moy_fc28 = f"=AVERAGE({col_map_excel['fc28']}{start_data_row}:{col_map_excel['fc28']}{end_data_row})"
         f_max_fc28 = f"=MAX({col_map_excel['fc28']}{start_data_row}:{col_map_excel['fc28']}{end_data_row})"
 
-        # CORRECTION : Formule ECARTYPE.STANDARD et liaison directe CV% sur les cellules MOY et σ
         f_std_fc28 = f"=ECARTYPE.STANDARD({col_map_excel['fc28']}{start_data_row}:{col_map_excel['fc28']}{end_data_row})"
         f_cv_fc28 = f"=SIERREUR(({col_map_excel['fc28']}{row_std}/{col_map_excel['fc28']}{row_moy})*100, 0)"
     else:
@@ -479,7 +470,6 @@ def generate_excel_synthesis_controle(df_data, titre_periode):
         ws.row_dimensions[row_idx].height = 22
         row_idx += 1
 
-    # Largeurs de colonnes
     specific_widths = {
         'A': 8, 'B': 11, 'C': 10, 'D': 28, 'E': 10,
         'F': 10, 'G': 14, 'H': 14, 'I': 14
@@ -723,7 +713,13 @@ def show(supabase):
 
                 if data:
                     df = pd.DataFrame(data)
-                    if selected_class != "Toutes":
+                    
+                    # Construction des colonnes requises avec mapping propre
+                    df["date_coulee"] = df["date_livraison"] if "date_livraison" in df.columns else None
+                    df["centrale"] = df["centrale_beton"] if "centrale_beton" in df.columns else None
+                    df["ref_controle"] = df["id"] if "id" in df.columns else None
+
+                    if selected_class != "Toutes" and "classe_beton" in df.columns:
                         df = df[df["classe_beton"] == selected_class]
 
                     if df.empty:
@@ -739,32 +735,31 @@ def show(supabase):
                                     return "-"
                             df["Durée de transport"] = df.apply(calc_duree, axis=1)
 
-                        cols_drop = [c for c in ["id", "created_at", "created", "heure_fin_coulage", "client", "centrale_beton", "technicien", "observations", "nb_eprouvettes"] if c in df.columns]
-                        df = df.drop(columns=cols_drop)
-
-                        cols = list(df.columns)
-                        if "date_livraison" in cols and "heure_arrivee" in cols:
-                            cols.remove("heure_arrivee")
-                            cols.insert(cols.index("date_livraison") + 1, "heure_arrivee")
-                        if "meteo" in cols:
-                            cols.remove("meteo")
-                            cols.append("meteo")
-                        df = df[cols]
-
                         renames = {
-                            "date_livraison": "Date Livraison", "heure_arrivee": "Heure d'arrivée",
-                            "bl_num": "N° BL", "ouvrage": "Ouvrage", "quantite_m3": "Quantité (m³)",
-                            "classe_beton": "Classe", "temperature": "Temp. Béton",
-                            "temperature_ambiante": "Temp. Ambiante", "affaissement": "Affaissement",
-                            "prelevement": "Prélèvement", "meteo": "Météo"
+                            "ouvrage": "Ouvrage",
+                            "classe_beton": "Classe",
+                            "date_coulee": "date_coulee",
+                            "prelevement": "Prélèvement",
+                            "affaissement": "Affaissement",
+                            "temperature": "Temp. Béton",
+                            "centrale": "centrale",
+                            "ref_controle": "ref_controle",
+                            "bl_num": "N° BL",
+                            "quantite_m3": "Quantité (m³)"
                         }
-                        df_display = df.rename(columns=renames)
+                        
+                        cols_needed = [c for c in renames.keys() if c in df.columns]
+                        df_display = df[cols_needed].rename(columns=renames)
+                        df_display = df_display.fillna("-")
 
                         st.markdown("---")
                         k1, k2 = st.columns(2)
-                        k1.metric("Volume Total", f"{df_display['Quantité (m³)'].sum():.1f} m³")
+                        vol_tot = pd.to_numeric(df_display["Quantité (m³)"], errors='coerce').sum() if "Quantité (m³)" in df_display.columns else 0.0
+                        k1.metric("Volume Total", f"{vol_tot:.1f} m³")
+                        
                         if "Affaissement" in df_display.columns:
-                            k2.metric("Affaissement Moyen", f"{pd.to_numeric(df_display['Affaissement'], errors='coerce').mean():.0f} mm")
+                            aff_mean = pd.to_numeric(df_display['Affaissement'], errors='coerce').mean()
+                            k2.metric("Affaissement Moyen", f"{aff_mean:.0f} mm" if pd.notna(aff_mean) else "-")
                         st.markdown("---")
 
                         excel_file = generate_excel_synthesis_betonnage(df_display, f"Journée du {selected_date.strftime('%d/%m/%Y')}")
@@ -805,45 +800,37 @@ def show(supabase):
 
                 if data_m:
                     df_m = pd.DataFrame(data_m)
-                    if selected_class_m != "Toutes":
+
+                    df_m["date_coulee"] = df_m["date_livraison"] if "date_livraison" in df_m.columns else None
+                    df_m["centrale"] = df_m["centrale_beton"] if "centrale_beton" in df_m.columns else None
+                    df_m["ref_controle"] = df_m["id"] if "id" in df_m.columns else None
+
+                    if selected_class_m != "Toutes" and "classe_beton" in df_m.columns:
                         df_m = df_m[df_m["classe_beton"] == selected_class_m]
 
                     if df_m.empty:
                         st.info("Aucun coulage enregistré pour ce mois.")
                     else:
-                        if "heure_fin_coulage" in df_m.columns and "heure_arrivee" in df_m.columns:
-                            def calc_duree(row):
-                                try:
-                                    h_fin = datetime.strptime(str(row["heure_fin_coulage"]), "%H:%M")
-                                    h_arr = datetime.strptime(str(row["heure_arrivee"]), "%H:%M")
-                                    return f"{int((h_arr - h_fin).total_seconds() / 60)} min"
-                                except:
-                                    return "-"
-                            df_m["Durée de transport"] = df_m.apply(calc_duree, axis=1)
-
-                        cols_drop = [c for c in ["id", "created_at", "created", "heure_fin_coulage", "client", "centrale_beton", "technicien", "observations", "nb_eprouvettes"] if c in df_m.columns]
-                        df_m = df_m.drop(columns=cols_drop)
-
-                        cols_m = list(df_m.columns)
-                        if "date_livraison" in cols_m and "heure_arrivee" in cols_m:
-                            cols_m.remove("heure_arrivee")
-                            cols_m.insert(cols_m.index("date_livraison") + 1, "heure_arrivee")
-                        if "meteo" in cols_m:
-                            cols_m.remove("meteo")
-                            cols_m.append("meteo")
-                        df_m = df_m[cols_m]
-
                         renames = {
-                            "date_livraison": "Date Livraison", "heure_arrivee": "Heure d'arrivée",
-                            "bl_num": "N° BL", "ouvrage": "Ouvrage", "quantite_m3": "Quantité (m³)",
-                            "classe_beton": "Classe", "temperature": "Temp. Béton",
-                            "temperature_ambiante": "Temp. Ambiante", "affaissement": "Affaissement",
-                            "prelevement": "Prélèvement", "meteo": "Météo"
+                            "ouvrage": "Ouvrage",
+                            "classe_beton": "Classe",
+                            "date_coulee": "date_coulee",
+                            "prelevement": "Prélèvement",
+                            "affaissement": "Affaissement",
+                            "temperature": "Temp. Béton",
+                            "centrale": "centrale",
+                            "ref_controle": "ref_controle",
+                            "bl_num": "N° BL",
+                            "quantite_m3": "Quantité (m³)"
                         }
-                        df_m_display = df_m.rename(columns=renames)
+
+                        cols_needed = [c for c in renames.keys() if c in df_m.columns]
+                        df_m_display = df_m[cols_needed].rename(columns=renames)
+                        df_m_display = df_m_display.fillna("-")
 
                         st.markdown("---")
-                        st.metric("Volume Cumulé du Mois", f"{df_m_display['Quantité (m³)'].sum():.1f} m³")
+                        vol_cumul = pd.to_numeric(df_m_display["Quantité (m³)"], errors='coerce').sum() if "Quantité (m³)" in df_m_display.columns else 0.0
+                        st.metric("Volume Cumulé du Mois", f"{vol_cumul:.1f} m³")
                         st.markdown("---")
 
                         excel_file_m = generate_excel_synthesis_betonnage(df_m_display, f"Mois de {mois_selected} {annee}")
