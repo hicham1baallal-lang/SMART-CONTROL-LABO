@@ -1,34 +1,51 @@
 import os
+import base64
 import pandas as pd
 import streamlit as st
+from PIL import Image
 from supabase import create_client, Client
 
 # ==========================================
-# 1. CONFIGURATION DE LA PAGE STREAMLIT & PWA
+# 1. CONFIGURATION DE LA PAGE & ICÔNE PWA
 # ==========================================
+icon_path = os.path.join(os.path.dirname(__file__), "icon-192.png")
+
+# Chargement de l'icône PIL pour le favicon natif
+if os.path.exists(icon_path):
+    app_icon = Image.open(icon_path)
+else:
+    app_icon = "🏗️"
+
 st.set_page_config(
     page_title="LPEE - CTR-CSB",
-    page_icon="icon-192.png",
+    page_icon=app_icon,
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Injection des balises et scripts pour la compatibilité PWA
-pwa_code = """
+# Encodage Base64 pour forcer la prise en compte de l'icône dans Edge/Chrome
+icon_b64 = ""
+if os.path.exists(icon_path):
+    with open(icon_path, "rb") as f:
+        icon_b64 = base64.b64encode(f.read()).decode()
+
+pwa_code = f"""
+    <link rel="icon" type="image/png" href="data:image/png;base64,{icon_b64}">
+    <link rel="apple-touch-icon" href="data:image/png;base64,{icon_b64}">
     <link rel="manifest" href="./manifest.json">
     <meta name="theme-color" content="#0066cc">
     <script>
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', function() {
+        if ('serviceWorker' in navigator) {{
+            window.addEventListener('load', function() {{
                 navigator.serviceWorker.register('./sw.js')
-                    .then(function(reg) {
+                    .then(function(reg) {{
                         console.log('Service Worker enregistré avec succès:', reg);
-                    })
-                    .catch(function(err) {
+                    }})
+                    .catch(function(err) {{
                         console.error('Erreur d enregistrement du Service Worker:', err);
-                    });
-            });
-        }
+                    }});
+            }});
+        }}
     </script>
 """
 st.markdown(pwa_code, unsafe_allow_html=True)
@@ -104,7 +121,6 @@ DEFAULT_USERS = {
 if "users_db" not in st.session_state:
     st.session_state["users_db"] = DEFAULT_USERS
 else:
-    # Fusion sécurisée pour éviter KeyError en cas de rechargement
     for u, data in DEFAULT_USERS.items():
         if u not in st.session_state["users_db"]:
             st.session_state["users_db"][u] = data
@@ -136,7 +152,10 @@ except Exception as e:
 if st.session_state["user"] is None:
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        st.markdown("<br><br>", unsafe_allow_html=True)
+        st.markdown("<br>", unsafe_allow_html=True)
+        if os.path.exists(icon_path):
+            st.image(icon_path, width=90)
+        
         st.title("🔐 Accès Restreint - LPEE")
         st.caption("Veuillez saisir vos identifiants pour accéder à la plateforme.")
         
@@ -213,7 +232,6 @@ if st.session_state["selected_chantier"] is None:
                     }
                     st.rerun()
             else:
-                # Chantier par défaut si la table Supabase est vide
                 st.session_state["selected_chantier"] = {
                     "id": 1,
                     "nom_chantier": "GARE CASA SUD",
