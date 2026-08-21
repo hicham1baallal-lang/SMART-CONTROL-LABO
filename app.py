@@ -8,7 +8,7 @@ from supabase import create_client, Client
 # ==========================================
 st.set_page_config(
     page_title="LPEE - CTR-CSB",
-    page_icon="🏗️",
+    page_icon="icon-192.png",
     layout="wide",
     initial_sidebar_state="expanded"
 )
