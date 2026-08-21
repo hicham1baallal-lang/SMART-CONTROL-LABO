@@ -4,7 +4,7 @@ import streamlit as st
 from supabase import create_client, Client
 
 # ==========================================
-# 1. CONFIGURATION DE LA PAGE STREAMLIT
+# 1. CONFIGURATION DE LA PAGE STREAMLIT & PWA
 # ==========================================
 st.set_page_config(
     page_title="LPEE - CTR-CSB",
@@ -12,6 +12,26 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# Injection des balises et scripts pour la compatibilité PWA
+pwa_code = """
+    <link rel="manifest" href="./manifest.json">
+    <meta name="theme-color" content="#0066cc">
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function() {
+                navigator.serviceWorker.register('./sw.js')
+                    .then(function(reg) {
+                        console.log('Service Worker enregistré avec succès:', reg);
+                    })
+                    .catch(function(err) {
+                        console.error('Erreur d enregistrement du Service Worker:', err);
+                    });
+            });
+        }
+    </script>
+"""
+st.markdown(pwa_code, unsafe_allow_html=True)
 
 # ==========================================
 # 2. BASE DE DONNÉES UTILISATEURS & SESSION
@@ -129,7 +149,6 @@ if st.session_state["user"] is None:
                 if username_input in USERS_DB and USERS_DB[username_input]["password"] == password_input:
                     user_info = USERS_DB[username_input]
                     
-                    # Utilisation sécurisée de .get() pour éviter KeyError
                     st.session_state["user"] = {
                         "username": username_input, 
                         "role": user_info.get("role", "user"),
