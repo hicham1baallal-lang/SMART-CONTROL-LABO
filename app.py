@@ -402,7 +402,7 @@ if page == "Accueil":
         if os.path.exists(image_path):
             st.image(
                 image_path, 
-                caption="PLATEFORME - SUIVI ET CONTROLE QUALITE DES CHANTIERS - Projet LGV CASA SUD", 
+                caption="PLATEFORME - SUIVI ET CONTROLE QUALITE DES CHANTIERS - PROJET LPEE/CTR-CASA/BAA", 
                 use_container_width=True
             )
         else:
