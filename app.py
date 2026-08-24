@@ -410,7 +410,7 @@ if page == "Accueil":
         
     st.markdown("---")
     st.markdown(f"""
-    Bienvenue **{current_username}** sur l'application de gestion des contrôles qualité pour les projets **CASA SUD**.
+    Bienvenue **{current_username}** sur l'application de gestion des contrôles qualité pour les projets de **CASA SUD**.
     
     Vous êtes actuellement connecté sur le dossier client **{active_chantier['client']}** (*Chantier : {active_chantier['nom_chantier']}*).
     
