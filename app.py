@@ -398,7 +398,7 @@ if page == "Accueil":
     st.markdown("---")
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        image_path = os.path.join(os.path.dirname(__file__), "al_boraq.jpg.jpg")
+        image_path = os.path.join(os.path.dirname(__file__), "image.platforme.jpg")
         if os.path.exists(image_path):
             st.image(
                 image_path, 
@@ -406,7 +406,7 @@ if page == "Accueil":
                 use_container_width=True
             )
         else:
-            st.warning("⚠️ L'image 'al_boraq.jpg.jpg' est introuvable à la racine.")
+            st.warning("⚠️ L'image 'image.platforme.jpg' est introuvable à la racine.")
         
     st.markdown("---")
     st.markdown(f"""
