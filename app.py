@@ -393,7 +393,7 @@ def call_view_safe(view_module, supabase_obj, chantier_obj):
         view_module.show(supabase_obj)
 
 if page == "Accueil":
-    st.title("🚄 Accueil - LGV CASA SUD")
+    st.title("🚄 Accueil - LPEE/CTR CASA/BAA")
     st.markdown("### Plateforme de Suivi et Contrôle Qualité - LPEE")
     st.markdown("---")
     col1, col2, col3 = st.columns([1, 2, 1])
