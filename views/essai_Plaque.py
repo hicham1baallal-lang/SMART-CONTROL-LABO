@@ -140,7 +140,7 @@ def show(supabase):
             }
 
             try:
-                sample_query = supabase.table("essais_plaque").select("*").limit(1).execute()
+                sample_query = supabase.table("essai_plaque").select("*").limit(1).execute()
                 if sample_query.data and len(sample_query.data) > 0:
                     valid_columns = set(sample_query.data[0].keys())
                     safe_payload = {k: v for k, v in payload.items() if k in valid_columns}
