@@ -433,7 +433,7 @@ def show(supabase):
         st.markdown("### 📥 Exportation Excel avec Mise en Page A4 Imprimable")
         
         excel_data = generate_excel_a4(filtered_df, filter_title=filter_label)
-        file_name_clean = f"Synthese_Essais_Plaque_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
+        file_name_clean = f"Synthese_Essai_Plaque_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
 
         st.download_button(
             label="📄 Télécharger la Synthèse Excel (Format A4 Imprimable)",
