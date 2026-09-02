@@ -146,8 +146,7 @@ def show(supabase):
                     safe_payload = {k: v for k, v in payload.items() if k in valid_columns}
                 else:
                     safe_payload = payload
-                # Toujours inclus, même si absent des colonnes déjà vues par
-                # l'échantillon ci-dessus (table encore vide par exemple).
+                
                 safe_payload["projet_id"] = projet_id_actif
 
                 if editing_item:
@@ -261,7 +260,6 @@ def show(supabase):
                         except Exception as e:
                             st.error(f"Erreur lors de la suppression : {e}")
             else:
-                # Bouton de modification disponible pour les techniciens
                 if st.button("✏️ Modifier cet essai", type="secondary", use_container_width=True):
                     selected_item = next((item for item in res.data if item["id"] == selected_id), None)
                     if selected_item:
