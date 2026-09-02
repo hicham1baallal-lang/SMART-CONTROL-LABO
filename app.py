@@ -489,7 +489,7 @@ if (
 
 try:
   from views import (
-      essai_Plaque,
+      essai_plaque,
       historique_pvs,
       suivi_Betonnage,
       suivi_controle_beton,
@@ -876,7 +876,7 @@ elif page == "Gestion Utilisateurs" and current_role == "admin":
   st.dataframe(data_users, use_container_width=True)
 
 elif page == "Essai à la Plaque":
-  render_view(essai_Plaque, supabase)
+  render_view(essai_plaque, supabase)
 elif page == "Synthèse Plaque":
   render_view(synthese_plaque, supabase)
 elif page == "Suivi de Bétonnage":
