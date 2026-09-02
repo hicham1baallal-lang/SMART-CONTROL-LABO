@@ -155,7 +155,7 @@ def show(supabase):
                     supabase.table("essais_plaque").update(safe_payload).eq("id", editing_item["id"]).eq("projet_id", projet_id_actif).execute()
                     enregistrer_modification(
                         supabase,
-                        table_concernee="essais_plaque",
+                        table_concernee="essai_plaque",
                         enregistrement_id=editing_item["id"],
                         action="MODIFICATION",
                         anciennes_valeurs=anciennes_valeurs_plaque,
@@ -164,7 +164,7 @@ def show(supabase):
                     st.success(f"✅ Essai #{editing_item['id']} mis à jour avec succès !")
                     st.session_state["edit_plaque_item"] = None
                 else:
-                    res_ins_plaque = supabase.table("essais_plaque").insert(safe_payload).execute()
+                    res_ins_plaque = supabase.table("essai_plaque").insert(safe_payload).execute()
                     if res_ins_plaque.data:
                         nouvel_id_plaque = res_ins_plaque.data[0].get("id")
                         enregistrer_modification(
@@ -194,7 +194,7 @@ def show(supabase):
     st.subheader("📋 Historique des Essais Enregistrés")
 
     try:
-        res = supabase.table("essais_plaque").select("*").eq("projet_id", projet_id_actif).order("id", desc=True).execute()
+        res = supabase.table("essai_plaque").select("*").eq("projet_id", projet_id_actif).order("id", desc=True).execute()
         if res.data and len(res.data) > 0:
             
             clean_rows = []
