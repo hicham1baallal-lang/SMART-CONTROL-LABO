@@ -67,11 +67,11 @@ def extraire_nb_jours(echeance_str, default=28):
     return int(match.group()) if match else default
 
 
-def extraire_repere_eprouvette(item):
+def extraire_repeère_eprouvette(item):
     """Récupère le repère d'éprouvette quelle que soit la variante de nom de colonne dans Supabase."""
     if not item or not isinstance(item, dict):
         return "B/01"
-    for k in ["repere_eprouvette", "repere", "code_eprouvette", "num_eprouvette", "eprouvette_repere"]:
+    for k in ["repère_eprouvette", "repère", "code_eprouvette", "num_eprouvette", "eprouvette_repère"]:
         val = str(item.get(k) or "").strip()
         if val and val.upper() not in ["N/A", "NONE", "NAN", "", "-"]:
             return val
