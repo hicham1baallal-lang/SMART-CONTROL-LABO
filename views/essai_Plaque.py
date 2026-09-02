@@ -232,7 +232,7 @@ def show(supabase):
             )
 
             if is_baallal_admin:
-                afficher_historique_modifications(supabase, "essais_plaque", selected_id)
+                afficher_historique_modifications(supabase, "essai_plaque", selected_id)
 
             if is_admin:
                 act_col1, act_col2 = st.columns(2)
@@ -255,7 +255,7 @@ def show(supabase):
                                 anciennes_valeurs={k: v for k, v in (item_a_supprimer or {}).items() if k != "id"},
                                 commentaire="Suppression définitive de l'essai",
                             )
-                            supabase.table("essais_plaque").delete().eq("id", selected_id).eq("projet_id", projet_id_actif).execute()
+                            supabase.table("essai_plaque").delete().eq("id", selected_id).eq("projet_id", projet_id_actif).execute()
                             st.success(f"🗑️ Essai #{selected_id} supprimé avec succès.")
                             st.rerun()
                         except Exception as e:
