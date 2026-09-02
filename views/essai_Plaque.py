@@ -152,7 +152,7 @@ def show(supabase):
 
                 if editing_item:
                     anciennes_valeurs_plaque = {k: editing_item.get(k) for k in safe_payload}
-                    supabase.table("essais_plaque").update(safe_payload).eq("id", editing_item["id"]).eq("projet_id", projet_id_actif).execute()
+                    supabase.table("essai_plaque").update(safe_payload).eq("id", editing_item["id"]).eq("projet_id", projet_id_actif).execute()
                     enregistrer_modification(
                         supabase,
                         table_concernee="essai_plaque",
@@ -169,7 +169,7 @@ def show(supabase):
                         nouvel_id_plaque = res_ins_plaque.data[0].get("id")
                         enregistrer_modification(
                             supabase,
-                            table_concernee="essais_plaque",
+                            table_concernee="essai_plaque",
                             enregistrement_id=nouvel_id_plaque,
                             action="CREATION",
                             nouvelles_valeurs=safe_payload,
