@@ -1164,11 +1164,6 @@ def show(supabase):
 
         if can_edit:
             # --- Correction en masse des dates déjà en base (données historiques) ---
-            # Le calcul automatique (ci-dessous) ne s'applique qu'aux MODIFICATIONS
-            # futures faites depuis ce tableau. Pour corriger d'un coup les
-            # éprouvettes déjà enregistrées avec une date d'écrasement incohérente
-            # (ex : échéance changée de 7 à 28 jours sans que la date ait suivi à
-            # l'époque), ce bouton recalcule et corrige tout en une fois.
             with st.expander("🔧 Corriger en masse les dates d'écrasement incohérentes", expanded=False):
                 st.caption(
                     "Recalcule `Date Écrasement Prévue = Date Coulée + Échéance Visée` "
@@ -1259,12 +1254,6 @@ def show(supabase):
                     cols_ed = [c for c in ["id", "betonnage_id", "ref_controle", "repere_eprouvette", "echeance", "date_ecrasement", "date_coulee", "ouvrage", "classe_beton"] if c in df_edit_prog.columns]
                     df_display_prog = df_edit_prog[cols_ed].copy()
 
-                    # --- Aperçu live : "Date Écrasement Prévue" = Date Coulée + Échéance ---
-                    # On applique d'abord les éditions non-encore-enregistrées de
-                    # l'utilisateur (stockées par Streamlit dans session_state sous
-                    # la clé du data_editor) avant de recalculer, pour que la date
-                    # affichée se mette à jour DÈS qu'on change l'échéance dans le
-                    # tableau — sans attendre le clic sur "Enregistrer".
                     etat_editeur_prog = st.session_state.get("editor_modification_phase1", {})
                     for idx_pos, changements in etat_editeur_prog.get("edited_rows", {}).items():
                         if idx_pos < len(df_display_prog):
@@ -1282,7 +1271,7 @@ def show(supabase):
                                 dt_c_apercu = datetime.strptime(str(coulee_val)[:10], "%Y-%m-%d").date()
                                 df_display_prog.iat[idx_pos, col_idx_ecras] = str(dt_c_apercu + timedelta(days=nb_j_apercu))
                             except (ValueError, TypeError):
-                                pass  # Date Coulée invalide/absente : on laisse la valeur enregistrée telle quelle
+                                pass
 
                     df_prog_modifiee = st.data_editor(
                         df_display_prog,
@@ -1320,9 +1309,6 @@ def show(supabase):
                                 ech_str = str(r_m.get("echeance", "")).strip()
                                 dt_coulee_str = str(r_m.get("date_coulee", "")).strip()
 
-                                # Règle stricte et systématique, appliquée ligne par
-                                # ligne (pas de calcul vectoriel pandas fragile) :
-                                # Date Écrasement Prévue = Date Coulée + Échéance Visée.
                                 nb_j = extraire_nb_jours(ech_str, default=28)
                                 try:
                                     dt_c = datetime.strptime(dt_coulee_str[:10], "%Y-%m-%d").date()
@@ -1419,11 +1405,9 @@ def show(supabase):
             col2.text_input("Ouvrage / Élément", value=ouvrage_p, disabled=True, key=f"p_ouv_{b_id}")
             col3.text_input("Classe de Béton Spécifiée", value=classe_beton_p, disabled=True, key=f"p_classe_{b_id}")
 
-            # CALCUL DYNAMIQUE ET VECTORIEL DE LA DATE D'ÉCRASEMENT PRÉVUE VIA LA FONCTION PRINCIPALE
             options_echeances = ["3 jours", "7 jours", "28 jours", "90 jours"]
             echeance_p = st.selectbox("Âge / Échéance visée", options_echeances, key=f"p_echeance_{b_id}")
             
-            # Utilisation directe du dataframe pour calculer la date
             df_calcul_single = pd.DataFrame([{
                 'Date Coulée': str(date_coulee_p),
                 'Échéance Visée': echeance_p
@@ -1508,7 +1492,6 @@ def show(supabase):
         debut_semaine = date_filtre - timedelta(days=date_filtre.weekday())
         fin_semaine = debut_semaine + timedelta(days=6)
 
-        # Retards
         try:
             res_retards = supabase.table("suivi_controle_beton").select("*").lte("date_ecrasement", today_str).or_("force_kn.is.null,force_kn.eq.0").order("date_ecrasement", desc=False).execute()
             retards_list = res_retards.data or []
@@ -1531,7 +1514,6 @@ def show(supabase):
             st.dataframe(pd.DataFrame(rows_retard), use_container_width=True, hide_index=True)
             st.markdown("---")
 
-        # Jour et Semaine
         try:
             eprouvettes_date_sel = supabase.table("suivi_controle_beton").select("*").eq("date_ecrasement", date_filtre_str).order("id", desc=False).execute().data or []
             eprouvettes_semaine = supabase.table("suivi_controle_beton").select("*").gte("date_ecrasement", str(debut_semaine)).lte("date_ecrasement", str(fin_semaine)).order("date_ecrasement", desc=False).execute().data or []
