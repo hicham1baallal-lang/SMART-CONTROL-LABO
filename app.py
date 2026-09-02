@@ -232,10 +232,10 @@ def generate_pdf_report(
 # ==========================================
 try:
   SUPABASE_URL = st.secrets.get(
-      "SUPABASE_URL", "https://yqijsvxyrdymcnqluipa.supabase.co"
+      "SUPABASE_URL", "https://pfyfmfujccibiwfiwknu.supabase.co"
   )
   SUPABASE_KEY = st.secrets.get(
-      "SUPABASE_KEY", "sb_publishable_m8g5mocsCDgk3JpS1lpuCQ_3wOPyet1"
+      "SUPABASE_KEY", "sb_publishable_6h8ZUeV8ii5TjKUV9B1Ewg_eDawQRkW"
   )
   # Code partagé exigé par la politique RLS sur suivi_betonnage (voir le SQL
   # fourni pour la page hors-ligne). L'app principale doit envoyer le même
