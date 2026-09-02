@@ -67,7 +67,7 @@ def extraire_nb_jours(echeance_str, default=28):
     return int(match.group()) if match else default
 
 
-def extraire_repère_eprouvette(item):
+def extraire_repere_eprouvette(item):
     """Récupère le repere d'éprouvette quelle que soit la variante de nom de colonne dans Supabase."""
     if not item or not isinstance(item, dict):
         return "B/01"
@@ -76,6 +76,38 @@ def extraire_repère_eprouvette(item):
         if val and val.upper() not in ["N/A", "NONE", "NAN", "", "-"]:
             return val
     return "B/01"
+
+
+# Alias (l'ancien nom accentué était utilisé par erreur à certains endroits
+# historiquement ; on le garde pointant vers la même fonction par sécurité).
+extraire_repère_eprouvette = extraire_repere_eprouvette
+
+
+def detecter_colonne_repere(supabase):
+    """Détecte dynamiquement le VRAI nom de la colonne 'repère d'éprouvette'
+    dans la table Supabase, en inspectant un enregistrement existant, plutôt
+    que de deviner (ce qui provoquait l'erreur 'Could not find the column...
+    in the schema cache' quand le nom supposé était incorrect). Le résultat
+    est mis en cache pour la session, pour ne faire cette vérification
+    qu'une seule fois."""
+    if "colonne_repere_detectee" in st.session_state:
+        return st.session_state["colonne_repere_detectee"]
+
+    candidats = ["repere_eprouvette", "repere", "repere_1", "code_eprouvette", "num_eprouvette", "eprouvette_repere"]
+    colonne_trouvee = "repere_eprouvette"  # valeur par défaut si la détection échoue
+    try:
+        res = supabase.table("suivi_controle_beton").select("*").limit(1).execute()
+        if res.data:
+            cles_dispo = res.data[0].keys()
+            for c in candidats:
+                if c in cles_dispo:
+                    colonne_trouvee = c
+                    break
+    except Exception:
+        pass
+
+    st.session_state["colonne_repere_detectee"] = colonne_trouvee
+    return colonne_trouvee
 # ==============================================================================
 # 1. GESTION DES UTILISATEURS ET CONNEXION SUPABASE
 # ==============================================================================
@@ -1308,6 +1340,7 @@ def show(supabase):
                         if not bloque_mod:
                             orig_par_id_p1 = {ep["id"]: ep for ep in eprouvettes_enregistrees}
                             nb_succes = 0
+                            col_repere = detecter_colonne_repere(supabase)
                             for _, r_m in df_prog_modifiee.iterrows():
                                 ep_id, b_id = int(r_m["id"]), r_m.get("betonnage_id")
                                 ref_ctrl = str(r_m.get("ref_controle", "")).strip()
@@ -1324,23 +1357,14 @@ def show(supabase):
 
                                 pay = {
                                     "ref_controle": ref_ctrl,
-                                    "repere_eprouvette": repere_val,
+                                    col_repere: repere_val,
                                     "echeance": ech_str,
                                     "date_coulee": dt_coulee_str,
                                     "date_ecrasement": dt_ecrasement_calc,
                                 }
                                 try:
                                     orig_row_p1 = orig_par_id_p1.get(ep_id, {})
-                                    try:
-                                        supabase.table("suivi_controle_beton").update(pay).eq("id", ep_id).execute()
-                                    except Exception as err_col:
-                                        if "repere_eprouvette" in str(err_col):
-                                            pay_fallback = pay.copy()
-                                            rep_v = pay_fallback.pop("repere_eprouvette")
-                                            pay_fallback["repere"] = rep_v
-                                            supabase.table("suivi_controle_beton").update(pay_fallback).eq("id", ep_id).execute()
-                                        else:
-                                            raise err_col
+                                    supabase.table("suivi_controle_beton").update(pay).eq("id", ep_id).execute()
 
                                     enregistrer_modification(
                                         supabase,
@@ -1458,24 +1482,15 @@ def show(supabase):
                     except Exception: pass
 
                     succes_cnt = 0
+                    col_repere = detecter_colonne_repere(supabase)
                     for rep in reperes_p:
                         pay = {
                             "betonnage_id": b_id, "num_bl": num_bl_p, "ouvrage": ouvrage_p, "classe_beton": classe_beton_p,
                             "date_coulee": str(date_coulee_p), "echeance": echeance_p, "date_ecrasement": str(date_ecrasement_prevue),
-                            "ref_controle": ref_controle_p, "repere_eprouvette": rep, "forme": forme_p, "section": float(sect_def)
+                            "ref_controle": ref_controle_p, col_repere: rep, "forme": forme_p, "section": float(sect_def)
                         }
                         try:
-                            res_ins_prog = None
-                            try:
-                                res_ins_prog = supabase.table("suivi_controle_beton").insert(pay).execute()
-                            except Exception as err_ins:
-                                if "repere_eprouvette" in str(err_ins):
-                                    pay_fallback = pay.copy()
-                                    rep_val_tmp = pay_fallback.pop("repere_eprouvette")
-                                    pay_fallback["repere"] = rep_val_tmp
-                                    res_ins_prog = supabase.table("suivi_controle_beton").insert(pay_fallback).execute()
-                                else:
-                                    raise err_ins
+                            res_ins_prog = supabase.table("suivi_controle_beton").insert(pay).execute()
 
                             if res_ins_prog and res_ins_prog.data:
                                 succes_cnt += 1
@@ -1794,10 +1809,11 @@ def show(supabase):
                         try: supabase.table("suivi_betonnage").update({"ref_controle": ref_finale}).eq("id", betonnage_id).execute()
                         except Exception: pass
 
+                        col_repere = detecter_colonne_repere(supabase)
                         for _, row in df_actuel.iterrows():
                             upd = {
                                 "ref_controle": row.get("🏷️ Référence de Contrôle"),
-                                "repere_eprouvette": row.get("Repère"),
+                                col_repere: row.get("Repère"),
                                 "force_kn": float(row["Force (kN)"]),
                                 "fc_mpa": float(row["Résistance Fc (MPa)"]),
                                 "technicien": tech_global,
@@ -1807,19 +1823,10 @@ def show(supabase):
                                 ep_id_row = int(row["ID"])
                                 me_ep = {
                                     "ref_controle": row.get("_ref_orig", upd["ref_controle"]),
-                                    "repere_eprouvette": row.get("_repere_orig", upd["repere_eprouvette"]),
+                                    col_repere: row.get("_repere_orig", upd[col_repere]),
                                     "force_kn": float(row.get("_force_orig", upd["force_kn"])),
                                 }
-                                try:
-                                    supabase.table("suivi_controle_beton").update(upd).eq("id", ep_id_row).execute()
-                                except Exception as err_upd:
-                                    if "repere_eprouvette" in str(err_upd):
-                                        upd_fallback = upd.copy()
-                                        rep_tmp = upd_fallback.pop("repere_eprouvette")
-                                        upd_fallback["repere"] = rep_tmp
-                                        supabase.table("suivi_controle_beton").update(upd_fallback).eq("id", ep_id_row).execute()
-                                    else:
-                                        raise err_upd
+                                supabase.table("suivi_controle_beton").update(upd).eq("id", ep_id_row).execute()
 
                                 enregistrer_modification(
                                     supabase,
@@ -1829,7 +1836,7 @@ def show(supabase):
                                     anciennes_valeurs=me_ep,
                                     nouvelles_valeurs={
                                         "ref_controle": upd["ref_controle"],
-                                        "repere_eprouvette": upd.get("repere_eprouvette", upd.get("repere")),
+                                        col_repere: upd.get(col_repere),
                                         "force_kn": upd["force_kn"],
                                     },
                                     commentaire=f"Saisie d'écrasement — opérateur : {tech_global}",
