@@ -249,7 +249,7 @@ def show(supabase):
                             item_a_supprimer = next((item for item in res.data if item["id"] == selected_id), None)
                             enregistrer_modification(
                                 supabase,
-                                table_concernee="essais_plaque",
+                                table_concernee="essai_plaque",
                                 enregistrement_id=selected_id,
                                 action="SUPPRESSION",
                                 anciennes_valeurs={k: v for k, v in (item_a_supprimer or {}).items() if k != "id"},
