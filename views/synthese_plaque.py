@@ -407,7 +407,7 @@ def show(supabase):
                         if st.form_submit_button("Enregistrer les modifications"):
                             try:
                                 new_k = new_ev2 / new_ev1 if new_ev1 > 0 else 0
-                                supabase.table("essais_plaque").update({
+                                supabase.table("essai_plaque").update({
                                     "pk_profil": new_pk,
                                     "ev1": new_ev1,
                                     "ev2": new_ev2,
@@ -422,7 +422,7 @@ def show(supabase):
                 st.markdown("##### ⚠️ Suppression")
                 if st.button("🗑️ Supprimer définitivement", type="primary"):
                     try:
-                        supabase.table("essais_plaque").delete().eq("id", selected_item["id"]).execute()
+                        supabase.table("essai_plaque").delete().eq("id", selected_item["id"]).execute()
                         st.success("Enregistrement supprimé avec succès.")
                         st.rerun()
                     except Exception as e:
