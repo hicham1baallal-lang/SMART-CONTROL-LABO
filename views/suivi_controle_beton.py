@@ -83,31 +83,89 @@ def extraire_repere_eprouvette(item):
 extraire_repère_eprouvette = extraire_repere_eprouvette
 
 
+COLONNES_REPERE_CANDIDATS = [
+    "repere_eprouvette", "repere", "repere_1", "code_eprouvette",
+    "num_eprouvette", "eprouvette_repere", "repere_ep", "n_eprouvette",
+    "reference_eprouvette", "identifiant_eprouvette",
+]
+
+
 def detecter_colonne_repere(supabase):
-    """Détecte dynamiquement le VRAI nom de la colonne 'repère d'éprouvette'
-    dans la table Supabase, en inspectant un enregistrement existant, plutôt
-    que de deviner (ce qui provoquait l'erreur 'Could not find the column...
-    in the schema cache' quand le nom supposé était incorrect). Le résultat
-    est mis en cache pour la session, pour ne faire cette vérification
-    qu'une seule fois."""
+    """Détecte le VRAI nom de la colonne 'repère d'éprouvette' dans Supabase
+    en inspectant un enregistrement EXISTANT. Sert de première estimation
+    rapide, mais n'est fiable QUE si la table contient déjà au moins une
+    ligne : si la table est vide, cette méthode ne peut rien détecter et il
+    faut alors passer par inserer_ctrl_beton()/maj_ctrl_beton() ci-dessous,
+    qui testent réellement l'écriture."""
     if "colonne_repere_detectee" in st.session_state:
         return st.session_state["colonne_repere_detectee"]
 
-    candidats = ["repere_eprouvette", "repere", "repere_1", "code_eprouvette", "num_eprouvette", "eprouvette_repere"]
-    colonne_trouvee = "repere_eprouvette"  # valeur par défaut si la détection échoue
+    colonne_trouvee = None
     try:
         res = supabase.table("suivi_controle_beton").select("*").limit(1).execute()
         if res.data:
             cles_dispo = res.data[0].keys()
-            for c in candidats:
+            for c in COLONNES_REPERE_CANDIDATS:
                 if c in cles_dispo:
                     colonne_trouvee = c
                     break
     except Exception:
         pass
 
-    st.session_state["colonne_repere_detectee"] = colonne_trouvee
-    return colonne_trouvee
+    if colonne_trouvee:
+        st.session_state["colonne_repere_detectee"] = colonne_trouvee
+    return colonne_trouvee or "repere_eprouvette"
+
+
+def _est_erreur_colonne_manquante(err):
+    txt = str(err).lower()
+    return "schema cache" in txt or "pgrst204" in txt or "could not find the" in txt
+
+
+def inserer_ctrl_beton(supabase, payload_sans_repere, valeur_repere):
+    """Insère une ligne dans suivi_controle_beton en testant, si besoin,
+    plusieurs noms de colonne possibles pour le 'repère d'éprouvette'
+    jusqu'à ce que l'un d'eux soit accepté par Supabase — robuste même si
+    la table est vide (la détection par lecture ne peut alors rien deviner)."""
+    colonne_connue = st.session_state.get("colonne_repere_detectee")
+    candidats = ([colonne_connue] if colonne_connue else []) + [
+        c for c in COLONNES_REPERE_CANDIDATS if c != colonne_connue
+    ]
+    derniere_erreur = None
+    for col in candidats:
+        pay = dict(payload_sans_repere)
+        pay[col] = valeur_repere
+        try:
+            res = supabase.table("suivi_controle_beton").insert(pay).execute()
+            st.session_state["colonne_repere_detectee"] = col
+            return res
+        except Exception as e:
+            derniere_erreur = e
+            if not _est_erreur_colonne_manquante(e):
+                raise
+    raise derniere_erreur
+
+
+def maj_ctrl_beton(supabase, ep_id, payload_sans_repere, valeur_repere):
+    """Met à jour une ligne de suivi_controle_beton avec la même logique de
+    détection robuste que inserer_ctrl_beton()."""
+    colonne_connue = st.session_state.get("colonne_repere_detectee")
+    candidats = ([colonne_connue] if colonne_connue else []) + [
+        c for c in COLONNES_REPERE_CANDIDATS if c != colonne_connue
+    ]
+    derniere_erreur = None
+    for col in candidats:
+        pay = dict(payload_sans_repere)
+        pay[col] = valeur_repere
+        try:
+            res = supabase.table("suivi_controle_beton").update(pay).eq("id", ep_id).execute()
+            st.session_state["colonne_repere_detectee"] = col
+            return res, col
+        except Exception as e:
+            derniere_erreur = e
+            if not _est_erreur_colonne_manquante(e):
+                raise
+    raise derniere_erreur
 # ==============================================================================
 # 1. GESTION DES UTILISATEURS ET CONNEXION SUPABASE
 # ==============================================================================
@@ -1340,7 +1398,6 @@ def show(supabase):
                         if not bloque_mod:
                             orig_par_id_p1 = {ep["id"]: ep for ep in eprouvettes_enregistrees}
                             nb_succes = 0
-                            col_repere = detecter_colonne_repere(supabase)
                             for _, r_m in df_prog_modifiee.iterrows():
                                 ep_id, b_id = int(r_m["id"]), r_m.get("betonnage_id")
                                 ref_ctrl = str(r_m.get("ref_controle", "")).strip()
@@ -1355,16 +1412,16 @@ def show(supabase):
                                 except (ValueError, TypeError):
                                     dt_ecrasement_calc = dt_coulee_str
 
-                                pay = {
+                                pay_base = {
                                     "ref_controle": ref_ctrl,
-                                    col_repere: repere_val,
                                     "echeance": ech_str,
                                     "date_coulee": dt_coulee_str,
                                     "date_ecrasement": dt_ecrasement_calc,
                                 }
                                 try:
                                     orig_row_p1 = orig_par_id_p1.get(ep_id, {})
-                                    supabase.table("suivi_controle_beton").update(pay).eq("id", ep_id).execute()
+                                    _, col_utilisee = maj_ctrl_beton(supabase, ep_id, pay_base, repere_val)
+                                    pay = {**pay_base, col_utilisee: repere_val}
 
                                     enregistrer_modification(
                                         supabase,
@@ -1482,15 +1539,14 @@ def show(supabase):
                     except Exception: pass
 
                     succes_cnt = 0
-                    col_repere = detecter_colonne_repere(supabase)
                     for rep in reperes_p:
-                        pay = {
+                        pay_base = {
                             "betonnage_id": b_id, "num_bl": num_bl_p, "ouvrage": ouvrage_p, "classe_beton": classe_beton_p,
                             "date_coulee": str(date_coulee_p), "echeance": echeance_p, "date_ecrasement": str(date_ecrasement_prevue),
-                            "ref_controle": ref_controle_p, col_repere: rep, "forme": forme_p, "section": float(sect_def)
+                            "ref_controle": ref_controle_p, "forme": forme_p, "section": float(sect_def)
                         }
                         try:
-                            res_ins_prog = supabase.table("suivi_controle_beton").insert(pay).execute()
+                            res_ins_prog = inserer_ctrl_beton(supabase, pay_base, rep)
 
                             if res_ins_prog and res_ins_prog.data:
                                 succes_cnt += 1
@@ -1500,7 +1556,7 @@ def show(supabase):
                                     table_concernee="suivi_controle_beton",
                                     enregistrement_id=nouvel_id_prog,
                                     action="CREATION",
-                                    nouvelles_valeurs=pay,
+                                    nouvelles_valeurs=res_ins_prog.data[0],
                                     commentaire="Programmation d'une nouvelle éprouvette",
                                 )
                         except Exception as err: st.error(f"Erreur pour {rep} : {err}")
@@ -1809,24 +1865,24 @@ def show(supabase):
                         try: supabase.table("suivi_betonnage").update({"ref_controle": ref_finale}).eq("id", betonnage_id).execute()
                         except Exception: pass
 
-                        col_repere = detecter_colonne_repere(supabase)
                         for _, row in df_actuel.iterrows():
-                            upd = {
+                            upd_base = {
                                 "ref_controle": row.get("🏷️ Référence de Contrôle"),
-                                col_repere: row.get("Repère"),
                                 "force_kn": float(row["Force (kN)"]),
                                 "fc_mpa": float(row["Résistance Fc (MPa)"]),
                                 "technicien": tech_global,
                                 "observations": obs_globale,
                             }
+                            repere_val_lot = row.get("Repère")
                             try:
                                 ep_id_row = int(row["ID"])
+                                _, col_utilisee = maj_ctrl_beton(supabase, ep_id_row, upd_base, repere_val_lot)
+                                upd = {**upd_base, col_utilisee: repere_val_lot}
                                 me_ep = {
                                     "ref_controle": row.get("_ref_orig", upd["ref_controle"]),
-                                    col_repere: row.get("_repere_orig", upd[col_repere]),
+                                    col_utilisee: row.get("_repere_orig", repere_val_lot),
                                     "force_kn": float(row.get("_force_orig", upd["force_kn"])),
                                 }
-                                supabase.table("suivi_controle_beton").update(upd).eq("id", ep_id_row).execute()
 
                                 enregistrer_modification(
                                     supabase,
@@ -1836,7 +1892,7 @@ def show(supabase):
                                     anciennes_valeurs=me_ep,
                                     nouvelles_valeurs={
                                         "ref_controle": upd["ref_controle"],
-                                        col_repere: upd.get(col_repere),
+                                        col_utilisee: upd.get(col_utilisee),
                                         "force_kn": upd["force_kn"],
                                     },
                                     commentaire=f"Saisie d'écrasement — opérateur : {tech_global}",
