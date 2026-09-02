@@ -36,9 +36,6 @@ st.set_page_config(
 # ==========================================
 # 1bis. CAPTURE DES PARAMÈTRES QR CODE (ex: ?rec=...&beton_id=...)
 # ==========================================
-# C'est ICI qu'il faut lire l'URL, et pas dans views/suivi_controle_beton.py :
-# ce module est importé (pas exécuté directement), donc son bloc
-# "if __name__ == '__main__':" ne s'exécute jamais dans l'app déployée.
 _query_params = st.query_params
 _qr_rec = _query_params.get("rec") or _query_params.get("num_reception")
 _qr_bid = _query_params.get("beton_id") or _query_params.get("id")
@@ -52,30 +49,12 @@ if _qr_rec or _qr_bid:
     if _qr_ep:
         st.session_state["pending_qr_ep"] = str(_qr_ep).strip()
 
-    # (Ré)armer la redirection automatique vers la page "Suivi Contrôle Béton"
     st.session_state["qr_page_applied"] = False
-
-    # Nettoyer l'URL : sans ça, ce bloc s'exécuterait à nouveau à CHAQUE clic
-    # / rerun et forcerait la page à chaque interaction (ce qui empêcherait
-    # toute navigation manuelle une fois arrivé sur la bonne page).
     st.query_params.clear()
 
 # ==========================================
-# 1ter. "SE SOUVENIR DE MOI" — COOKIE VIA COMPOSANT (rapide, sans rechargement)
+# 1ter. "SE SOUVENIR DE MOI" — COOKIE VIA COMPOSANT
 # ==========================================
-# Permet de rester connecté sur le même appareil/navigateur, y compris après
-# un scan QR Code qui ouvre une nouvelle session Streamlit (donc un
-# session_state vide) : sans cookie, il faudrait ressaisir le mot de passe
-# à CHAQUE scan.
-#
-# NOTE : une version précédente lisait/écrivait le cookie via un
-# rechargement complet de la page (fiable, mais lent : ~30-40s à chaque
-# scan QR). On revient donc au composant (rapide, pas de rechargement),
-# avec deux corrections de timing pour fiabiliser sur Safari/iOS :
-#  1) un premier passage "à vide" forcé pour laisser le composant le temps
-#     de récupérer les cookies déjà présents avant toute vérification,
-#  2) une courte pause après l'écriture d'un nouveau cookie, avant de
-#     recharger la vue, pour laisser le temps au navigateur de l'enregistrer.
 REMEMBER_SECRET_KEY = os.environ.get(
     "REMEMBER_SECRET_KEY", "lpee_ctr_csb_remember_me_2026_a_changer"
 )
@@ -84,13 +63,6 @@ REMEMBER_COOKIE_NAME = "remember_data"
 
 
 def _generer_jeton_souvenir(username, role, can_edit, issued_at_iso):
-    """Jeton signé auto-suffisant (indépendant de la base utilisateurs),
-    pour fonctionner avec les 3 chemins de connexion possibles (compte
-    nommé, mot de passe maître admin2026, mot de passe maître ctr2026).
-    L'horodatage de connexion (issued_at_iso) est inclus dans la signature
-    afin de pouvoir vérifier côté serveur que la session ne dépasse pas
-    REMEMBER_SESSION_DUREE, indépendamment de l'expiration du cookie
-    navigateur (qu'un changement d'horloge sur l'appareil pourrait fausser)."""
     import hashlib
     import hmac as hmac_lib
     payload = f"{username}:{role}:{bool(can_edit)}:{issued_at_iso}"
@@ -101,18 +73,10 @@ def _generer_jeton_souvenir(username, role, can_edit, issued_at_iso):
 
 cookie_manager = stx.CookieManager(key="lpee_ctr_csb_cookie_manager")
 
-# Premier passage forcé : sur Safari/iOS notamment, le composant (chargé
-# dans un iframe) a besoin d'un premier aller-retour avant de renvoyer les
-# cookies réellement présents. Sans ce passage, la vérification "se
-# souvenir de moi" plus bas risquerait de s'exécuter avec une valeur encore
-# vide et donc d'afficher l'écran de connexion à tort.
 if "_cookies_bootstrap_ok" not in st.session_state:
     st.session_state["_cookies_bootstrap_ok"] = True
     st.rerun()
 
-
-
-# Injection PWA dans le HEAD du document principal
 pwa_code = """
 <script>
 const parentDoc = window.parent.document;
@@ -192,7 +156,6 @@ class LPEEPDFReport(FPDF):
 def generate_pdf_report(
     title: str, data_rows: list, headers: list = None
 ) -> bytes:
-  """Génère un document PDF binaire prêt pour st.download_button."""
   pdf = LPEEPDFReport()
   pdf.alias_nb_pages()
   pdf.add_page()
@@ -237,20 +200,10 @@ try:
   SUPABASE_KEY = st.secrets.get(
       "SUPABASE_KEY", "sb_publishable_6h8ZUeV8ii5TjKUV9B1Ewg_eDawQRkW"
   )
-  # Code partagé exigé par la politique RLS sur suivi_betonnage (voir le SQL
-  # fourni pour la page hors-ligne). L'app principale doit envoyer le même
-  # en-tête que offline_betonnage.html, sinon ses propres insertions seraient
-  # bloquées par cette même règle de sécurité.
   CODE_ACCES_TERRAIN = st.secrets.get("CODE_ACCES_TERRAIN", "lpee2026")
 
-  # Création du client SANS argument supplémentaire (comme avant) : c'est le
-  # passage d'un ClientOptions à create_client() qui faisait planter la
-  # connexion selon les versions de la librairie supabase-py.
   supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-  # Ajout de l'en-tête APRÈS coup, de façon tolérante : si la structure
-  # interne de la librairie diffère selon la version installée, l'app
-  # continue de fonctionner normalement (juste sans cet en-tête ajouté).
   try:
     supabase.postgrest.session.headers.update(
         {"x-code-acces-terrain": CODE_ACCES_TERRAIN}
@@ -298,7 +251,6 @@ DEFAULT_USERS = {
 
 
 def load_users():
-  """Charge en temps réel les utilisateurs depuis Supabase."""
   users = DEFAULT_USERS.copy()
   if supabase:
     try:
@@ -316,7 +268,6 @@ def load_users():
 
 
 def save_user_db(username, password, role, can_edit):
-  """Enregistre ou met à jour un utilisateur dans Supabase."""
   if not supabase:
     return False, "Client Supabase non configuré."
   try:
@@ -332,7 +283,6 @@ def save_user_db(username, password, role, can_edit):
 
 
 def delete_user_db(username):
-  """Supprime un utilisateur de Supabase."""
   if not supabase:
     return False, "Client Supabase non configuré."
   try:
@@ -342,11 +292,6 @@ def delete_user_db(username):
     return False, str(e)
 
 
-# Chargement paresseux : on ne fait l'appel réseau Supabase que lorsque
-# c'est réellement nécessaire (connexion manuelle ou auto-connexion réussie
-# via cookie, plus bas). Le faire ici de façon systématique coûtait un
-# aller-retour réseau inutile sur CHAQUE nouveau scan QR, y compris sur le
-# passage "jetable" qui précède la vérification du cookie.
 st.session_state.setdefault("users_db", {})
 
 if "user" not in st.session_state:
@@ -357,7 +302,7 @@ if "can_edit" not in st.session_state:
   st.session_state["can_edit"] = False
 
 # ==========================================
-# 3bis. AUTO-CONNEXION VIA COOKIE "SE SOUVENIR DE MOI"
+# 3bis. AUTO-CONNEXION VIA COOKIE
 # ==========================================
 if st.session_state["user"] is None:
   _cookie_brut = cookie_manager.get(REMEMBER_COOKIE_NAME)
@@ -435,12 +380,8 @@ if st.session_state["user"] is None:
               REMEMBER_COOKIE_NAME, payload_json,
               key="set_remember_data", expires_at=expiration,
           )
-          # Laisser le temps au navigateur (Safari/iOS en particulier) de
-          # réellement écrire le cookie avant que le rerun ci-dessous ne
-          # démonte le composant qui le gère.
           time.sleep(0.4)
         st.rerun()
-
 
       if submit_btn:
         fresh_users = load_users()
@@ -463,7 +404,6 @@ if st.session_state["user"] is None:
           st.error("❌ Nom d'utilisateur ou mot de passe incorrect.")
   st.stop()
 
-# Synchronisation du statut d'édition
 current_username = st.session_state["user"]["username"]
 if current_username in st.session_state["users_db"]:
   st.session_state["can_edit"] = st.session_state["users_db"][
@@ -489,7 +429,7 @@ if (
 
 try:
   from views import (
-      essai_plaque,
+      essai_Plaque,
       historique_pvs,
       suivi_Betonnage,
       suivi_controle_beton,
@@ -560,7 +500,6 @@ with st.sidebar:
         "Synthèse Plaque",
     ]
 
-  # --- MODULE SYNCHRONISATION HORS LIGNE ---
   if OFFLINE_SUPPORT:
     st.markdown("---")
     pending_count = get_pending_count()
@@ -591,7 +530,6 @@ with st.sidebar:
 
   st.markdown("---")
 
-  # --- Redirection automatique vers "Suivi Contrôle Béton" (scan QR) ---
   st.session_state.setdefault("page_widget_seed", 0)
   st.session_state.setdefault("selected_page", None)
 
@@ -602,10 +540,6 @@ with st.sidebar:
   if forcer_page_qr:
     if "Suivi Contrôle Béton" in available_pages:
       st.session_state["selected_page"] = "Suivi Contrôle Béton"
-      # Nouvelle clé => Streamlit traite le widget comme neuf et applique
-      # obligatoirement l'index demandé (contrairement à un simple
-      # pré-remplissage de session_state sur une clé déjà utilisée, qui peut
-      # être ignoré si le widget a déjà un état côté navigateur).
       st.session_state["page_widget_seed"] += 1
     else:
       st.warning(
@@ -666,10 +600,6 @@ with st.sidebar:
     st.session_state["user"] = None
     st.session_state["role"] = None
     st.session_state["can_edit"] = False
-    # NOTE : le cookie "se souvenir de moi" n'est PAS supprimé ici. Tant que
-    # la fenêtre de 4h (REMEMBER_SESSION_DUREE) n'est pas écoulée, revenir
-    # sur l'application reconnectera automatiquement sans redemander le mot
-    # de passe. Passé les 4h, le cookie expire et le mot de passe est requis.
     st.rerun()
 
 
@@ -758,10 +688,7 @@ elif page == "Gestion Utilisateurs" and current_role == "admin":
               )
               st.rerun()
             else:
-              st.error(
-                  f"❌ Erreur Supabase :\n\n`{err}`\n\n👉 *Vérifiez que RLS est"
-                  " désactivé sur la table app_users dans Supabase.*"
-              )
+              st.error(f"❌ Erreur Supabase :\n\n`{err}`")
 
   with col_edit:
     with st.expander("✏️ Modifier un utilisateur", expanded=False):
@@ -876,7 +803,7 @@ elif page == "Gestion Utilisateurs" and current_role == "admin":
   st.dataframe(data_users, use_container_width=True)
 
 elif page == "Essai à la Plaque":
-  render_view(essai_plaque, supabase)
+  render_view(essai_Plaque, supabase)
 elif page == "Synthèse Plaque":
   render_view(synthese_plaque, supabase)
 elif page == "Suivi de Bétonnage":
