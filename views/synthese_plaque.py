@@ -269,7 +269,7 @@ def show(supabase):
         return
 
     try:
-        res = supabase.table("essais_plaque").select("*").order("date_essai", desc=True).execute()
+        res = supabase.table("essai_plaque").select("*").order("date_essai", desc=True).execute()
         data = res.data if res else []
     except Exception as e:
         st.error(f"Erreur lors de la connexion à la base de données : {e}")
