@@ -4,33 +4,35 @@ import streamlit as st
 from fpdf import FPDF
 
 # ==========================================
-# FONCTION DE CLASSIFICATION SELON LE GTR (CLASSE B)
+# FONCTION DE CLASSIFICATION SELON LE GTR (CLASSES A & B)
 # ==========================================
-def evaluer_etat_hydrique_gtr_b(w_mesure, w_opn, sous_classe="B2"):
+def evaluer_etat_hydrique_gtr(w_mesure, w_opn, classe_gtr="Classe B", sous_classe="B2"):
     """
-    Détermine l'état hydrique (th, h, m, s, ts) et la conformité selon les seuils du GTR (Classe B).
+    Détermine l'état hydrique (th, h, m, s, ts) et la conformité selon les seuils du GTR (Classes A et B).
     """
     if w_opn <= 0:
         return "N/A", "N/A", 0.0
 
     ratio = w_mesure / w_opn
 
-    # Seuils spécifiques selon le sous-classement GTR B
-    if sous_classe == "B6":
-        seuil_th = 1.30
-        seuil_h = 1.10
-        seuil_m = 0.90
-        seuil_s = 0.70
-    elif sous_classe == "B2":
-        seuil_th = 1.25
-        seuil_h = 1.10
-        seuil_m = 0.90
-        seuil_s = 0.50
-    else:  # B1, B3, B4, B5
-        seuil_th = 1.25
-        seuil_h = 1.10
-        seuil_m = 0.90
-        seuil_s = 0.60
+    # Definition des seuils selon la classe et la sous-classe GTR
+    if classe_gtr == "Classe A (Sols Fins)":
+        if sous_classe == "A1":
+            seuil_th, seuil_h, seuil_m, seuil_s = 1.25, 1.10, 0.90, 0.70
+        elif sous_classe == "A2":
+            seuil_th, seuil_h, seuil_m, seuil_s = 1.30, 1.10, 0.90, 0.70
+        elif sous_classe in ["A3", "A4"]:
+            seuil_th, seuil_h, seuil_m, seuil_s = 1.40, 1.20, 0.90, 0.70
+        else:
+            seuil_th, seuil_h, seuil_m, seuil_s = 1.25, 1.10, 0.90, 0.70
+
+    else:  # Classe B (Sols Sableux et Graveleux avec Fines)
+        if sous_classe == "B6":
+            seuil_th, seuil_h, seuil_m, seuil_s = 1.30, 1.10, 0.90, 0.70
+        elif sous_classe == "B2":
+            seuil_th, seuil_h, seuil_m, seuil_s = 1.25, 1.10, 0.90, 0.50
+        else:  # B1, B3, B4, B5
+            seuil_th, seuil_h, seuil_m, seuil_s = 1.25, 1.10, 0.90, 0.60
 
     # Qualification de l'état hydrique
     if ratio >= seuil_th:
@@ -179,20 +181,40 @@ def show(supabase_client, can_edit=False):
             num_rapport = f"{fixed_prefix}{num_pv_seq}"
             st.info(f"Rapport : **{num_rapport}**")
 
-            nature_mat_base = st.text_input("Nature du matériau", value="Sol - Classe B", disabled=not can_edit)
+            # Choix de la Classe GTR
+            classe_gtr = st.selectbox(
+                "Classe GTR du matériau",
+                ["Classe A (Sols Fins)", "Classe B (Sols Sableux et Graveleux)"],
+                index=1,
+                disabled=not can_edit
+            )
 
         with col_h2:
             lieu_prelevement = st.text_input("Lieu de prélèvement / Zone", value="Zone T4 Axe V3G et V6G", disabled=not can_edit)
             pk_zone = st.text_input("PK / Section", value="pk 8+540 à pk 8+600", disabled=not can_edit)
-            sous_classe_gtr = st.selectbox("Sous-classe GTR (Classe B)", ["B1", "B2", "B3", "B4", "B5", "B6"], index=1, disabled=not can_edit)
+            
+            # Sous-classe dynamique en fonction de la classe GTR choisie
+            if classe_gtr == "Classe A (Sols Fins)":
+                sous_classes_options = ["A1", "A2", "A3", "A4"]
+                default_idx = 1
+            else:
+                sous_classes_options = ["B1", "B2", "B3", "B4", "B5", "B6"]
+                default_idx = 1
+                
+            sous_classe_gtr = st.selectbox(
+                "Sous-classe GTR",
+                sous_classes_options,
+                index=default_idx,
+                disabled=not can_edit
+            )
 
         with col_h3:
             date_prelevement = st.date_input("Date de prélèvement", value=datetime.date.today(), disabled=not can_edit)
             type_proctor = st.selectbox("Type de Proctor", ["OPN", "OPM"], disabled=not can_edit)
             w_opn = st.number_input(f"Teneur en eau {type_proctor} (%)", value=12.0, step=0.1, disabled=not can_edit)
 
-        # Concaténation pour éviter le champ manquant dans la base de données Supabase
-        nature_mat_complete = f"{nature_mat_base} ({sous_classe_gtr})"
+        # Intégration de la classe et de la sous-classe dans le nom du matériau
+        nature_mat_complete = f"{classe_gtr.split()[0]} - Sous-classe {sous_classe_gtr}"
 
         st.markdown("---")
         st.subheader("2. Mesures & Prélèvements")
@@ -242,13 +264,15 @@ def show(supabase_client, can_edit=False):
                     if st.button("🗑️", key=f"del_{i}", help="Supprimer cet échantillon", disabled=not can_edit or len(st.session_state["teneur_eau_samples"]) <= 1):
                         to_delete_idx = i
 
-                # Calculs
+                # Calculs physiques
                 m_eau = m_h - m_s
                 m_seche_nette = m_s - m_t
                 w_mesure = (m_eau / m_seche_nette * 100) if m_seche_nette > 0 else 0.0
 
-                # Classification GTR
-                etat_hydrique, obs, ratio_w = evaluer_etat_hydrique_gtr_b(w_mesure, w_opn, sous_classe=sous_classe_gtr)
+                # Evaluation de l'état hydrique selon GTR (A ou B)
+                etat_hydrique, obs, ratio_w = evaluer_etat_hydrique_gtr(
+                    w_mesure, w_opn, classe_gtr=classe_gtr, sous_classe=sous_classe_gtr
+                )
 
                 st.caption(f"📊 **w mesurée** = `{w_mesure:.1f} %` | **Ratio w/wOPN** = `{ratio_w:.2f}` | **État Hydrique (GTR)** = `{etat_hydrique}` | **Observation** = `{obs}`")
 
@@ -273,7 +297,7 @@ def show(supabase_client, can_edit=False):
 
         st.markdown("---")
         
-        # En-tête compatible Supabase
+        # Structure de données compatible Supabase
         header_data = {
             "num_rapport": num_rapport,
             "nature_materiau": nature_mat_complete,
@@ -284,7 +308,7 @@ def show(supabase_client, can_edit=False):
             "w_opn": w_opn
         }
 
-        # PDF Bytes
+        # Génération du PV PDF
         pdf_bytes = generate_pv_teneur_eau_pdf(header_data, samples_calculated)
 
         col_act1, col_act2 = st.columns(2)
@@ -303,7 +327,7 @@ def show(supabase_client, can_edit=False):
                     st.error("❌ Connexion Supabase indisponible.")
                 else:
                     try:
-                        # Validation unicité
+                        # Contrôle d'unicité
                         refs_to_check = [s["ref_ech"] for s in samples_calculated]
                         check_samples = supabase_client.table("essai_teneur_eau").select("ref_ech").in_("ref_ech", refs_to_check).execute()
 
@@ -311,7 +335,7 @@ def show(supabase_client, can_edit=False):
                             existing_refs = [item["ref_ech"] for item in check_samples.data]
                             st.error(f"⛔ **Saisie bloquée** : Les références suivantes existent déjà : **{', '.join(existing_refs)}**.")
                         else:
-                            # Insertion dans Supabase sans champs inconnus
+                            # Insertion Supabase
                             supabase_client.table("pv_teneur_eau").upsert(header_data).execute()
                             
                             for item in samples_calculated:
