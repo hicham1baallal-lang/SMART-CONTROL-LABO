@@ -53,19 +53,19 @@ def evaluer_etat_hydrique_gtr(w_mesure, w_opn, classe_gtr="Classe B", sous_class
 
 
 # ==========================================
-# CLASSE DE GÉNÉRATION DU PV EN PDF (FORMAT LPEE)
+# CLASSE DE GÉNÉRATION DU PV EN PDF (FORMAT LPEE - AJUSTÉ A4)
 # ==========================================
 class LPEETeneurEauPDF(FPDF):
     def header(self):
-        self.set_font("Helvetica", "B", 10)
-        self.cell(0, 5, "LABORATOIRE PUBLIC D'ESSAIS ET D'ETUDES - LPEE", 0, 1, "C")
-        self.set_font("Helvetica", "B", 8)
-        self.cell(0, 4, "CENTRE TECHNIQUE REGIONAL DE CASABLANCA-SETTAT-BENI MELLAL (CTR-CSB)", 0, 1, "C")
-        self.set_font("Helvetica", "I", 8)
-        self.cell(0, 4, "Laboratoire de Contrôle Externe - LGV CASA SUD", 0, 1, "C")
-        self.ln(2)
-        self.line(10, 22, 200, 22)
-        self.ln(4)
+        self.set_font("Helvetica", "B", 11)
+        self.cell(0, 6, "LABORATOIRE PUBLIC D'ESSAIS ET D'ETUDES - LPEE", 0, 1, "C")
+        self.set_font("Helvetica", "B", 9)
+        self.cell(0, 5, "CENTRE TECHNIQUE REGIONAL DE CASABLANCA-SETTAT-BENI MELLAL (CTR-CSB)", 0, 1, "C")
+        self.set_font("Helvetica", "I", 9)
+        self.cell(0, 5, "Laboratoire de Contrôle Externe - LGV CASA SUD", 0, 1, "C")
+        self.ln(3)
+        self.line(10, 26, 200, 26)
+        self.ln(6)
 
     def footer(self):
         self.set_y(-15)
@@ -78,69 +78,87 @@ def generate_pv_teneur_eau_pdf(header_info, points_data):
     pdf.alias_nb_pages()
     pdf.add_page()
 
-    pdf.set_font("Helvetica", "B", 12)
-    pdf.cell(0, 6, "PROCES VERBAL", 0, 1, "C")
-    pdf.set_font("Helvetica", "B", 9)
-    pdf.cell(0, 5, "Détermination de la teneur en eau pondérale des matériaux par étuvage (NM EN 1097-5)", 0, 1, "C")
-    pdf.ln(3)
+    # --- TITRE DU RAPPORT ---
+    pdf.set_font("Helvetica", "B", 14)
+    pdf.cell(0, 8, "PROCES VERBAL", 0, 1, "C")
+    pdf.set_font("Helvetica", "B", 10)
+    pdf.cell(0, 6, "Détermination de la teneur en eau pondérale des matériaux par étuvage (NM EN 1097-5)", 0, 1, "C")
+    pdf.ln(5)
 
-    pdf.set_font("Helvetica", "B", 9)
-    pdf.cell(0, 5, f"Rapport d'Essai n° : {header_info.get('num_rapport', 'N/A')}", 0, 1, "R")
-    pdf.ln(2)
-
-    pdf.set_fill_color(240, 240, 240)
-    pdf.set_font("Helvetica", "B", 9)
-    pdf.cell(190, 6, " I - Identification du matériau testé", 1, 1, "L", fill=True)
-    pdf.set_font("Helvetica", "", 8)
-    
-    type_p = header_info.get('type_proctor', 'OPN')
-    pdf.cell(95, 5, f"  Nature du matériau : {header_info.get('nature_materiau', '')}", 1, 0, "L")
-    pdf.cell(95, 5, f"  Type de Proctor : {type_p}", 1, 1, "L")
-    
-    pdf.cell(95, 5, f"  Lieu de prélèvement : {header_info.get('lieu_prelevement', '')}", 1, 0, "L")
-    pdf.cell(95, 5, f"  Teneur en eau {type_p} (%) : {header_info.get('w_opn', '')} %", 1, 1, "L")
-
-    pdf.cell(95, 5, f"  Prélèvement effectué le : {header_info.get('date_prelevement', '')}", 1, 0, "L")
-    pdf.cell(95, 5, f"  PK : {header_info.get('pk_zone', '')}", 1, 1, "L")
+    # N° RAPPORT
+    pdf.set_font("Helvetica", "B", 10)
+    pdf.cell(0, 6, f"Rapport d'Essai n° : {header_info.get('num_rapport', 'N/A')}", 0, 1, "R")
     pdf.ln(4)
 
-    pdf.set_font("Helvetica", "B", 9)
-    pdf.cell(190, 6, " II - Résultats des essais", 1, 1, "L", fill=True)
+    # --- SECTION I : IDENTIFICATION DU MATÉRIAU ---
+    pdf.set_fill_color(230, 230, 230)
+    pdf.set_font("Helvetica", "B", 10)
+    pdf.cell(190, 8, " I - Identification du matériau testé", 1, 1, "L", fill=True)
+    pdf.set_font("Helvetica", "", 9)
+
+    type_p = header_info.get('type_proctor', 'OPN')
     
+    # Lignes plus hautes (7mm) pour aérer la section d'identification
+    pdf.cell(95, 7, f"  Nature du matériau : {header_info.get('nature_materiau', '')}", 1, 0, "L")
+    pdf.cell(95, 7, f"  Type de Proctor : {type_p}", 1, 1, "L")
+
+    pdf.cell(95, 7, f"  Lieu de prélèvement : {header_info.get('lieu_prelevement', '')}", 1, 0, "L")
+    pdf.cell(95, 7, f"  Teneur en eau {type_p} (%) : {header_info.get('w_opn', '')} %", 1, 1, "L")
+
+    pdf.cell(95, 7, f"  Prélèvement effectué le : {header_info.get('date_prelevement', '')}", 1, 0, "L")
+    pdf.cell(95, 7, f"  PK / Section : {header_info.get('pk_zone', '')}", 1, 1, "L")
+    pdf.ln(8)
+
+    # --- SECTION II : RÉSULTATS DES ESSAIS ---
+    pdf.set_font("Helvetica", "B", 10)
+    pdf.cell(190, 8, " II - Résultats des essais", 1, 1, "L", fill=True)
+
     headers = ["Référence", "Date Prél.", "PK / Localisation", "w (%)", f"w {type_p} (%)", "w / wOPN", "État Hydrique (GTR)", "Observation"]
-    widths = [22, 20, 38, 16, 20, 18, 32, 24]
-    
-    pdf.set_font("Helvetica", "B", 7.5)
+    widths = [22, 20, 38, 16, 20, 18, 34, 22]
+
+    # En-tête du tableau (Hauteur 8mm)
+    pdf.set_font("Helvetica", "B", 8)
     for i, h in enumerate(headers):
-        pdf.cell(widths[i], 6, h, 1, 0, "C")
+        pdf.cell(widths[i], 8, h, 1, 0, "C")
     pdf.ln()
 
-    pdf.set_font("Helvetica", "", 7.5)
+    # Corps du tableau avec hauteur adaptable pour équilibrer la feuille
+    pdf.set_font("Helvetica", "", 8)
+    
+    # Ajuster la hauteur des lignes selon le nombre d'échantillons (entre 8mm et 12mm)
+    nb_samples = max(len(points_data), 1)
+    row_height = 10 if nb_samples <= 4 else (8 if nb_samples <= 8 else 6)
+
     for p in points_data:
         w_m = float(p.get('w_mesure', 0.0))
         w_o = float(p.get('w_opn', 1.0))
         ratio = p.get('ratio_w', w_m / w_o if w_o > 0 else 0.0)
 
-        pdf.cell(widths[0], 6, str(p.get("ref_ech", "")), 1, 0, "C")
-        pdf.cell(widths[1], 6, str(p.get("date_prel", p.get("created_at", "")[:10])), 1, 0, "C")
-        pdf.cell(widths[2], 6, str(p.get("pk", "")), 1, 0, "C")
-        pdf.cell(widths[3], 6, f"{w_m:.1f}", 1, 0, "C")
-        pdf.cell(widths[4], 6, f"{w_o:.1f}", 1, 0, "C")
-        pdf.cell(widths[5], 6, f"{ratio:.2f}", 1, 0, "C")
-        pdf.cell(widths[6], 6, str(p.get("etat_hydrique", "")), 1, 0, "C")
-        pdf.cell(widths[7], 6, str(p.get("observation", "Conforme")), 1, 1, "C")
+        pdf.cell(widths[0], row_height, str(p.get("ref_ech", "")), 1, 0, "C")
+        pdf.cell(widths[1], row_height, str(p.get("date_prel", p.get("created_at", "")[:10])), 1, 0, "C")
+        pdf.cell(widths[2], row_height, str(p.get("pk", "")), 1, 0, "C")
+        pdf.cell(widths[3], row_height, f"{w_m:.1f}", 1, 0, "C")
+        pdf.cell(widths[4], row_height, f"{w_o:.1f}", 1, 0, "C")
+        pdf.cell(widths[5], row_height, f"{ratio:.2f}", 1, 0, "C")
+        pdf.cell(widths[6], row_height, str(p.get("etat_hydrique", "")), 1, 0, "C")
+        pdf.cell(widths[7], row_height, str(p.get("observation", "Conforme")), 1, 1, "C")
 
-    pdf.ln(8)
+    # --- BLOC SIGNATURES (POSITIONNÉ DYNAMIQUEMENT VERS LE BAS) ---
+    # Positionner le bloc de signature à Y=220 mm pour occuper le bas de la page A4 (hauteur max A4 = 297 mm)
+    if pdf.get_y() < 220:
+        pdf.set_y(220)
+    else:
+        pdf.ln(10)
 
-    pdf.set_font("Helvetica", "B", 8)
-    pdf.cell(63, 5, "Réception du client", 0, 0, "C")
-    pdf.cell(64, 5, "Le Coordinateur des Essais", 0, 0, "C")
-    pdf.cell(63, 5, "Le Chef de Laboratoire Externe", 0, 1, "C")
-    
-    pdf.set_font("Helvetica", "I", 8)
-    pdf.cell(63, 4, "(Nom, Visa, Date)", 0, 0, "C")
-    pdf.cell(64, 4, "B. ELAMRI", 0, 0, "C")
-    pdf.cell(63, 4, "H. BAALLAL", 0, 1, "C")
+    pdf.set_font("Helvetica", "B", 9)
+    pdf.cell(63, 6, "Réception du client", 0, 0, "C")
+    pdf.cell(64, 6, "Le Coordinateur des Essais", 0, 0, "C")
+    pdf.cell(63, 6, "Le Chef de Laboratoire Externe", 0, 1, "C")
+
+    pdf.set_font("Helvetica", "I", 9)
+    pdf.cell(63, 5, "(Nom, Visa, Date)", 0, 0, "C")
+    pdf.cell(64, 5, "B. ELAMRI", 0, 0, "C")
+    pdf.cell(63, 5, "H. BAALLAL", 0, 1, "C")
 
     return bytes(pdf.output())
 
@@ -149,7 +167,7 @@ def generate_pv_teneur_eau_pdf(header_info, points_data):
 # MODULE VUE STREAMLIT : TENEUR EN EAU
 # ==========================================
 def show(supabase_client, can_edit=False, is_admin=False):
-    # DÉTECTION DU RÔLE DEPUIS LE SESSION_STATE (RÉSOUT LE BOUTON GRIS)
+    # DÉTECTION DU RÔLE DEPUIS LE SESSION_STATE
     user_role = str(st.session_state.get("role", st.session_state.get("user_role", ""))).upper()
     user_is_admin = is_admin or ("ADMIN" in user_role)
     user_can_edit = can_edit or user_is_admin or ("LABO" in user_role)
@@ -172,12 +190,12 @@ def show(supabase_client, can_edit=False, is_admin=False):
 
         st.subheader("1. Informations Générales du PV")
         col_h1, col_h2, col_h3 = st.columns(3)
-        
+
         default_seq = st.session_state.get("edit_num_pv_seq", 371)
         default_lieu = st.session_state.get("edit_lieu", "Zone T4 Axe V3G et V6G")
         default_pk = st.session_state.get("edit_pk", "pk 8+540 à pk 8+600")
         default_w_opn = float(st.session_state.get("edit_w_opn", 12.0))
-        
+
         with col_h1:
             st.markdown("**N° Rapport d'essai**")
             c_prefix, c_num = st.columns([2.5, 1.5])
@@ -185,7 +203,7 @@ def show(supabase_client, can_edit=False, is_admin=False):
                 fixed_prefix = st.text_input("Préfixe fixe", value="25/260/LGV/CS/", disabled=True, key="fixed_prefix")
             with c_num:
                 num_pv_seq = st.number_input("N° PV", value=default_seq, step=1, key="num_pv_seq", disabled=not user_can_edit or is_editing_mode)
-            
+
             num_rapport = f"{fixed_prefix}{num_pv_seq}"
             st.info(f"Rapport : **{num_rapport}**")
 
@@ -199,14 +217,14 @@ def show(supabase_client, can_edit=False, is_admin=False):
         with col_h2:
             lieu_prelevement = st.text_input("Lieu de prélèvement / Zone", value=default_lieu, disabled=not user_can_edit)
             pk_zone = st.text_input("PK / Section", value=default_pk, disabled=not user_can_edit)
-            
+
             if "Classe A" in classe_gtr:
                 sous_classes_options = ["A1", "A2", "A3", "A4"]
                 default_idx = 1
             else:
                 sous_classes_options = ["B1", "B2", "B3", "B4", "B5", "B6"]
                 default_idx = 1
-                
+
             sous_classe_gtr = st.selectbox(
                 "Sous-classe GTR",
                 sous_classes_options,
@@ -248,7 +266,7 @@ def show(supabase_client, can_edit=False, is_admin=False):
 
         for i, sample in enumerate(st.session_state["teneur_eau_samples"]):
             computed_ref = f"{num_pv_seq}/{i+1}"
-            
+
             with st.expander(f"📍 Échantillon N° {i+1} : {computed_ref}", expanded=True):
                 c1, c2, c3, c4, c5, c6 = st.columns([1.5, 2, 2, 2, 2, 1])
                 with c1:
@@ -296,7 +314,7 @@ def show(supabase_client, can_edit=False, is_admin=False):
             st.rerun()
 
         st.markdown("---")
-        
+
         header_data = {
             "num_rapport": num_rapport,
             "nature_materiau": nature_mat_complete,
@@ -336,16 +354,18 @@ def show(supabase_client, can_edit=False, is_admin=False):
                                 st.stop()
 
                         supabase_client.table("pv_teneur_eau").upsert(header_data).execute()
-                        
+
                         if is_editing_mode:
                             supabase_client.table("essai_teneur_eau").delete().eq("num_rapport", num_rapport).execute()
 
                         for item in samples_calculated:
-                            item["num_rapport"] = num_rapport
-                            supabase_client.table("essai_teneur_eau").insert(item).execute()
+                            item_to_insert = item.copy()
+                            item_to_insert["num_rapport"] = num_rapport
+                            item_to_insert.pop("ratio_w", None)  # Évite l'erreur PGRST204 si la colonne n'existe pas en BDD
+                            supabase_client.table("essai_teneur_eau").insert(item_to_insert).execute()
 
                         st.success(f"✅ PV **{num_rapport}** enregistré/mis à jour avec succès !")
-                        
+
                         if is_editing_mode:
                             st.session_state["teneur_eau_edit_mode"] = False
                             st.rerun()
@@ -358,17 +378,17 @@ def show(supabase_client, can_edit=False, is_admin=False):
     # ---------------------------------------------------------
     with tabs[1]:
         st.subheader("🖨️ Sélection, Impression et Gestion des PV")
-        
+
         if not supabase_client:
             st.info("💡 Client Supabase non configuré.")
         else:
             try:
                 pv_res = supabase_client.table("pv_teneur_eau").select("*").order("created_at", desc=True).execute()
-                
+
                 if pv_res.data:
                     pv_list = pv_res.data
                     pv_options = {pv["num_rapport"]: pv for pv in pv_list}
-                    
+
                     selected_num_rapport = st.selectbox(
                         "🔍 Choisir un N° de Rapport / PV :",
                         options=list(pv_options.keys())
@@ -376,13 +396,13 @@ def show(supabase_client, can_edit=False, is_admin=False):
 
                     if selected_num_rapport:
                         selected_pv = pv_options[selected_num_rapport]
-                        
+
                         samples_res = supabase_client.table("essai_teneur_eau") \
                             .select("*") \
                             .eq("num_rapport", selected_num_rapport) \
                             .order("ref_ech", desc=False) \
                             .execute()
-                            
+
                         samples_data = samples_res.data if samples_res.data else []
 
                         with st.expander(f"📄 Détails du PV : {selected_num_rapport}", expanded=True):
@@ -405,7 +425,7 @@ def show(supabase_client, can_edit=False, is_admin=False):
                                 st.warning("Aucun échantillon rattaché à ce PV.")
 
                         col_act1, col_act2, col_act3 = st.columns([2, 1.5, 1.5])
-                        
+
                         with col_act1:
                             pdf_reprint = generate_pv_teneur_eau_pdf(selected_pv, samples_data)
                             st.download_button(
@@ -423,14 +443,14 @@ def show(supabase_client, can_edit=False, is_admin=False):
                                     seq_val = int(selected_num_rapport.split('/')[-1])
                                 except Exception:
                                     seq_val = 371
-                                
+
                                 st.session_state["teneur_eau_edit_mode"] = True
                                 st.session_state["teneur_eau_edit_num_rapport"] = selected_num_rapport
                                 st.session_state["edit_num_pv_seq"] = seq_val
                                 st.session_state["edit_lieu"] = selected_pv.get("lieu_prelevement", "")
                                 st.session_state["edit_pk"] = selected_pv.get("pk_zone", "")
                                 st.session_state["edit_w_opn"] = selected_pv.get("w_opn", 12.0)
-                                
+
                                 if samples_data:
                                     st.session_state["teneur_eau_samples"] = [
                                         {
@@ -445,10 +465,9 @@ def show(supabase_client, can_edit=False, is_admin=False):
                                 st.rerun()
 
                         with col_act3:
-                            # BOUTON ACTIVÉ SI user_is_admin EST VRAI
                             if st.button(
-                                "🗑️ Supprimer ce PV", 
-                                disabled=not user_is_admin, 
+                                "🗑️ Supprimer ce PV",
+                                disabled=not user_is_admin,
                                 help="Exclusif aux administrateurs" if not user_is_admin else "Supprimer définitivement ce PV",
                                 use_container_width=True
                             ):
