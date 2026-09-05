@@ -427,6 +427,7 @@ if (
       unsafe_allow_html=True,
   )
 
+# Importation sécurisée des vues principales et des nouveaux essais
 try:
   from views import (
       essai_Plaque,
@@ -437,8 +438,30 @@ try:
       synthese_plaque,
   )
 except ImportError as e:
-  st.error(f"❌ Erreur lors de l'importation des vues : {e}")
+  st.error(f"❌ Erreur lors de l'importation des vues de base : {e}")
   st.stop()
+
+# Importation dynamique / sécurisée des modules pour les nouveaux essais
+try:
+  from views import essai_teneur_eau
+except ImportError:
+  essai_teneur_eau = None
+
+try:
+  from views import essai_compacite
+except ImportError:
+  essai_compacite = None
+
+try:
+  from views import essai_granulats_beton
+except ImportError:
+  essai_granulats_beton = None
+
+try:
+  from views import essai_identification_materiaux
+except ImportError:
+  essai_identification_materiaux = None
+
 
 # Menu latéral (Sidebar)
 with st.sidebar:
@@ -447,6 +470,7 @@ with st.sidebar:
 
   st.markdown(f"👤 **{current_username}**")
 
+  # Définition des pages accessibles selon le rôle
   if current_role in ["laboratoire", "technicien"]:
     if current_username == "HANINE":
       st.info("Rôle : **RESPONSABLE DE DOSSIER**")
@@ -461,6 +485,10 @@ with st.sidebar:
         "Historique Complet & PVs",
         "Suivi de Bétonnage",
         "Essai à la Plaque",
+        "Teneur en Eau",
+        "Contrôle de Compacité",
+        "Granulats pour Béton",
+        "Identification Matériau",
         "Synthèse Béton",
         "Synthèse Plaque",
     ]
@@ -475,6 +503,10 @@ with st.sidebar:
         "Accueil",
         "Gestion Utilisateurs",
         "Essai à la Plaque",
+        "Teneur en Eau",
+        "Contrôle de Compacité",
+        "Granulats pour Béton",
+        "Identification Matériau",
         "Synthèse Plaque",
         "Suivi de Bétonnage",
         "Suivi Contrôle Béton",
@@ -489,6 +521,10 @@ with st.sidebar:
         "Synthèse Béton",
         "Historique Complet & PVs",
         "Synthèse Plaque",
+        "Teneur en Eau",
+        "Contrôle de Compacité",
+        "Granulats pour Béton",
+        "Identification Matériau",
     ]
   else:
     st.info(f"Rôle : **{current_role.upper()}**")
@@ -604,6 +640,9 @@ with st.sidebar:
 
 
 def render_view(module, supabase_client):
+  if module is None:
+    st.error("⚠️ Ce module n'est pas encore chargé dans le fichier views.")
+    return
   try:
     module.show(supabase_client, can_edit=st.session_state["can_edit"])
   except TypeError:
@@ -804,6 +843,14 @@ elif page == "Gestion Utilisateurs" and current_role == "admin":
 
 elif page == "Essai à la Plaque":
   render_view(essai_Plaque, supabase)
+elif page == "Teneur en Eau":
+  render_view(essai_teneur_eau, supabase)
+elif page == "Contrôle de Compacité":
+  render_view(essai_compacite, supabase)
+elif page == "Granulats pour Béton":
+  render_view(essai_granulats_beton, supabase)
+elif page == "Identification Matériau":
+  render_view(essai_identification_materiaux, supabase)
 elif page == "Synthèse Plaque":
   render_view(synthese_plaque, supabase)
 elif page == "Suivi de Bétonnage":
