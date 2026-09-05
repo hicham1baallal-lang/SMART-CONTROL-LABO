@@ -178,7 +178,6 @@ def show(supabase_client, can_edit=False, is_admin=False):
         st.subheader("1. Informations Générales du PV")
         col_h1, col_h2, col_h3 = st.columns(3)
         
-        # Valeurs par défaut ou rechargées lors de l'édition
         default_seq = st.session_state.get("edit_num_pv_seq", 371)
         default_lieu = st.session_state.get("edit_lieu", "Zone T4 Axe V3G et V6G")
         default_pk = st.session_state.get("edit_pk", "pk 8+540 à pk 8+600")
@@ -230,14 +229,12 @@ def show(supabase_client, can_edit=False, is_admin=False):
         st.markdown("---")
         st.subheader("2. Mesures & Prélèvements")
 
-        # Initialisation ou état rechargé des échantillons
         if "teneur_eau_samples" not in st.session_state:
             st.session_state["teneur_eau_samples"] = [
                 {"pk": pk_zone, "couche": 1, "m_humide": 238.1, "m_seche": 217.0, "m_tare": 38.0},
                 {"pk": pk_zone, "couche": 1, "m_humide": 239.0, "m_seche": 217.5, "m_tare": 38.5},
             ]
 
-        # Gestion des boutons d'ajout/suppression rapide
         col_b1, col_b2, col_b3 = st.columns([1.5, 1.5, 3])
         with col_b1:
             if st.button("➕ Ajouter un échantillon", disabled=not can_edit):
@@ -254,7 +251,6 @@ def show(supabase_client, can_edit=False, is_admin=False):
         samples_calculated = []
         to_delete_idx = None
 
-        # Formulaire des échantillons
         for i, sample in enumerate(st.session_state["teneur_eau_samples"]):
             computed_ref = f"{num_pv_seq}/{i+1}"
             
@@ -344,10 +340,9 @@ def show(supabase_client, can_edit=False, is_admin=False):
                                 st.error(f"⛔ **Saisie bloquée** : Les références suivantes existent déjà : **{', '.join(existing_refs)}**.")
                                 st.stop()
 
-                        # Enregistrement / Upsert
+                        # Upsert du PV
                         supabase_client.table("pv_teneur_eau").upsert(header_data).execute()
                         
-                        # Suppression des anciens points en mode mise à jour
                         if is_editing_mode:
                             supabase_client.table("essai_teneur_eau").delete().eq("num_rapport", num_rapport).execute()
 
@@ -357,7 +352,6 @@ def show(supabase_client, can_edit=False, is_admin=False):
 
                         st.success(f"✅ PV **{num_rapport}** enregistré/mis à jour avec succès !")
                         
-                        # Réinitialisation du mode édition
                         if is_editing_mode:
                             st.session_state["teneur_eau_edit_mode"] = False
                             st.rerun()
@@ -397,7 +391,6 @@ def show(supabase_client, can_edit=False, is_admin=False):
                             
                         samples_data = samples_res.data if samples_res.data else []
 
-                        # Résumé du PV
                         with st.expander(f"📄 Détails du PV : {selected_num_rapport}", expanded=True):
                             c_info1, c_info2 = st.columns(2)
                             with c_info1:
@@ -432,9 +425,7 @@ def show(supabase_client, can_edit=False, is_admin=False):
                             )
 
                         with col_act2:
-                            # MODIFICATION (Accessible pour rôle Laboratoire / can_edit)
                             if st.button("✏️ Modifier ce PV", disabled=not can_edit, use_container_width=True):
-                                # Extraction du numéro séquentiel
                                 try:
                                     seq_val = int(selected_num_rapport.split('/')[-1])
                                 except Exception:
@@ -461,19 +452,21 @@ def show(supabase_client, can_edit=False, is_admin=False):
                                 st.rerun()
 
                         with col_act3:
-                            # SUPPRESSION (Exclusivité Administrateur)
-                            if is_admin:
-                                if st.button("🗑️ Supprimer ce PV", type="secondary", use_container_width=True):
-                                    try:
-                                        # Suppression en cascade : d'abord les échantillons, puis le PV
-                                        supabase_client.table("essai_teneur_eau").delete().eq("num_rapport", selected_num_rapport).execute()
-                                        supabase_client.table("pv_teneur_eau").delete().eq("num_rapport", selected_num_rapport).execute()
-                                        st.success(f"✅ PV `{selected_num_rapport}` supprimé avec succès.")
-                                        st.rerun()
-                                    except Exception as err:
-                                        st.error(f"Erreur lors de la suppression : {err}")
-                            else:
-                                st.button("🔒 Supprimer (Admin)", disabled=True, help="Réservé aux administrateurs", use_container_width=True)
+                            # BOUTON SUPPRIMER CORRIGÉ : Activé si is_admin=True, désactivé sinon
+                            if st.button(
+                                "🗑️ Supprimer ce PV", 
+                                disabled=not is_admin, 
+                                help="Exclusif aux administrateurs" if not is_admin else "Supprimer définitivement le PV",
+                                use_container_width=True
+                            ):
+                                try:
+                                    # Suppression en cascade dans Supabase
+                                    supabase_client.table("essai_teneur_eau").delete().eq("num_rapport", selected_num_rapport).execute()
+                                    supabase_client.table("pv_teneur_eau").delete().eq("num_rapport", selected_num_rapport).execute()
+                                    st.success(f"✅ PV `{selected_num_rapport}` supprimé avec succès.")
+                                    st.rerun()
+                                except Exception as err:
+                                    st.error(f"Erreur lors de la suppression : {err}")
 
                 else:
                     st.info("Aucun PV enregistré dans la base de données.")
