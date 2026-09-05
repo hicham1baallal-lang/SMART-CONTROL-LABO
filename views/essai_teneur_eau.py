@@ -15,8 +15,8 @@ def evaluer_etat_hydrique_gtr(w_mesure, w_opn, classe_gtr="Classe B", sous_class
 
     ratio = w_mesure / w_opn
 
-    # Definition des seuils selon la classe et la sous-classe GTR
-    if classe_gtr == "Classe A (Sols Fins)":
+    # Définition des seuils selon la classe et la sous-classe GTR
+    if "Classe A" in classe_gtr:
         if sous_classe == "A1":
             seuil_th, seuil_h, seuil_m, seuil_s = 1.25, 1.10, 0.90, 0.70
         elif sous_classe == "A2":
@@ -25,8 +25,7 @@ def evaluer_etat_hydrique_gtr(w_mesure, w_opn, classe_gtr="Classe B", sous_class
             seuil_th, seuil_h, seuil_m, seuil_s = 1.40, 1.20, 0.90, 0.70
         else:
             seuil_th, seuil_h, seuil_m, seuil_s = 1.25, 1.10, 0.90, 0.70
-
-    else:  # Classe B (Sols Sableux et Graveleux avec Fines)
+    else:  # Classe B
         if sous_classe == "B6":
             seuil_th, seuil_h, seuil_m, seuil_s = 1.30, 1.10, 0.90, 0.70
         elif sous_classe == "B2":
@@ -126,12 +125,16 @@ def generate_pv_teneur_eau_pdf(header_info, points_data):
     # Lignes du tableau
     pdf.set_font("Helvetica", "", 7.5)
     for p in points_data:
+        w_m = float(p.get('w_mesure', 0.0))
+        w_o = float(p.get('w_opn', 1.0))
+        ratio = p.get('ratio_w', w_m / w_o if w_o > 0 else 0.0)
+
         pdf.cell(widths[0], 6, str(p.get("ref_ech", "")), 1, 0, "C")
-        pdf.cell(widths[1], 6, str(p.get("date_prel", "")), 1, 0, "C")
+        pdf.cell(widths[1], 6, str(p.get("date_prel", p.get("created_at", "")[:10])), 1, 0, "C")
         pdf.cell(widths[2], 6, str(p.get("pk", "")), 1, 0, "C")
-        pdf.cell(widths[3], 6, f"{p.get('w_mesure', 0.0):.1f}", 1, 0, "C")
-        pdf.cell(widths[4], 6, f"{p.get('w_opn', 0.0):.1f}", 1, 0, "C")
-        pdf.cell(widths[5], 6, f"{p.get('ratio_w', 0.0):.2f}", 1, 0, "C")
+        pdf.cell(widths[3], 6, f"{w_m:.1f}", 1, 0, "C")
+        pdf.cell(widths[4], 6, f"{w_o:.1f}", 1, 0, "C")
+        pdf.cell(widths[5], 6, f"{ratio:.2f}", 1, 0, "C")
         pdf.cell(widths[6], 6, str(p.get("etat_hydrique", "")), 1, 0, "C")
         pdf.cell(widths[7], 6, str(p.get("observation", "Conforme")), 1, 1, "C")
 
@@ -193,8 +196,8 @@ def show(supabase_client, can_edit=False):
             lieu_prelevement = st.text_input("Lieu de prélèvement / Zone", value="Zone T4 Axe V3G et V6G", disabled=not can_edit)
             pk_zone = st.text_input("PK / Section", value="pk 8+540 à pk 8+600", disabled=not can_edit)
             
-            # Sous-classe dynamique en fonction de la classe GTR choisie
-            if classe_gtr == "Classe A (Sols Fins)":
+            # Sous-classe dynamique selon la classe GTR choisie
+            if "Classe A" in classe_gtr:
                 sous_classes_options = ["A1", "A2", "A3", "A4"]
                 default_idx = 1
             else:
@@ -213,7 +216,7 @@ def show(supabase_client, can_edit=False):
             type_proctor = st.selectbox("Type de Proctor", ["OPN", "OPM"], disabled=not can_edit)
             w_opn = st.number_input(f"Teneur en eau {type_proctor} (%)", value=12.0, step=0.1, disabled=not can_edit)
 
-        # Intégration de la classe et de la sous-classe dans le nom du matériau
+        # Désignation complète
         nature_mat_complete = f"{classe_gtr.split()[0]} - Sous-classe {sous_classe_gtr}"
 
         st.markdown("---")
@@ -269,7 +272,7 @@ def show(supabase_client, can_edit=False):
                 m_seche_nette = m_s - m_t
                 w_mesure = (m_eau / m_seche_nette * 100) if m_seche_nette > 0 else 0.0
 
-                # Evaluation de l'état hydrique selon GTR (A ou B)
+                # Évaluation selon la grille GTR
                 etat_hydrique, obs, ratio_w = evaluer_etat_hydrique_gtr(
                     w_mesure, w_opn, classe_gtr=classe_gtr, sous_classe=sous_classe_gtr
                 )
@@ -286,11 +289,12 @@ def show(supabase_client, can_edit=False):
                     "m_tare": m_t,
                     "w_mesure": round(w_mesure, 1),
                     "w_opn": w_opn,
+                    "ratio_w": round(ratio_w, 2),
                     "etat_hydrique": etat_hydrique,
                     "observation": obs
                 })
 
-        # Suppression spécifique via le bouton corbeille
+        # Suppression d'un échantillon
         if to_delete_idx is not None:
             st.session_state["teneur_eau_samples"].pop(to_delete_idx)
             st.rerun()
@@ -335,7 +339,7 @@ def show(supabase_client, can_edit=False):
                             existing_refs = [item["ref_ech"] for item in check_samples.data]
                             st.error(f"⛔ **Saisie bloquée** : Les références suivantes existent déjà : **{', '.join(existing_refs)}**.")
                         else:
-                            # Insertion Supabase
+                            # Insertion dans les tables Supabase
                             supabase_client.table("pv_teneur_eau").upsert(header_data).execute()
                             
                             for item in samples_calculated:
@@ -347,10 +351,78 @@ def show(supabase_client, can_edit=False):
                         st.error(f"❌ Erreur lors de l'enregistrement : {e}")
 
     # ---------------------------------------------------------
-    # TAB 2 : HISTORIQUE ET CONSULTATION
+    # TAB 2 : HISTORIQUE, CONSULTATION ET IMPRESSION
     # ---------------------------------------------------------
     with tabs[1]:
-        st.subheader("📋 Historique des mesures de teneur en eau")
+        st.subheader("🖨️ Sélectionner et Imprimer un Procès-Verbal (PV)")
+        
+        if not supabase_client:
+            st.info("💡 Client Supabase non configuré.")
+        else:
+            try:
+                # Récupération de la liste des PV enregistrés
+                pv_res = supabase_client.table("pv_teneur_eau").select("*").order("created_at", desc=True).execute()
+                
+                if pv_res.data:
+                    pv_list = pv_res.data
+                    pv_options = {pv["num_rapport"]: pv for pv in pv_list}
+                    
+                    selected_num_rapport = st.selectbox(
+                        "🔍 Choisir un N° de Rapport / PV enregistrer :",
+                        options=list(pv_options.keys())
+                    )
+
+                    if selected_num_rapport:
+                        selected_pv = pv_options[selected_num_rapport]
+                        
+                        # Récupération des points d'essai associés au PV
+                        samples_res = supabase_client.table("essai_teneur_eau") \
+                            .select("*") \
+                            .eq("num_rapport", selected_num_rapport) \
+                            .order("ref_ech", desc=False) \
+                            .execute()
+                            
+                        samples_data = samples_res.data if samples_res.data else []
+
+                        # Affichage du résumé du PV sélectionné
+                        with st.expander(f"📄 Résumé du PV : {selected_num_rapport}", expanded=True):
+                            c_info1, c_info2 = st.columns(2)
+                            with c_info1:
+                                st.markdown(f"**Nature du matériau :** {selected_pv.get('nature_materiau', 'N/A')}")
+                                st.markdown(f"**Lieu de prélèvement :** {selected_pv.get('lieu_prelevement', 'N/A')}")
+                                st.markdown(f"**PK / Section :** {selected_pv.get('pk_zone', 'N/A')}")
+                            with c_info2:
+                                st.markdown(f"**Date de prélèvement :** {selected_pv.get('date_prelevement', 'N/A')}")
+                                st.markdown(f"**Type de Proctor :** {selected_pv.get('type_proctor', 'OPN')}")
+                                st.markdown(f"**w Proctor (%) :** {selected_pv.get('w_opn', 'N/A')} %")
+
+                            st.markdown("#### Liste des échantillons rattachés :")
+                            if samples_data:
+                                df_samples = pd.DataFrame(samples_data)
+                                display_cols = [c for c in ["ref_ech", "pk", "w_mesure", "w_opn", "etat_hydrique", "observation"] if c in df_samples.columns]
+                                st.dataframe(df_samples[display_cols], use_container_width=True)
+                            else:
+                                st.warning("Aucun échantillon rattaché à ce PV.")
+
+                        # Génération du PDF réimprimable
+                        pdf_reprint = generate_pv_teneur_eau_pdf(selected_pv, samples_data)
+                        
+                        st.download_button(
+                            label=f"🖨️ Imprimer / Télécharger le PV {selected_num_rapport} (PDF)",
+                            data=pdf_reprint,
+                            file_name=f"PV_Teneur_en_eau_{selected_num_rapport.replace('/', '_')}.pdf",
+                            mime="application/pdf",
+                            type="primary",
+                            use_container_width=True
+                        )
+                else:
+                    st.info("Aucun PV enregistrer dans la table 'pv_teneur_eau'.")
+
+            except Exception as e:
+                st.error(f"❌ Erreur lors de la récupération des PV : {e}")
+
+        st.markdown("---")
+        st.subheader("📋 Base de données brute des mesures (essai_teneur_eau)")
         if supabase_client:
             try:
                 res = supabase_client.table("essai_teneur_eau").select("*").order("created_at", desc=True).execute()
@@ -358,8 +430,6 @@ def show(supabase_client, can_edit=False):
                     df = pd.DataFrame(res.data)
                     st.dataframe(df, use_container_width=True)
                 else:
-                    st.info("Aucune donnée enregistrée dans Supabase pour le moment.")
+                    st.info("Aucune donnée d'échantillon enregistrée.")
             except Exception as e:
-                st.error(f"Erreur de chargement des données : {e}")
-        else:
-            st.info("💡 Client Supabase non configuré.")
+                st.error(f"Erreur de chargement de la table brute : {e}")
