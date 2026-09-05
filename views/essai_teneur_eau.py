@@ -143,14 +143,15 @@ def show(supabase_client, can_edit=False):
         st.markdown("---")
         st.subheader("2. Mesures & Prélèvements")
 
+        # Initialisation par défaut de la liste
         if "teneur_eau_samples" not in st.session_state:
             st.session_state["teneur_eau_samples"] = [
                 {"pk": pk_zone, "couche": 1, "m_humide": 240.5, "m_seche": 218.2, "m_tare": 39.8},
                 {"pk": pk_zone, "couche": 1, "m_humide": 238.1, "m_seche": 217.0, "m_tare": 38.0},
-                {"pk": pk_zone, "couche": 1, "m_humide": 239.0, "m_seche": 217.5, "m_tare": 38.5},
             ]
 
-        col_b1, col_b2 = st.columns([1, 4])
+        # Boutons d'ajout et de suppression d'échantillon
+        col_b1, col_b2, col_b3 = st.columns([1.5, 1.5, 3])
         with col_b1:
             if st.button("➕ Ajouter un échantillon", disabled=not can_edit):
                 st.session_state["teneur_eau_samples"].append({
@@ -158,12 +159,19 @@ def show(supabase_client, can_edit=False):
                 })
                 st.rerun()
 
+        with col_b2:
+            if st.button("➖ Supprimer le dernier", disabled=not can_edit or len(st.session_state["teneur_eau_samples"]) <= 1):
+                st.session_state["teneur_eau_samples"].pop()
+                st.rerun()
+
         samples_calculated = []
+        to_delete_idx = None
+
         for i, sample in enumerate(st.session_state["teneur_eau_samples"]):
             computed_ref = f"{num_pv_seq}/{i+1}"
             
             with st.expander(f"📍 Échantillon N° {i+1} : {computed_ref}", expanded=True):
-                c1, c2, c3, c4, c5 = st.columns(5)
+                c1, c2, c3, c4, c5, c6 = st.columns([1.5, 2, 2, 2, 2, 1])
                 with c1:
                     ref = st.text_input("Référence", value=computed_ref, key=f"ref_{i}", disabled=True)
                 with c2:
@@ -174,6 +182,10 @@ def show(supabase_client, can_edit=False):
                     m_s = st.number_input("Masse Sèche + Tare (g)", value=float(sample["m_seche"]), step=0.1, key=f"ms_{i}", disabled=not can_edit)
                 with c5:
                     m_t = st.number_input("Masse Tare (g)", value=float(sample["m_tare"]), step=0.1, key=f"mt_{i}", disabled=not can_edit)
+                with c6:
+                    st.markdown("&nbsp;")
+                    if st.button("🗑️", key=f"del_{i}", help="Supprimer cet échantillon", disabled=not can_edit or len(st.session_state["teneur_eau_samples"]) <= 1):
+                        to_delete_idx = i
 
                 m_eau = m_h - m_s
                 m_seche_nette = m_s - m_t
@@ -208,6 +220,11 @@ def show(supabase_client, can_edit=False):
                     "observation": obs
                 })
 
+        # Suppression spécifique de l'échantillon sélectionné via le bouton corbeille
+        if to_delete_idx is not None:
+            st.session_state["teneur_eau_samples"].pop(to_delete_idx)
+            st.rerun()
+
         st.markdown("---")
         
         # Actions : Téléchargement PDF / Enregistrement
@@ -241,25 +258,23 @@ def show(supabase_client, can_edit=False):
                     st.error("❌ Connexion Supabase non disponible.")
                 else:
                     try:
-                        # 1. Liste des références d'échantillons à enregistrer
+                        # 1. Vérification si la référence existe déjà
                         refs_to_check = [s["ref_ech"] for s in samples_calculated]
-
-                        # 2. Vérification d'existence dans la table `essai_teneur_eau`
                         check_samples = supabase_client.table("essai_teneur_eau").select("ref_ech").in_("ref_ech", refs_to_check).execute()
 
                         if check_samples.data:
                             existing_refs = [item["ref_ech"] for item in check_samples.data]
-                            st.error(f"⛔ **Saisie bloquée** : Les références d'échantillons suivantes existent déjà dans Supabase : **{', '.join(existing_refs)}**. Veuillez incrémenter le N° PV.")
+                            st.error(f"⛔ **Saisie bloquée** : Les références suivantes existent déjà dans Supabase : **{', '.join(existing_refs)}**. Veuillez incrémenter le N° PV.")
                         else:
-                            # 3. Insertion de l'en-tête du PV
+                            # 2. Enregistrement de l'en-tête
                             supabase_client.table("pv_teneur_eau").upsert(header_data).execute()
                             
-                            # 4. Insertion des mesures d'échantillons
+                            # 3. Enregistrement uniquement des échantillons restants
                             for item in samples_calculated:
                                 item["num_rapport"] = num_rapport
                                 supabase_client.table("essai_teneur_eau").insert(item).execute()
 
-                            st.success(f"✅ Procès-Verbal **{num_rapport}** et ses échantillons enregistrés avec succès !")
+                            st.success(f"✅ Procès-Verbal **{num_rapport}** ({len(samples_calculated)} échantillons) enregistré avec succès !")
                     except Exception as e:
                         st.error(f"❌ Erreur lors de l'enregistrement : {e}")
 
