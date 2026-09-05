@@ -122,13 +122,10 @@ def show(supabase_client, can_edit=False):
             st.markdown("**N° Rapport d'essai**")
             c_prefix, c_num = st.columns([2.5, 1.5])
             with c_prefix:
-                # Préfixe fixe non modifiable
                 fixed_prefix = st.text_input("Préfixe fixe", value="25/260/LGV/CS/", disabled=True, key="fixed_prefix")
             with c_num:
-                # Numéro d'ordre incrémentable (ex: 364, 365, 366...)
                 num_pv_seq = st.number_input("N° PV", value=364, step=1, key="num_pv_seq", disabled=not can_edit)
             
-            # Reconstruction du numéro complet de rapport d'essai
             num_rapport = f"{fixed_prefix}{num_pv_seq}"
             st.info(f"Rapport : **{num_rapport}**")
 
@@ -146,7 +143,6 @@ def show(supabase_client, can_edit=False):
         st.markdown("---")
         st.subheader("2. Mesures & Prélèvements")
 
-        # Initialisation de la liste des échantillons en session
         if "teneur_eau_samples" not in st.session_state:
             st.session_state["teneur_eau_samples"] = [
                 {"pk": pk_zone, "couche": 1, "m_humide": 240.5, "m_seche": 218.2, "m_tare": 39.8},
@@ -164,7 +160,6 @@ def show(supabase_client, can_edit=False):
 
         samples_calculated = []
         for i, sample in enumerate(st.session_state["teneur_eau_samples"]):
-            # Génération automatique de la référence verrouillée (ex: 364/1, 364/2, 364/3...)
             computed_ref = f"{num_pv_seq}/{i+1}"
             
             with st.expander(f"📍 Échantillon N° {i+1} : {computed_ref}", expanded=True):
@@ -180,12 +175,10 @@ def show(supabase_client, can_edit=False):
                 with c5:
                     m_t = st.number_input("Masse Tare (g)", value=float(sample["m_tare"]), step=0.1, key=f"mt_{i}", disabled=not can_edit)
 
-                # Calculs automatiques
                 m_eau = m_h - m_s
                 m_seche_nette = m_s - m_t
                 w_mesure = (m_eau / m_seche_nette * 100) if m_seche_nette > 0 else 0.0
 
-                # Évaluation de l'État Hydrique
                 delta_w = w_mesure - w_opn
                 if abs(delta_w) <= 1.5:
                     etat_hydrique = "Moyen"
@@ -248,15 +241,21 @@ def show(supabase_client, can_edit=False):
                     st.error("❌ Connexion Supabase non disponible.")
                 else:
                     try:
-                        # Sauvegarde de l'en-tête
-                        supabase_client.table("pv_teneur_eau").upsert(header_data).execute()
+                        # ⚠️ Vérification si le rapport existe déjà
+                        check_exist = supabase_client.table("pv_teneur_eau").select("num_rapport").eq("num_rapport", num_rapport).execute()
                         
-                        # Sauvegarde des mesures des échantillons
-                        for item in samples_calculated:
-                            item["num_rapport"] = num_rapport
-                            supabase_client.table("essai_teneur_eau").insert(item).execute()
+                        if check_exist.data:
+                            st.warning(f"⚠️ **Saisie en double impossible** : Le rapport **{num_rapport}** existe déjà dans la base de données ! Veuillez changer le N° PV.")
+                        else:
+                            # Insertion de l'en-tête (Méthode insert au lieu d'upsert)
+                            supabase_client.table("pv_teneur_eau").insert(header_data).execute()
+                            
+                            # Insertion des mesures des échantillons
+                            for item in samples_calculated:
+                                item["num_rapport"] = num_rapport
+                                supabase_client.table("essai_teneur_eau").insert(item).execute()
 
-                        st.success(f"✅ Procès-Verbal {num_rapport} enregistré avec succès !")
+                            st.success(f"✅ Procès-Verbal **{num_rapport}** enregistré avec succès !")
                     except Exception as e:
                         st.error(f"❌ Erreur lors de l'enregistrement : {e}")
 
