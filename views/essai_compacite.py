@@ -8,16 +8,14 @@ from fpdf import FPDF
 # ==========================================
 REFERENTIEL_MATERIAUX = {
     "GNT 0/31,5 – sous-couche LGV": {"exigence_str": "q1", "exigence_mc": 98.0, "exigence_fc": 95.0},
-    "GNT / Grave 0/60 – couche de forme LGV": {"exigence_str": "q3", "exigence_mc": 95.0, "exigence_fc": 92.0},
+    "GNT / Grave 0/60 – couche de forme LGV": {"exigence_str": "q3", "exigence_mc": 98.5, "exigence_fc": 96.0},
     "GNT – PST": {"exigence_str": "95 % OPM", "exigence_mc": 95.0, "exigence_fc": 95.0},
-    "GNT / matériaux Type 1 ou Type 2 – remblais contigus OA": {"exigence_str": "q4 (zones courantes) / q3 (partie sup.)", "exigence_mc": 95.0, "exigence_fc": 92.0},
-    "Sols de remblai courant": {"exigence_str": "q4", "exigence_mc": 92.0, "exigence_fc": 90.0},
-    "Matériaux rocheux Rt2 – base de haut remblai": {"exigence_str": "q3", "exigence_mc": 95.0, "exigence_fc": 92.0},
+    "GNT / matériaux Type 1 ou Type 2 – remblais contigus OA": {"exigence_str": "q4 (zones courantes) / q3 (partie sup.)", "exigence_mc": 98.5, "exigence_fc": 96.0},
+    "Sols de remblai courant": {"exigence_str": "q4", "exigence_mc": 95.0, "exigence_fc": 92.0},
     "Sols en place – assise des remblais": {"exigence_str": "95 % OPM", "exigence_mc": 95.0, "exigence_fc": 95.0},
     "Sols réutilisables / D2-D3 – remblais de fouilles": {"exigence_str": "≥ 95 % OPM", "exigence_mc": 95.0, "exigence_fc": 95.0},
-    "GNA/GNB 0/31,5 – couche de base": {"exigence_str": "≥ 95 % OPM", "exigence_mc": 95.0, "exigence_fc": 95.0},
-    "GNF 0/40 / GNT 0/20 – couche de fondation": {"exigence_str": "Critère stat : 90% ≥ 95% OPM & 100% ≥ 90% OPM", "exigence_mc": 95.0, "exigence_fc": 90.0},
-    "Matériau d'assise – lit de pose": {"exigence_str": "q4", "exigence_mc": 92.0, "exigence_fc": 90.0},
+    "GNA/GNB 0/31,5 – couche de base": {"exigence_str": "≥ 98 % OPM", "exigence_mc": 98.0, "exigence_fc": 98.0},
+    "GNF 0/40  – couche de fondation": {"exigence_str": "Critère stat : 95% ≥ 95% OPM & 100% ≥ 95% OPM", "exigence_mc": 95.0, "exigence_fc": 95.0},
     "Autre / Saisie Personnalisée": {"exigence_str": "Personnalisée", "exigence_mc": 95.0, "exigence_fc": 92.0}
 }
 
