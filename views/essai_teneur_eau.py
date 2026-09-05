@@ -15,7 +15,6 @@ def evaluer_etat_hydrique_gtr(w_mesure, w_opn, classe_gtr="Classe B", sous_class
 
     ratio = w_mesure / w_opn
 
-    # Définition des seuils selon la classe et la sous-classe GTR
     if "Classe A" in str(classe_gtr):
         if sous_classe == "A1":
             seuil_th, seuil_h, seuil_m, seuil_s = 1.25, 1.10, 0.90, 0.70
@@ -33,7 +32,6 @@ def evaluer_etat_hydrique_gtr(w_mesure, w_opn, classe_gtr="Classe B", sous_class
         else:  # B1, B3, B4, B5
             seuil_th, seuil_h, seuil_m, seuil_s = 1.25, 1.10, 0.90, 0.60
 
-    # Qualification de l'état hydrique
     if ratio >= seuil_th:
         etat_hydrique = "Très Humide (th)"
         conforme = False
@@ -80,19 +78,16 @@ def generate_pv_teneur_eau_pdf(header_info, points_data):
     pdf.alias_nb_pages()
     pdf.add_page()
 
-    # Titre du PV
     pdf.set_font("Helvetica", "B", 12)
     pdf.cell(0, 6, "PROCES VERBAL", 0, 1, "C")
     pdf.set_font("Helvetica", "B", 9)
     pdf.cell(0, 5, "Détermination de la teneur en eau pondérale des matériaux par étuvage (NM EN 1097-5)", 0, 1, "C")
     pdf.ln(3)
 
-    # N° de Rapport
     pdf.set_font("Helvetica", "B", 9)
     pdf.cell(0, 5, f"Rapport d'Essai n° : {header_info.get('num_rapport', 'N/A')}", 0, 1, "R")
     pdf.ln(2)
 
-    # I - Identification du matériau testé
     pdf.set_fill_color(240, 240, 240)
     pdf.set_font("Helvetica", "B", 9)
     pdf.cell(190, 6, " I - Identification du matériau testé", 1, 1, "L", fill=True)
@@ -109,11 +104,9 @@ def generate_pv_teneur_eau_pdf(header_info, points_data):
     pdf.cell(95, 5, f"  PK : {header_info.get('pk_zone', '')}", 1, 1, "L")
     pdf.ln(4)
 
-    # II - Résultats des Essais
     pdf.set_font("Helvetica", "B", 9)
     pdf.cell(190, 6, " II - Résultats des essais", 1, 1, "L", fill=True)
     
-    # En-têtes du tableau
     headers = ["Référence", "Date Prél.", "PK / Localisation", "w (%)", f"w {type_p} (%)", "w / wOPN", "État Hydrique (GTR)", "Observation"]
     widths = [22, 20, 38, 16, 20, 18, 32, 24]
     
@@ -122,7 +115,6 @@ def generate_pv_teneur_eau_pdf(header_info, points_data):
         pdf.cell(widths[i], 6, h, 1, 0, "C")
     pdf.ln()
 
-    # Lignes du tableau
     pdf.set_font("Helvetica", "", 7.5)
     for p in points_data:
         w_m = float(p.get('w_mesure', 0.0))
@@ -140,7 +132,6 @@ def generate_pv_teneur_eau_pdf(header_info, points_data):
 
     pdf.ln(8)
 
-    # Signatures
     pdf.set_font("Helvetica", "B", 8)
     pdf.cell(63, 5, "Réception du client", 0, 0, "C")
     pdf.cell(64, 5, "Le Coordinateur des Essais", 0, 0, "C")
@@ -158,10 +149,14 @@ def generate_pv_teneur_eau_pdf(header_info, points_data):
 # MODULE VUE STREAMLIT : TENEUR EN EAU
 # ==========================================
 def show(supabase_client, can_edit=False, is_admin=False):
+    # DÉTECTION DU RÔLE DEPUIS LE SESSION_STATE (RÉSOUT LE BOUTON GRIS)
+    user_role = str(st.session_state.get("role", st.session_state.get("user_role", ""))).upper()
+    user_is_admin = is_admin or ("ADMIN" in user_role)
+    user_can_edit = can_edit or user_is_admin or ("LABO" in user_role)
+
     st.title("💧 Essai de Teneur en Eau (NM EN 1097-5 / GTR)")
     st.caption("Laboratoire de Contrôle Externe - Projet LGV CASA SUD")
 
-    # Mode Édition
     is_editing_mode = st.session_state.get("teneur_eau_edit_mode", False)
     if is_editing_mode:
         st.warning(f"✏️ **Mode Modification** activé pour le PV : `{st.session_state.get('teneur_eau_edit_num_rapport')}`")
@@ -172,7 +167,7 @@ def show(supabase_client, can_edit=False, is_admin=False):
     # TAB 1 : SAISIE & MODIFICATION PV
     # ---------------------------------------------------------
     with tabs[0]:
-        if not can_edit:
+        if not user_can_edit:
             st.warning("🔒 Mode lecture seule. Vous n'avez pas les droits de modification.")
 
         st.subheader("1. Informations Générales du PV")
@@ -189,7 +184,7 @@ def show(supabase_client, can_edit=False, is_admin=False):
             with c_prefix:
                 fixed_prefix = st.text_input("Préfixe fixe", value="25/260/LGV/CS/", disabled=True, key="fixed_prefix")
             with c_num:
-                num_pv_seq = st.number_input("N° PV", value=default_seq, step=1, key="num_pv_seq", disabled=not can_edit or is_editing_mode)
+                num_pv_seq = st.number_input("N° PV", value=default_seq, step=1, key="num_pv_seq", disabled=not user_can_edit or is_editing_mode)
             
             num_rapport = f"{fixed_prefix}{num_pv_seq}"
             st.info(f"Rapport : **{num_rapport}**")
@@ -198,12 +193,12 @@ def show(supabase_client, can_edit=False, is_admin=False):
                 "Classe GTR du matériau",
                 ["Classe A (Sols Fins)", "Classe B (Sols Sableux et Graveleux)"],
                 index=1,
-                disabled=not can_edit
+                disabled=not user_can_edit
             )
 
         with col_h2:
-            lieu_prelevement = st.text_input("Lieu de prélèvement / Zone", value=default_lieu, disabled=not can_edit)
-            pk_zone = st.text_input("PK / Section", value=default_pk, disabled=not can_edit)
+            lieu_prelevement = st.text_input("Lieu de prélèvement / Zone", value=default_lieu, disabled=not user_can_edit)
+            pk_zone = st.text_input("PK / Section", value=default_pk, disabled=not user_can_edit)
             
             if "Classe A" in classe_gtr:
                 sous_classes_options = ["A1", "A2", "A3", "A4"]
@@ -216,13 +211,13 @@ def show(supabase_client, can_edit=False, is_admin=False):
                 "Sous-classe GTR",
                 sous_classes_options,
                 index=default_idx,
-                disabled=not can_edit
+                disabled=not user_can_edit
             )
 
         with col_h3:
-            date_prelevement = st.date_input("Date de prélèvement", value=datetime.date.today(), disabled=not can_edit)
-            type_proctor = st.selectbox("Type de Proctor", ["OPN", "OPM"], disabled=not can_edit)
-            w_opn = st.number_input(f"Teneur en eau {type_proctor} (%)", value=default_w_opn, step=0.1, disabled=not can_edit)
+            date_prelevement = st.date_input("Date de prélèvement", value=datetime.date.today(), disabled=not user_can_edit)
+            type_proctor = st.selectbox("Type de Proctor", ["OPN", "OPM"], disabled=not user_can_edit)
+            w_opn = st.number_input(f"Teneur en eau {type_proctor} (%)", value=default_w_opn, step=0.1, disabled=not user_can_edit)
 
         nature_mat_complete = f"{classe_gtr.split()[0]} - Sous-classe {sous_classe_gtr}"
 
@@ -237,14 +232,14 @@ def show(supabase_client, can_edit=False, is_admin=False):
 
         col_b1, col_b2, col_b3 = st.columns([1.5, 1.5, 3])
         with col_b1:
-            if st.button("➕ Ajouter un échantillon", disabled=not can_edit):
+            if st.button("➕ Ajouter un échantillon", disabled=not user_can_edit):
                 st.session_state["teneur_eau_samples"].append({
                     "pk": pk_zone, "couche": 1, "m_humide": 200.0, "m_seche": 180.0, "m_tare": 30.0
                 })
                 st.rerun()
 
         with col_b2:
-            if st.button("➖ Supprimer le dernier", disabled=not can_edit or len(st.session_state["teneur_eau_samples"]) <= 1):
+            if st.button("➖ Supprimer le dernier", disabled=not user_can_edit or len(st.session_state["teneur_eau_samples"]) <= 1):
                 st.session_state["teneur_eau_samples"].pop()
                 st.rerun()
 
@@ -259,16 +254,16 @@ def show(supabase_client, can_edit=False, is_admin=False):
                 with c1:
                     st.text_input("Référence", value=computed_ref, key=f"ref_{i}", disabled=True)
                 with c2:
-                    pk_item = st.text_input("PK / Localisation", value=sample["pk"], key=f"pk_{i}", disabled=not can_edit)
+                    pk_item = st.text_input("PK / Localisation", value=sample["pk"], key=f"pk_{i}", disabled=not user_can_edit)
                 with c3:
-                    m_h = st.number_input("Masse Humide + Tare (g)", value=float(sample["m_humide"]), step=0.1, key=f"mh_{i}", disabled=not can_edit)
+                    m_h = st.number_input("Masse Humide + Tare (g)", value=float(sample["m_humide"]), step=0.1, key=f"mh_{i}", disabled=not user_can_edit)
                 with c4:
-                    m_s = st.number_input("Masse Sèche + Tare (g)", value=float(sample["m_seche"]), step=0.1, key=f"ms_{i}", disabled=not can_edit)
+                    m_s = st.number_input("Masse Sèche + Tare (g)", value=float(sample["m_seche"]), step=0.1, key=f"ms_{i}", disabled=not user_can_edit)
                 with c5:
-                    m_t = st.number_input("Masse Tare (g)", value=float(sample["m_tare"]), step=0.1, key=f"mt_{i}", disabled=not can_edit)
+                    m_t = st.number_input("Masse Tare (g)", value=float(sample["m_tare"]), step=0.1, key=f"mt_{i}", disabled=not user_can_edit)
                 with c6:
                     st.markdown("&nbsp;")
-                    if st.button("🗑️", key=f"del_{i}", help="Supprimer cet échantillon", disabled=not can_edit or len(st.session_state["teneur_eau_samples"]) <= 1):
+                    if st.button("🗑️", key=f"del_{i}", help="Supprimer cet échantillon", disabled=not user_can_edit or len(st.session_state["teneur_eau_samples"]) <= 1):
                         to_delete_idx = i
 
                 m_eau = m_h - m_s
@@ -326,7 +321,7 @@ def show(supabase_client, can_edit=False, is_admin=False):
 
         with col_act2:
             btn_label = "🔄 Mettre à jour dans Supabase" if is_editing_mode else "💾 Enregistrer dans Supabase"
-            if st.button(btn_label, type="primary", use_container_width=True, disabled=not can_edit):
+            if st.button(btn_label, type="primary", use_container_width=True, disabled=not user_can_edit):
                 if not supabase_client:
                     st.error("❌ Connexion Supabase indisponible.")
                 else:
@@ -340,7 +335,6 @@ def show(supabase_client, can_edit=False, is_admin=False):
                                 st.error(f"⛔ **Saisie bloquée** : Les références suivantes existent déjà : **{', '.join(existing_refs)}**.")
                                 st.stop()
 
-                        # Upsert du PV
                         supabase_client.table("pv_teneur_eau").upsert(header_data).execute()
                         
                         if is_editing_mode:
@@ -410,7 +404,6 @@ def show(supabase_client, can_edit=False, is_admin=False):
                             else:
                                 st.warning("Aucun échantillon rattaché à ce PV.")
 
-                        # Actions : Impression, Modification et Suppression
                         col_act1, col_act2, col_act3 = st.columns([2, 1.5, 1.5])
                         
                         with col_act1:
@@ -425,7 +418,7 @@ def show(supabase_client, can_edit=False, is_admin=False):
                             )
 
                         with col_act2:
-                            if st.button("✏️ Modifier ce PV", disabled=not can_edit, use_container_width=True):
+                            if st.button("✏️ Modifier ce PV", disabled=not user_can_edit, use_container_width=True):
                                 try:
                                     seq_val = int(selected_num_rapport.split('/')[-1])
                                 except Exception:
@@ -452,15 +445,14 @@ def show(supabase_client, can_edit=False, is_admin=False):
                                 st.rerun()
 
                         with col_act3:
-                            # BOUTON SUPPRIMER CORRIGÉ : Activé si is_admin=True, désactivé sinon
+                            # BOUTON ACTIVÉ SI user_is_admin EST VRAI
                             if st.button(
                                 "🗑️ Supprimer ce PV", 
-                                disabled=not is_admin, 
-                                help="Exclusif aux administrateurs" if not is_admin else "Supprimer définitivement le PV",
+                                disabled=not user_is_admin, 
+                                help="Exclusif aux administrateurs" if not user_is_admin else "Supprimer définitivement ce PV",
                                 use_container_width=True
                             ):
                                 try:
-                                    # Suppression en cascade dans Supabase
                                     supabase_client.table("essai_teneur_eau").delete().eq("num_rapport", selected_num_rapport).execute()
                                     supabase_client.table("pv_teneur_eau").delete().eq("num_rapport", selected_num_rapport).execute()
                                     st.success(f"✅ PV `{selected_num_rapport}` supprimé avec succès.")
