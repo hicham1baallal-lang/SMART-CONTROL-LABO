@@ -98,7 +98,7 @@ def generate_pv_teneur_eau_pdf(header_info, points_data):
     pdf.set_font("Helvetica", "", 8)
     
     type_p = header_info.get('type_proctor', 'OPN')
-    pdf.cell(95, 5, f"  Nature du matériau : {header_info.get('nature_materiau', '')} (GTR: {header_info.get('sous_classe_gtr', '')})", 1, 0, "L")
+    pdf.cell(95, 5, f"  Nature du matériau : {header_info.get('nature_materiau', '')}", 1, 0, "L")
     pdf.cell(95, 5, f"  Type de Proctor : {type_p}", 1, 1, "L")
     
     pdf.cell(95, 5, f"  Lieu de prélèvement : {header_info.get('lieu_prelevement', '')}", 1, 0, "L")
@@ -179,7 +179,7 @@ def show(supabase_client, can_edit=False):
             num_rapport = f"{fixed_prefix}{num_pv_seq}"
             st.info(f"Rapport : **{num_rapport}**")
 
-            nature_mat = st.text_input("Nature du matériau", value="Sol - Classe B", disabled=not can_edit)
+            nature_mat_base = st.text_input("Nature du matériau", value="Sol - Classe B", disabled=not can_edit)
 
         with col_h2:
             lieu_prelevement = st.text_input("Lieu de prélèvement / Zone", value="Zone T4 Axe V3G et V6G", disabled=not can_edit)
@@ -191,10 +191,13 @@ def show(supabase_client, can_edit=False):
             type_proctor = st.selectbox("Type de Proctor", ["OPN", "OPM"], disabled=not can_edit)
             w_opn = st.number_input(f"Teneur en eau {type_proctor} (%)", value=12.0, step=0.1, disabled=not can_edit)
 
+        # Concaténation pour éviter le champ manquant dans la base de données Supabase
+        nature_mat_complete = f"{nature_mat_base} ({sous_classe_gtr})"
+
         st.markdown("---")
         st.subheader("2. Mesures & Prélèvements")
 
-        # Initialisation du tableau d'échantillons dans le session_state
+        # Initialisation du tableau d'échantillons
         if "teneur_eau_samples" not in st.session_state:
             st.session_state["teneur_eau_samples"] = [
                 {"pk": pk_zone, "couche": 1, "m_humide": 238.1, "m_seche": 217.0, "m_tare": 38.0},
@@ -239,12 +242,12 @@ def show(supabase_client, can_edit=False):
                     if st.button("🗑️", key=f"del_{i}", help="Supprimer cet échantillon", disabled=not can_edit or len(st.session_state["teneur_eau_samples"]) <= 1):
                         to_delete_idx = i
 
-                # Calculs physiques
+                # Calculs
                 m_eau = m_h - m_s
                 m_seche_nette = m_s - m_t
                 w_mesure = (m_eau / m_seche_nette * 100) if m_seche_nette > 0 else 0.0
 
-                # Calcul GTR
+                # Classification GTR
                 etat_hydrique, obs, ratio_w = evaluer_etat_hydrique_gtr_b(w_mesure, w_opn, sous_classe=sous_classe_gtr)
 
                 st.caption(f"📊 **w mesurée** = `{w_mesure:.1f} %` | **Ratio w/wOPN** = `{ratio_w:.2f}` | **État Hydrique (GTR)** = `{etat_hydrique}` | **Observation** = `{obs}`")
@@ -259,25 +262,21 @@ def show(supabase_client, can_edit=False):
                     "m_tare": m_t,
                     "w_mesure": round(w_mesure, 1),
                     "w_opn": w_opn,
-                    "ratio_w": round(ratio_w, 2),
                     "etat_hydrique": etat_hydrique,
                     "observation": obs
                 })
 
-        # Suppression de l'échantillon ciblé par le bouton corbeille
+        # Suppression spécifique via le bouton corbeille
         if to_delete_idx is not None:
             st.session_state["teneur_eau_samples"].pop(to_delete_idx)
             st.rerun()
 
         st.markdown("---")
         
-        # Actions : Génération PDF / Sauvegarde Supabase
-        col_act1, col_act2 = st.columns(2)
-        
+        # En-tête compatible Supabase
         header_data = {
             "num_rapport": num_rapport,
-            "nature_materiau": nature_mat,
-            "sous_classe_gtr": sous_classe_gtr,
+            "nature_materiau": nature_mat_complete,
             "lieu_prelevement": lieu_prelevement,
             "pk_zone": pk_zone,
             "date_prelevement": str(date_prelevement),
@@ -285,9 +284,10 @@ def show(supabase_client, can_edit=False):
             "w_opn": w_opn
         }
 
-        # Génération du PV PDF
+        # PDF Bytes
         pdf_bytes = generate_pv_teneur_eau_pdf(header_data, samples_calculated)
 
+        col_act1, col_act2 = st.columns(2)
         with col_act1:
             st.download_button(
                 label="📄 Télécharger le PV Officiel (PDF)",
@@ -311,7 +311,7 @@ def show(supabase_client, can_edit=False):
                             existing_refs = [item["ref_ech"] for item in check_samples.data]
                             st.error(f"⛔ **Saisie bloquée** : Les références suivantes existent déjà : **{', '.join(existing_refs)}**.")
                         else:
-                            # Insertion dans Supabase
+                            # Insertion dans Supabase sans champs inconnus
                             supabase_client.table("pv_teneur_eau").upsert(header_data).execute()
                             
                             for item in samples_calculated:
