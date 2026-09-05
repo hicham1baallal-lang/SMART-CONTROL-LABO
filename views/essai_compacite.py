@@ -4,7 +4,7 @@ import streamlit as st
 from fpdf import FPDF
 
 # ==========================================
-# TABLEAU DE RÉFÉRENCE MATÉRIAUX & EXIGENCES
+# TABLEAU DE RÉFÉRENCE MATÉRIAUX & EXIGENCES CCTP
 # ==========================================
 REFERENTIEL_MATERIAUX = {
     "GNT 0/31,5 – sous-couche LGV": {"exigence_str": "q1", "exigence_mc": 98.0, "exigence_fc": 95.0},
@@ -26,10 +26,6 @@ REFERENTIEL_MATERIAUX = {
 # FONCTION DE CALCUL ET ÉVALUATION COMPACITÉ
 # ==========================================
 def evaluer_compacite(density_seche, density_ref, type_mesure="mc", exigence_mc=95.0, exigence_fc=92.0):
-    """
-    Calcule l'Indice de Compacité IC (%) et vérifie la conformité par rapport aux exigences CCTP.
-    - type_mesure : 'mc' (moyenne de couche) ou 'fc' (fond de couche)
-    """
     if density_ref <= 0:
         return 0.0, "N/A"
 
@@ -132,7 +128,7 @@ def generate_pv_compacite_pdf(header_info, points_data):
     pdf.set_font("Helvetica", "I", 7.5)
     pdf.cell(0, 4, "Légende : fc = fond de couche de la couche compactée | mc = moyenne sur toute l'épaisseur de la couche compactée", 0, 1, "L")
 
-    # --- BLOC SIGNATURES (POSITIONNÉ ÉQUILIBRÉ VERS LE BAS DU A4) ---
+    # --- BLOC SIGNATURES ---
     if pdf.get_y() < 220:
         pdf.set_y(220)
     else:
@@ -206,27 +202,33 @@ def show(supabase_client, can_edit=False, is_admin=False):
         with col_h2:
             lieu_prelevement = st.text_area("Lieu / Zone de prélèvement", value=default_lieu, height=90, disabled=not user_can_edit)
             
-            # FILTRAGE / SÉLECTION PAR TYPE DE MATÉRIAU ET EXIGENCES ASSOCIES
+            # SELECTBOX DYNAMIQUE MATÉRIAUX
             mat_keys = list(REFERENTIEL_MATERIAUX.keys())
             default_mat_idx = mat_keys.index(default_mat) if default_mat in mat_keys else 3
-            type_materiau = st.selectbox("Matériau / Famille", options=mat_keys, index=default_mat_idx, disabled=not user_can_edit)
+
+            type_materiau = st.selectbox(
+                "Type de matériau / Famille",
+                options=mat_keys,
+                index=default_mat_idx,
+                disabled=not user_can_edit,
+                key="select_type_materiau_comp"
+            )
 
         with col_h3:
             date_prelevement = st.date_input("Date du prélèvement", value=datetime.date.today(), disabled=not user_can_edit)
-            densite_opn = st.number_input("Densité Réf Proctor (t/m³)", value=default_d_opn, step=0.01, disabled=not user_can_edit)
-            w_opn = st.number_input("Teneur en eau opt. (%)", value=default_w_opn, step=0.1, disabled=not user_can_edit)
+            densite_opn = st.number_input("Densité Proctor OPN (t/m³)", value=default_d_opn, step=0.01, disabled=not user_can_edit)
+            w_opn = st.number_input("Teneur en eau opt. OPN (%)", value=default_w_opn, step=0.1, disabled=not user_can_edit)
 
-        # RÉCUPÉRATION ET AFFICHAGE AUTOMATIQUE DES EXIGENCES D'APRÈS LE TABLEAU
+        # SYNCHRONISATION AUTOMATIQUE DES EXIGENCES D'APRÈS LE TABLEAU
         mat_info = REFERENTIEL_MATERIAUX[type_materiau]
-        st.info(f"🎯 **Exigence CCTP définie :** `{mat_info['exigence_str']}`")
 
-        c_exig1, c_exig2, c_exig3 = st.columns(3)
+        c_exig1, c_exig2, c_exig3 = st.columns([2, 1, 1])
         with c_exig1:
-            exigence_str = st.text_input("Libellé Exigence CCTP", value=mat_info['exigence_str'], disabled=not user_can_edit)
+            exigence_str = st.text_input("Exigence CCTP", value=mat_info['exigence_str'], disabled=not user_can_edit)
         with c_exig2:
-            exigence_mc = st.number_input("Seuil Moyenne Couche (pdmc %)", value=float(mat_info['exigence_mc']), step=0.5, disabled=not user_can_edit)
+            exigence_mc = st.number_input("Exigence pdmc (% OPN)", value=float(mat_info['exigence_mc']), step=0.5, disabled=not user_can_edit)
         with c_exig3:
-            exigence_fc = st.number_input("Seuil Fond de Couche (pdfc %)", value=float(mat_info['exigence_fc']), step=0.5, disabled=not user_can_edit)
+            exigence_fc = st.number_input("Exigence pdfc (% OPN)", value=float(mat_info['exigence_fc']), step=0.5, disabled=not user_can_edit)
 
         st.markdown("---")
         st.subheader("2. Points de Mesure de Compacité")
@@ -254,7 +256,6 @@ def show(supabase_client, can_edit=False, is_admin=False):
                 st.rerun()
 
         samples_calculated = []
-        to_delete_idx = None
 
         for i, sample in enumerate(st.session_state["compacite_samples"]):
             with st.expander(f"📍 Point N° {i+1} : Réf {sample['ref_num']} [{sample['type_mesure'].upper()}]", expanded=True):
@@ -325,17 +326,17 @@ def show(supabase_client, can_edit=False, is_admin=False):
                     st.error("❌ Connexion Supabase indisponible.")
                 else:
                     try:
-                        # VÉRIFICATION ANTI-DOUBLON (en mode création)
+                        # VÉRIFICATION ANTI-DOUBLON (Mode création)
                         if not is_editing_mode:
                             check_pv = supabase_client.table("pv_compacite").select("num_rapport").eq("num_rapport", num_rapport).execute()
                             if check_pv.data:
-                                st.error(f"⛔ **Enregistrement bloqué** : Le PV n° **{num_rapport}** existe déjà dans la base de données. Veuillez choisir un autre numéro de séquence.")
+                                st.error(f"⛔ **Enregistrement bloqué** : Le PV n° **{num_rapport}** existe déjà dans la base de données. Choisissez un autre numéro.")
                                 st.stop()
 
                         # ENREGISTREMENT DE L'EN-TÊTE
                         supabase_client.table("pv_compacite").upsert(header_data).execute()
 
-                        # NETTOYAGE ANCIENS POINTS (en mode modification)
+                        # NETTOYAGE ANCIENS POINTS (Mode modification)
                         if is_editing_mode:
                             supabase_client.table("essai_compacite").delete().eq("num_rapport", num_rapport).execute()
 
@@ -355,7 +356,7 @@ def show(supabase_client, can_edit=False, is_admin=False):
                         st.error(f"❌ Erreur lors de l'enregistrement : {e}")
 
     # ---------------------------------------------------------
-    # TAB 2 : HISTORIQUE, CONSULTATION & ADMINISTRATION
+    # TAB 2 : HISTORIQUE & ADMINISTRATION
     # ---------------------------------------------------------
     with tabs[1]:
         st.subheader("🖨️ Historique et Gestion des PV de Compacité")
