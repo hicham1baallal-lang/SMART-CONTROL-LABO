@@ -1,5 +1,4 @@
 import datetime
-import re
 import pandas as pd
 import streamlit as st
 from fpdf import FPDF
@@ -48,12 +47,11 @@ def generate_pv_teneur_eau_pdf(header_info, points_data):
     pdf.cell(190, 6, " I - Identification du matériau testé", 1, 1, "L", fill=True)
     pdf.set_font("Helvetica", "", 8)
     
-    # Remplacement "Référence Proctor" -> "Type de Proctor"
+    type_p = header_info.get('type_proctor', 'OPN')
     pdf.cell(95, 5, f"  Nature du matériau : {header_info.get('nature_materiau', '')}", 1, 0, "L")
-    pdf.cell(95, 5, f"  Type de Proctor : {header_info.get('type_proctor', 'OPN')}", 1, 1, "L")
+    pdf.cell(95, 5, f"  Type de Proctor : {type_p}", 1, 1, "L")
     
     pdf.cell(95, 5, f"  Lieu de prélèvement : {header_info.get('lieu_prelevement', '')}", 1, 0, "L")
-    type_p = header_info.get('type_proctor', 'OPN')
     pdf.cell(95, 5, f"  Teneur en eau {type_p} (%) : {header_info.get('w_opn', '')} %", 1, 1, "L")
 
     pdf.cell(95, 5, f"  Prélèvement effectué le : {header_info.get('date_prelevement', '')}", 1, 0, "L")
@@ -101,12 +99,6 @@ def generate_pv_teneur_eau_pdf(header_info, points_data):
     return bytes(pdf.output())
 
 
-# Fonction pour extraire le numéro du rapport (ex: "364" depuis "25/260/LGV/CS/364")
-def extract_report_num(num_rapport):
-    parts = re.findall(r'\d+', num_rapport)
-    return parts[-1] if parts else "364"
-
-
 # ==========================================
 # MODULE VUE STREAMLIT : TENEUR EN EAU
 # ==========================================
@@ -125,25 +117,36 @@ def show(supabase_client, can_edit=False):
         
         st.subheader("1. Informations Générales du PV")
         col_h1, col_h2, col_h3 = st.columns(3)
+        
         with col_h1:
-            num_rapport = st.text_input("N° Rapport d'essai", value="25/260/LGV/CS/364")
-            nature_mat = st.text_input("Nature du matériau", value="Sol - C1 B5")
-        with col_h2:
-            lieu_prelevement = st.text_input("Lieu de prélèvement / Zone", value="Zone T4 Axe V3G et V6G")
-            pk_zone = st.text_input("PK / Section", value="pk 8+540 à pk 8+600")
-        with col_h3:
-            date_prelevement = st.date_input("Date de prélèvement", value=datetime.date.today())
-            # Libellé mis à jour "Type de Proctor"
-            type_proctor = st.selectbox("Type de Proctor", ["OPN", "OPM"])
-            w_opn = st.number_input(f"Teneur en eau {type_proctor} (%)", value=12.0, step=0.1)
+            st.markdown("**N° Rapport d'essai**")
+            c_prefix, c_num = st.columns([2.5, 1.5])
+            with c_prefix:
+                # Préfixe fixe non modifiable
+                fixed_prefix = st.text_input("Préfixe fixe", value="25/260/LGV/CS/", disabled=True, key="fixed_prefix")
+            with c_num:
+                # Numéro d'ordre incrémentable (ex: 364, 365, 366...)
+                num_pv_seq = st.number_input("N° PV", value=364, step=1, key="num_pv_seq", disabled=not can_edit)
+            
+            # Reconstruction du numéro complet de rapport d'essai
+            num_rapport = f"{fixed_prefix}{num_pv_seq}"
+            st.info(f"Rapport : **{num_rapport}**")
 
-        # Extraction automatique du numéro de rapport (ex: "364")
-        prefix_num = extract_report_num(num_rapport)
+            nature_mat = st.text_input("Nature du matériau", value="Sol - C1 B5", disabled=not can_edit)
+
+        with col_h2:
+            lieu_prelevement = st.text_input("Lieu de prélèvement / Zone", value="Zone T4 Axe V3G et V6G", disabled=not can_edit)
+            pk_zone = st.text_input("PK / Section", value="pk 8+540 à pk 8+600", disabled=not can_edit)
+
+        with col_h3:
+            date_prelevement = st.date_input("Date de prélèvement", value=datetime.date.today(), disabled=not can_edit)
+            type_proctor = st.selectbox("Type de Proctor", ["OPN", "OPM"], disabled=not can_edit)
+            w_opn = st.number_input(f"Teneur en eau {type_proctor} (%)", value=12.0, step=0.1, disabled=not can_edit)
 
         st.markdown("---")
         st.subheader("2. Mesures & Prélèvements")
 
-        # Initialisation du tableau d'échantillons avec la référence au format <num_rapport>/<index>
+        # Initialisation de la liste des échantillons en session
         if "teneur_eau_samples" not in st.session_state:
             st.session_state["teneur_eau_samples"] = [
                 {"pk": pk_zone, "couche": 1, "m_humide": 240.5, "m_seche": 218.2, "m_tare": 39.8},
@@ -161,8 +164,8 @@ def show(supabase_client, can_edit=False):
 
         samples_calculated = []
         for i, sample in enumerate(st.session_state["teneur_eau_samples"]):
-            # Construction automatique obligatoire de la référence : <num_rapport>/<1,2,3...>
-            computed_ref = f"{prefix_num}/{i+1}"
+            # Génération automatique de la référence verrouillée (ex: 364/1, 364/2, 364/3...)
+            computed_ref = f"{num_pv_seq}/{i+1}"
             
             with st.expander(f"📍 Échantillon N° {i+1} : {computed_ref}", expanded=True):
                 c1, c2, c3, c4, c5 = st.columns(5)
@@ -182,7 +185,7 @@ def show(supabase_client, can_edit=False):
                 m_seche_nette = m_s - m_t
                 w_mesure = (m_eau / m_seche_nette * 100) if m_seche_nette > 0 else 0.0
 
-                # Évaluation État Hydrique
+                # Évaluation de l'État Hydrique
                 delta_w = w_mesure - w_opn
                 if abs(delta_w) <= 1.5:
                     etat_hydrique = "Moyen"
@@ -214,7 +217,7 @@ def show(supabase_client, can_edit=False):
 
         st.markdown("---")
         
-        # Action : Validation et Génération PDF / Enregistrement
+        # Actions : Téléchargement PDF / Enregistrement
         col_act1, col_act2 = st.columns(2)
         
         header_data = {
@@ -227,14 +230,14 @@ def show(supabase_client, can_edit=False):
             "w_opn": w_opn
         }
 
-        # Génération du rapport PDF
+        # Génération du PDF
         pdf_bytes = generate_pv_teneur_eau_pdf(header_data, samples_calculated)
 
         with col_act1:
             st.download_button(
                 label="📄 Télécharger le PV Officiel (PDF)",
                 data=pdf_bytes,
-                file_name=f"PV_Teneur_en_eau_{num_rapport.replace('/', '_')}.pdf",
+                file_name=f"PV_Teneur_en_eau_{num_pv_seq}.pdf",
                 mime="application/pdf",
                 use_container_width=True
             )
@@ -245,17 +248,17 @@ def show(supabase_client, can_edit=False):
                     st.error("❌ Connexion Supabase non disponible.")
                 else:
                     try:
-                        # Insertion de l'entête du PV
-                        res_pv = supabase_client.table("pv_teneur_eau").upsert(header_data).execute()
+                        # Sauvegarde de l'en-tête
+                        supabase_client.table("pv_teneur_eau").upsert(header_data).execute()
                         
-                        # Insertion des mesures des points
+                        # Sauvegarde des mesures des échantillons
                         for item in samples_calculated:
                             item["num_rapport"] = num_rapport
                             supabase_client.table("essai_teneur_eau").insert(item).execute()
 
-                        st.success("✅ Procès-Verbal et mesures enregistrés dans la base de données !")
+                        st.success(f"✅ Procès-Verbal {num_rapport} enregistré avec succès !")
                     except Exception as e:
-                        st.error(f"❌ Erreur de sauvegarde : {e}")
+                        st.error(f"❌ Erreur lors de l'enregistrement : {e}")
 
     # ---------------------------------------------------------
     # TAB 2 : HISTORIQUE ET CONSULTATION
