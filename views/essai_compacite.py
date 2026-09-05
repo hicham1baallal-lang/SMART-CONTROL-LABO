@@ -4,6 +4,25 @@ import streamlit as st
 from fpdf import FPDF
 
 # ==========================================
+# TABLEAU DE RÉFÉRENCE MATÉRIAUX & EXIGENCES
+# ==========================================
+REFERENTIEL_MATERIAUX = {
+    "GNT 0/31,5 – sous-couche LGV": {"exigence_str": "q1", "exigence_mc": 98.0, "exigence_fc": 95.0},
+    "GNT / Grave 0/60 – couche de forme LGV": {"exigence_str": "q3", "exigence_mc": 95.0, "exigence_fc": 92.0},
+    "GNT – PST": {"exigence_str": "95 % OPM", "exigence_mc": 95.0, "exigence_fc": 95.0},
+    "GNT / matériaux Type 1 ou Type 2 – remblais contigus OA": {"exigence_str": "q4 (zones courantes) / q3 (partie sup.)", "exigence_mc": 95.0, "exigence_fc": 92.0},
+    "Sols de remblai courant": {"exigence_str": "q4", "exigence_mc": 92.0, "exigence_fc": 90.0},
+    "Matériaux rocheux Rt2 – base de haut remblai": {"exigence_str": "q3", "exigence_mc": 95.0, "exigence_fc": 92.0},
+    "Sols en place – assise des remblais": {"exigence_str": "95 % OPM", "exigence_mc": 95.0, "exigence_fc": 95.0},
+    "Sols réutilisables / D2-D3 – remblais de fouilles": {"exigence_str": "≥ 95 % OPM", "exigence_mc": 95.0, "exigence_fc": 95.0},
+    "GNA/GNB 0/31,5 – couche de base": {"exigence_str": "≥ 95 % OPM", "exigence_mc": 95.0, "exigence_fc": 95.0},
+    "GNF 0/40 / GNT 0/20 – couche de fondation": {"exigence_str": "Critère stat : 90% ≥ 95% OPM & 100% ≥ 90% OPM", "exigence_mc": 95.0, "exigence_fc": 90.0},
+    "Matériau d'assise – lit de pose": {"exigence_str": "q4", "exigence_mc": 92.0, "exigence_fc": 90.0},
+    "Autre / Saisie Personnalisée": {"exigence_str": "Personnalisée", "exigence_mc": 95.0, "exigence_fc": 92.0}
+}
+
+
+# ==========================================
 # FONCTION DE CALCUL ET ÉVALUATION COMPACITÉ
 # ==========================================
 def evaluer_compacite(density_seche, density_ref, type_mesure="mc", exigence_mc=95.0, exigence_fc=92.0):
@@ -72,18 +91,19 @@ def generate_pv_compacite_pdf(header_info, points_data):
 
     pdf.cell(190, 6, f"  Lieu de prélèvement : {header_info.get('lieu_prelevement', '')}", 1, 1, "L")
 
-    pdf.cell(95, 6, f"  Type de matériau : {header_info.get('type_materiau', 'Remblai contigu')}", 1, 0, "L")
-    pdf.cell(95, 6, f"  Densité Proctor OPN : {header_info.get('densite_opn', '2.09')} t/m³", 1, 1, "L")
+    pdf.cell(95, 6, f"  Type de matériau : {header_info.get('type_materiau', '')[:48]}", 1, 0, "L")
+    pdf.cell(95, 6, f"  Densité Proctor OPN/OPM : {header_info.get('densite_opn', '2.09')} t/m³", 1, 1, "L")
 
-    pdf.cell(95, 6, f"  Teneur en eau optimale OPN : {header_info.get('w_opn', '6.3')} %", 1, 0, "L")
-    pdf.cell(95, 6, f"  Exigences CCTP : pdmc > {header_info.get('exigence_mc', 95)}% | pdfc > {header_info.get('exigence_fc', 92)}%", 1, 1, "L")
+    pdf.cell(95, 6, f"  Teneur en eau opt. : {header_info.get('w_opn', '6.3')} %", 1, 0, "L")
+    exig_str = header_info.get('exigence_str', '')
+    pdf.cell(95, 6, f"  Exigence CCTP : {exig_str} (mc > {header_info.get('exigence_mc', 95)}% | fc > {header_info.get('exigence_fc', 92)}%)", 1, 1, "L")
     pdf.ln(6)
 
     # --- SECTION II : RÉSULTATS DES ESSAIS DE COMPACITÉ ---
     pdf.set_font("Helvetica", "B", 9.5)
     pdf.cell(190, 7, " II - Résultats des Essais de Compacité", 1, 1, "L", fill=True)
 
-    headers = ["Réf", "Désignation", "D. Sèche", "D. Réf (OPN)", "w (%)", "% > 20mm", "IC (%)", "Commentaire"]
+    headers = ["Réf", "Désignation", "D. Sèche", "D. Réf", "w (%)", "% > 20mm", "IC (%)", "Commentaire"]
     widths = [10, 68, 18, 22, 16, 18, 16, 22]
 
     pdf.set_font("Helvetica", "B", 7.5)
@@ -167,6 +187,7 @@ def show(supabase_client, can_edit=False, is_admin=False):
         default_lieu = st.session_state.get("edit_comp_lieu", "OA-SOUS-RN11/12éme couche de remblai contigu du plot 2 gauche (Inferieur 1,50m)")
         default_d_opn = float(st.session_state.get("edit_comp_d_opn", 2.09))
         default_w_opn = float(st.session_state.get("edit_comp_w_opn", 6.3))
+        default_mat = st.session_state.get("edit_comp_mat", "GNT / matériaux Type 1 ou Type 2 – remblais contigus OA")
 
         with col_h1:
             st.markdown("**N° Rapport d'essai**")
@@ -183,19 +204,29 @@ def show(supabase_client, can_edit=False, is_admin=False):
             num_dossier = st.text_input("N° Dossier", value=default_dossier, disabled=not user_can_edit)
 
         with col_h2:
-            lieu_prelevement = st.text_area("Lieu / Zone de prélèvement", value=default_lieu, height=110, disabled=not user_can_edit)
-            type_materiau = st.text_input("Type de matériau", value="Remblai contigu", disabled=not user_can_edit)
+            lieu_prelevement = st.text_area("Lieu / Zone de prélèvement", value=default_lieu, height=90, disabled=not user_can_edit)
+            
+            # FILTRAGE / SÉLECTION PAR TYPE DE MATÉRIAU ET EXIGENCES ASSOCIES
+            mat_keys = list(REFERENTIEL_MATERIAUX.keys())
+            default_mat_idx = mat_keys.index(default_mat) if default_mat in mat_keys else 3
+            type_materiau = st.selectbox("Matériau / Famille", options=mat_keys, index=default_mat_idx, disabled=not user_can_edit)
 
         with col_h3:
             date_prelevement = st.date_input("Date du prélèvement", value=datetime.date.today(), disabled=not user_can_edit)
-            densite_opn = st.number_input("Densité Proctor OPN (t/m³)", value=default_d_opn, step=0.01, disabled=not user_can_edit)
-            w_opn = st.number_input("Teneur en eau opt. OPN (%)", value=default_w_opn, step=0.1, disabled=not user_can_edit)
+            densite_opn = st.number_input("Densité Réf Proctor (t/m³)", value=default_d_opn, step=0.01, disabled=not user_can_edit)
+            w_opn = st.number_input("Teneur en eau opt. (%)", value=default_w_opn, step=0.1, disabled=not user_can_edit)
 
-        c_exig1, c_exig2 = st.columns(2)
+        # RÉCUPÉRATION ET AFFICHAGE AUTOMATIQUE DES EXIGENCES D'APRÈS LE TABLEAU
+        mat_info = REFERENTIEL_MATERIAUX[type_materiau]
+        st.info(f"🎯 **Exigence CCTP définie :** `{mat_info['exigence_str']}`")
+
+        c_exig1, c_exig2, c_exig3 = st.columns(3)
         with c_exig1:
-            exigence_mc = st.number_input("Exigence pdmc (% OPN)", value=95.0, step=1.0, disabled=not user_can_edit)
+            exigence_str = st.text_input("Libellé Exigence CCTP", value=mat_info['exigence_str'], disabled=not user_can_edit)
         with c_exig2:
-            exigence_fc = st.number_input("Exigence pdfc (% OPN)", value=92.0, step=1.0, disabled=not user_can_edit)
+            exigence_mc = st.number_input("Seuil Moyenne Couche (pdmc %)", value=float(mat_info['exigence_mc']), step=0.5, disabled=not user_can_edit)
+        with c_exig3:
+            exigence_fc = st.number_input("Seuil Fond de Couche (pdfc %)", value=float(mat_info['exigence_fc']), step=0.5, disabled=not user_can_edit)
 
         st.markdown("---")
         st.subheader("2. Points de Mesure de Compacité")
@@ -268,6 +299,7 @@ def show(supabase_client, can_edit=False, is_admin=False):
             "lieu_prelevement": lieu_prelevement,
             "date_prelevement": str(date_prelevement),
             "type_materiau": type_materiau,
+            "exigence_str": exigence_str,
             "densite_opn": densite_opn,
             "w_opn": w_opn,
             "exigence_mc": exigence_mc,
@@ -364,7 +396,7 @@ def show(supabase_client, can_edit=False, is_admin=False):
                             with c_info2:
                                 st.markdown(f"**Date Prélèvement :** {selected_pv.get('date_prelevement', 'N/A')}")
                                 st.markdown(f"**Matériau :** {selected_pv.get('type_materiau', 'N/A')}")
-                                st.markdown(f"**Densité OPN :** {selected_pv.get('densite_opn', 'N/A')} t/m³ | **w OPN :** {selected_pv.get('w_opn', 'N/A')} %")
+                                st.markdown(f"**Exigence CCTP :** `{selected_pv.get('exigence_str', 'N/A')}`")
 
                             st.markdown("#### Points de mesure :")
                             if samples_data:
@@ -398,6 +430,7 @@ def show(supabase_client, can_edit=False, is_admin=False):
                                 st.session_state["edit_comp_num_seq"] = seq_val
                                 st.session_state["edit_comp_dossier"] = selected_pv.get("num_dossier", "")
                                 st.session_state["edit_comp_lieu"] = selected_pv.get("lieu_prelevement", "")
+                                st.session_state["edit_comp_mat"] = selected_pv.get("type_materiau", "")
                                 st.session_state["edit_comp_d_opn"] = selected_pv.get("densite_opn", 2.09)
                                 st.session_state["edit_comp_w_opn"] = selected_pv.get("w_opn", 6.3)
 
