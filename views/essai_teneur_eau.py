@@ -124,7 +124,7 @@ def show(supabase_client, can_edit=False):
             with c_prefix:
                 fixed_prefix = st.text_input("Préfixe fixe", value="25/260/LGV/CS/", disabled=True, key="fixed_prefix")
             with c_num:
-                num_pv_seq = st.number_input("N° PV", value=364, step=1, key="num_pv_seq", disabled=not can_edit)
+                num_pv_seq = st.number_input("N° PV", value=371, step=1, key="num_pv_seq", disabled=not can_edit)
             
             num_rapport = f"{fixed_prefix}{num_pv_seq}"
             st.info(f"Rapport : **{num_rapport}**")
@@ -241,21 +241,25 @@ def show(supabase_client, can_edit=False):
                     st.error("❌ Connexion Supabase non disponible.")
                 else:
                     try:
-                        # ⚠️ Vérification si le rapport existe déjà
-                        check_exist = supabase_client.table("pv_teneur_eau").select("num_rapport").eq("num_rapport", num_rapport).execute()
-                        
-                        if check_exist.data:
-                            st.warning(f"⚠️ **Saisie en double impossible** : Le rapport **{num_rapport}** existe déjà dans la base de données ! Veuillez changer le N° PV.")
+                        # 1. Liste des références d'échantillons à enregistrer
+                        refs_to_check = [s["ref_ech"] for s in samples_calculated]
+
+                        # 2. Vérification d'existence dans la table `essai_teneur_eau`
+                        check_samples = supabase_client.table("essai_teneur_eau").select("ref_ech").in_("ref_ech", refs_to_check).execute()
+
+                        if check_samples.data:
+                            existing_refs = [item["ref_ech"] for item in check_samples.data]
+                            st.error(f"⛔ **Saisie bloquée** : Les références d'échantillons suivantes existent déjà dans Supabase : **{', '.join(existing_refs)}**. Veuillez incrémenter le N° PV.")
                         else:
-                            # Insertion de l'en-tête (Méthode insert au lieu d'upsert)
-                            supabase_client.table("pv_teneur_eau").insert(header_data).execute()
+                            # 3. Insertion de l'en-tête du PV
+                            supabase_client.table("pv_teneur_eau").upsert(header_data).execute()
                             
-                            # Insertion des mesures des échantillons
+                            # 4. Insertion des mesures d'échantillons
                             for item in samples_calculated:
                                 item["num_rapport"] = num_rapport
                                 supabase_client.table("essai_teneur_eau").insert(item).execute()
 
-                            st.success(f"✅ Procès-Verbal **{num_rapport}** enregistré avec succès !")
+                            st.success(f"✅ Procès-Verbal **{num_rapport}** et ses échantillons enregistrés avec succès !")
                     except Exception as e:
                         st.error(f"❌ Erreur lors de l'enregistrement : {e}")
 
