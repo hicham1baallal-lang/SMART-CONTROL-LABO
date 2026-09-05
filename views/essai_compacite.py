@@ -15,7 +15,6 @@ def evaluer_compacite(density_seche, density_ref, type_mesure="mc", exigence_mc=
         return 0.0, "N/A"
 
     ic = (density_seche / density_ref) * 100.0
-    
     seuil = exigence_mc if type_mesure == "mc" else exigence_fc
     conforme = ic >= seuil
     
@@ -24,7 +23,7 @@ def evaluer_compacite(density_seche, density_ref, type_mesure="mc", exigence_mc=
 
 
 # ==========================================
-# CLASSE DE GÉNÉRATION DU PV EN PDF (FORMAT LPEE - A4)
+# CLASSE DE GÉNÉRATION DU PV EN PDF (FORMAT LPEE - OPTIMISÉ A4)
 # ==========================================
 class LPEECompacitePDF(FPDF):
     def header(self):
@@ -92,7 +91,7 @@ def generate_pv_compacite_pdf(header_info, points_data):
         pdf.cell(widths[i], 7, h, 1, 0, "C")
     pdf.ln()
 
-    # Corps du tableau avec hauteur adaptable
+    # Corps du tableau avec hauteur adaptable pour équilibrer la page A4
     pdf.set_font("Helvetica", "", 7.5)
     nb_samples = max(len(points_data), 1)
     row_height = 8 if nb_samples <= 6 else 6.5
@@ -113,7 +112,7 @@ def generate_pv_compacite_pdf(header_info, points_data):
     pdf.set_font("Helvetica", "I", 7.5)
     pdf.cell(0, 4, "Légende : fc = fond de couche de la couche compactée | mc = moyenne sur toute l'épaisseur de la couche compactée", 0, 1, "L")
 
-    # --- BLOC SIGNATURES (POSITIONNÉ VERS LE BAS) ---
+    # --- BLOC SIGNATURES (POSITIONNÉ ÉQUILIBRÉ VERS LE BAS DU A4) ---
     if pdf.get_y() < 220:
         pdf.set_y(220)
     else:
@@ -140,7 +139,6 @@ def generate_pv_compacite_pdf(header_info, points_data):
 # MODULE VUE STREAMLIT : CONTRÔLE DE COMPACITÉ
 # ==========================================
 def show(supabase_client, can_edit=False, is_admin=False):
-    # DÉTECTION DU RÔLE DEPUIS LE SESSION_STATE
     user_role = str(st.session_state.get("role", st.session_state.get("user_role", ""))).upper()
     user_is_admin = is_admin or ("ADMIN" in user_role)
     user_can_edit = can_edit or user_is_admin or ("LABO" in user_role)
@@ -295,14 +293,21 @@ def show(supabase_client, can_edit=False, is_admin=False):
                     st.error("❌ Connexion Supabase indisponible.")
                 else:
                     try:
-                        # Sauvegarde En-tête PV
+                        # VÉRIFICATION ANTI-DOUBLON (en mode création)
+                        if not is_editing_mode:
+                            check_pv = supabase_client.table("pv_compacite").select("num_rapport").eq("num_rapport", num_rapport).execute()
+                            if check_pv.data:
+                                st.error(f"⛔ **Enregistrement bloqué** : Le PV n° **{num_rapport}** existe déjà dans la base de données. Veuillez choisir un autre numéro de séquence.")
+                                st.stop()
+
+                        # ENREGISTREMENT DE L'EN-TÊTE
                         supabase_client.table("pv_compacite").upsert(header_data).execute()
 
-                        # Suppression anciens points si mode modification
+                        # NETTOYAGE ANCIENS POINTS (en mode modification)
                         if is_editing_mode:
                             supabase_client.table("essai_compacite").delete().eq("num_rapport", num_rapport).execute()
 
-                        # Insertion des points de mesure
+                        # INSERTION DES POINTS DE MESURE
                         for item in samples_calculated:
                             item_to_insert = item.copy()
                             item_to_insert["num_rapport"] = num_rapport
