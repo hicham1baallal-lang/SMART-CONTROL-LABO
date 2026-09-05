@@ -1,4 +1,5 @@
 import datetime
+import re
 import pandas as pd
 import streamlit as st
 from fpdf import FPDF
@@ -41,17 +42,19 @@ def generate_pv_teneur_eau_pdf(header_info, points_data):
     pdf.cell(0, 5, f"Rapport d'Essai n° : {header_info.get('num_rapport', 'N/A')}", 0, 1, "R")
     pdf.ln(2)
 
-    # I - Demandeur / Identification
+    # I - Identification du matériau testé
     pdf.set_fill_color(240, 240, 240)
     pdf.set_font("Helvetica", "B", 9)
     pdf.cell(190, 6, " I - Identification du matériau testé", 1, 1, "L", fill=True)
     pdf.set_font("Helvetica", "", 8)
     
+    # Remplacement "Référence Proctor" -> "Type de Proctor"
     pdf.cell(95, 5, f"  Nature du matériau : {header_info.get('nature_materiau', '')}", 1, 0, "L")
-    pdf.cell(95, 5, f"  Référence Proctor : {header_info.get('ref_proctor', 'OPN')}", 1, 1, "L")
+    pdf.cell(95, 5, f"  Type de Proctor : {header_info.get('type_proctor', 'OPN')}", 1, 1, "L")
     
     pdf.cell(95, 5, f"  Lieu de prélèvement : {header_info.get('lieu_prelevement', '')}", 1, 0, "L")
-    pdf.cell(95, 5, f"  Teneur en eau OPN (%) : {header_info.get('w_opn', '')} %", 1, 1, "L")
+    type_p = header_info.get('type_proctor', 'OPN')
+    pdf.cell(95, 5, f"  Teneur en eau {type_p} (%) : {header_info.get('w_opn', '')} %", 1, 1, "L")
 
     pdf.cell(95, 5, f"  Prélèvement effectué le : {header_info.get('date_prelevement', '')}", 1, 0, "L")
     pdf.cell(95, 5, f"  PK : {header_info.get('pk_zone', '')}", 1, 1, "L")
@@ -62,7 +65,7 @@ def generate_pv_teneur_eau_pdf(header_info, points_data):
     pdf.cell(190, 6, " II - Résultats des essais", 1, 1, "L", fill=True)
     
     # En-têtes du tableau
-    headers = ["Référence", "Date Prél.", "PK / Localisation", "Couche", "w (%)", "w OPN (%)", "État Hydrique", "Observation"]
+    headers = ["Référence", "Date Prél.", "PK / Localisation", "Couche", "w (%)", f"w {type_p} (%)", "État Hydrique", "Observation"]
     widths = [22, 22, 42, 16, 18, 22, 24, 24]
     
     pdf.set_font("Helvetica", "B", 7.5)
@@ -98,8 +101,14 @@ def generate_pv_teneur_eau_pdf(header_info, points_data):
     return bytes(pdf.output())
 
 
+# Fonction pour extraire le numéro du rapport (ex: "364" depuis "25/260/LGV/CS/364")
+def extract_report_num(num_rapport):
+    parts = re.findall(r'\d+', num_rapport)
+    return parts[-1] if parts else "364"
+
+
 # ==========================================
-# MODULE VUE STREAMLIT : TENUERE EN EAU
+# MODULE VUE STREAMLIT : TENEUR EN EAU
 # ==========================================
 def show(supabase_client, can_edit=False):
     st.title("💧 Essai de Teneur en Eau (NM EN 1097-5)")
@@ -124,35 +133,41 @@ def show(supabase_client, can_edit=False):
             pk_zone = st.text_input("PK / Section", value="pk 8+540 à pk 8+600")
         with col_h3:
             date_prelevement = st.date_input("Date de prélèvement", value=datetime.date.today())
-            ref_proctor = st.selectbox("Référence Proctor", ["OPN", "OPM"])
-            w_opn = st.number_input("Teneur en eau OPN/OPM (%)", value=12.0, step=0.1)
+            # Libellé mis à jour "Type de Proctor"
+            type_proctor = st.selectbox("Type de Proctor", ["OPN", "OPM"])
+            w_opn = st.number_input(f"Teneur en eau {type_proctor} (%)", value=12.0, step=0.1)
+
+        # Extraction automatique du numéro de rapport (ex: "364")
+        prefix_num = extract_report_num(num_rapport)
 
         st.markdown("---")
         st.subheader("2. Mesures & Prélèvements")
 
-        # Initialisation du tableau dynamique de sous-échantillons dans la session
+        # Initialisation du tableau d'échantillons avec la référence au format <num_rapport>/<index>
         if "teneur_eau_samples" not in st.session_state:
             st.session_state["teneur_eau_samples"] = [
-                {"ref_ech": "364/1", "pk": "pk 8+540 à pk 8+600", "couche": 1, "m_humide": 240.5, "m_seche": 218.2, "m_tare": 39.8},
-                {"ref_ech": "364/2", "pk": "pk 8+540 à pk 8+600", "couche": 1, "m_humide": 238.1, "m_seche": 217.0, "m_tare": 38.0},
+                {"pk": pk_zone, "couche": 1, "m_humide": 240.5, "m_seche": 218.2, "m_tare": 39.8},
+                {"pk": pk_zone, "couche": 1, "m_humide": 238.1, "m_seche": 217.0, "m_tare": 38.0},
+                {"pk": pk_zone, "couche": 1, "m_humide": 239.0, "m_seche": 217.5, "m_tare": 38.5},
             ]
 
         col_b1, col_b2 = st.columns([1, 4])
         with col_b1:
             if st.button("➕ Ajouter un échantillon", disabled=not can_edit):
-                idx = len(st.session_state["teneur_eau_samples"]) + 1
-                prefix = num_rapport.split('/')[-1] if '/' in num_rapport else "364"
                 st.session_state["teneur_eau_samples"].append({
-                    "ref_ech": f"{prefix}/{idx}", "pk": pk_zone, "couche": 1, "m_humide": 200.0, "m_seche": 180.0, "m_tare": 30.0
+                    "pk": pk_zone, "couche": 1, "m_humide": 200.0, "m_seche": 180.0, "m_tare": 30.0
                 })
                 st.rerun()
 
         samples_calculated = []
         for i, sample in enumerate(st.session_state["teneur_eau_samples"]):
-            with st.expander(f"📍 Échantillon N° {i+1} : {sample['ref_ech']}", expanded=True):
+            # Construction automatique obligatoire de la référence : <num_rapport>/<1,2,3...>
+            computed_ref = f"{prefix_num}/{i+1}"
+            
+            with st.expander(f"📍 Échantillon N° {i+1} : {computed_ref}", expanded=True):
                 c1, c2, c3, c4, c5 = st.columns(5)
                 with c1:
-                    ref = st.text_input("Référence", value=sample["ref_ech"], key=f"ref_{i}", disabled=not can_edit)
+                    ref = st.text_input("Référence", value=computed_ref, key=f"ref_{i}", disabled=True)
                 with c2:
                     pk_item = st.text_input("PK / Localisation", value=sample["pk"], key=f"pk_{i}", disabled=not can_edit)
                 with c3:
@@ -184,7 +199,7 @@ def show(supabase_client, can_edit=False):
                 st.caption(f"📊 **w mesurée** = `{w_mesure:.1f} %` | **État Hydrique** = `{etat_hydrique}` | **Observation** = `{obs}`")
 
                 samples_calculated.append({
-                    "ref_ech": ref,
+                    "ref_ech": computed_ref,
                     "date_prel": str(date_prelevement),
                     "pk": pk_item,
                     "couche": sample["couche"],
@@ -208,7 +223,7 @@ def show(supabase_client, can_edit=False):
             "lieu_prelevement": lieu_prelevement,
             "pk_zone": pk_zone,
             "date_prelevement": str(date_prelevement),
-            "ref_proctor": ref_proctor,
+            "type_proctor": type_proctor,
             "w_opn": w_opn
         }
 
