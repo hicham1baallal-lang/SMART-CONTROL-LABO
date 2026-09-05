@@ -4,18 +4,33 @@ import streamlit as st
 from fpdf import FPDF
 
 # ==========================================
+# UTILITAIRE NETTOYAGE TEXTE UTF-8 POUR FPDF (HELVETICA)
+# ==========================================
+def clean_text(text):
+    """
+    Nettoie et convertit une chaîne UTF-8 pour la rendre compatible avec le codage latin-1 de FPDF.
+    """
+    if text is None:
+        return ""
+    text_str = str(text)
+    # Remplacement des caractères typographiques courants incompatibles avec latin-1
+    text_str = text_str.replace("–", "-").replace("—", "-").replace("’", "'").replace("³", "3")
+    return text_str.encode("latin-1", "replace").decode("latin-1")
+
+
+# ==========================================
 # TABLEAU DE RÉFÉRENCE MATÉRIAUX & EXIGENCES CCTP
 # ==========================================
 REFERENTIEL_MATERIAUX = {
-    "GNT 0/31,5 – sous-couche LGV": {"exigence_str": "q1", "exigence_mc": 98.0, "exigence_fc": 95.0},
-    "GNT / Grave 0/60 – couche de forme LGV": {"exigence_str": "q3", "exigence_mc": 98.5, "exigence_fc": 96.0},
-    "GNT – PST": {"exigence_str": "95 % OPM", "exigence_mc": 95.0, "exigence_fc": 95.0},
-    "GNT / matériaux Type 1 ou Type 2 – remblais contigus OA": {"exigence_str": "q4 (zones courantes) / q3 (partie sup.)", "exigence_mc": 98.5, "exigence_fc": 96.0},
+    "GNT 0/31,5 - sous-couche LGV": {"exigence_str": "q1", "exigence_mc": 98.0, "exigence_fc": 95.0},
+    "GNT / Grave 0/60 - couche de forme LGV": {"exigence_str": "q3", "exigence_mc": 98.5, "exigence_fc": 96.0},
+    "GNT - PST": {"exigence_str": "95 % OPM", "exigence_mc": 95.0, "exigence_fc": 95.0},
+    "GNT / matériaux Type 1 ou Type 2 - remblais contigus OA": {"exigence_str": "q4 (zones courantes) / q3 (partie sup.)", "exigence_mc": 98.5, "exigence_fc": 96.0},
     "Sols de remblai courant": {"exigence_str": "q4", "exigence_mc": 95.0, "exigence_fc": 92.0},
-    "Sols en place – assise des remblais": {"exigence_str": "95 % OPM", "exigence_mc": 95.0, "exigence_fc": 95.0},
-    "Sols réutilisables / D2-D3 – remblais de fouilles": {"exigence_str": "≥ 95 % OPM", "exigence_mc": 95.0, "exigence_fc": 95.0},
-    "GNA/GNB 0/31,5 – couche de base": {"exigence_str": "≥ 98 % OPM", "exigence_mc": 98.0, "exigence_fc": 98.0},
-    "GNF 0/40  – couche de fondation": {"exigence_str": "Critère stat : 95% ≥ 95% OPM & 100% ≥ 95% OPM", "exigence_mc": 95.0, "exigence_fc": 95.0},
+    "Sols en place - assise des remblais": {"exigence_str": "95 % OPM", "exigence_mc": 95.0, "exigence_fc": 95.0},
+    "Sols réutilisables / D2-D3 - remblais de fouilles": {"exigence_str": ">= 95 % OPM", "exigence_mc": 95.0, "exigence_fc": 95.0},
+    "GNA/GNB 0/31,5 - couche de base": {"exigence_str": ">= 98 % OPM", "exigence_mc": 98.0, "exigence_fc": 98.0},
+    "GNF 0/40 - couche de fondation": {"exigence_str": "Critère stat : 95% >= 95% OPM & 100% >= 95% OPM", "exigence_mc": 95.0, "exigence_fc": 95.0},
     "Autre / Saisie Personnalisée": {"exigence_str": "Personnalisée", "exigence_mc": 95.0, "exigence_fc": 92.0}
 }
 
@@ -41,11 +56,11 @@ def evaluer_compacite(density_seche, density_ref, type_mesure="mc", exigence_mc=
 class LPEECompacitePDF(FPDF):
     def header(self):
         self.set_font("Helvetica", "B", 11)
-        self.cell(0, 5, "LABORATOIRE PUBLIC D'ESSAIS ET D'ETUDES - LPEE", 0, 1, "C")
+        self.cell(0, 5, clean_text("LABORATOIRE PUBLIC D'ESSAIS ET D'ETUDES - LPEE"), 0, 1, "C")
         self.set_font("Helvetica", "B", 9)
-        self.cell(0, 4, "CENTRE TECHNIQUE REGIONAL DE CASABLANCA-SETTAT-BENI MELLAL (CTR-CSB)", 0, 1, "C")
+        self.cell(0, 4, clean_text("CENTRE TECHNIQUE REGIONAL DE CASABLANCA-SETTAT-BENI MELLAL (CTR-CSB)"), 0, 1, "C")
         self.set_font("Helvetica", "I", 9)
-        self.cell(0, 4, "Laboratoire de Contrôle Externe - LGV CASA SUD", 0, 1, "C")
+        self.cell(0, 4, clean_text("Laboratoire de Contrôle Externe - LGV CASA SUD"), 0, 1, "C")
         self.ln(2)
         self.line(10, 24, 200, 24)
         self.ln(5)
@@ -53,7 +68,7 @@ class LPEECompacitePDF(FPDF):
     def footer(self):
         self.set_y(-15)
         self.set_font("Helvetica", "I", 8)
-        self.cell(0, 10, f"CTR-CSB - Page {self.page_no()}/{{nb}}", 0, 0, "C")
+        self.cell(0, 10, clean_text(f"CTR-CSB - Page {self.page_no()}/{{nb}}"), 0, 0, "C")
 
 
 def generate_pv_compacite_pdf(header_info, points_data):
@@ -63,46 +78,47 @@ def generate_pv_compacite_pdf(header_info, points_data):
 
     # --- TITRE DU RAPPORT ---
     pdf.set_font("Helvetica", "B", 13)
-    pdf.cell(0, 7, "PROCES VERBAL DE CONTROLE DE COMPACITE", 0, 1, "C")
+    pdf.cell(0, 7, clean_text("PROCES VERBAL DE CONTROLE DE COMPACITE"), 0, 1, "C")
     pdf.set_font("Helvetica", "B", 9)
-    pdf.cell(0, 5, "Références de normes : NF P 94-093 / NF P 94-061-2", 0, 1, "C")
+    pdf.cell(0, 5, clean_text("Références de normes : NF P 94-093 / NF P 94-061-2"), 0, 1, "C")
     pdf.ln(3)
 
     # N° RAPPORT & DOSSIER
     pdf.set_font("Helvetica", "B", 9)
-    pdf.cell(100, 5, f"N° Dossier : {header_info.get('num_dossier', 'N/A')}", 0, 0, "L")
-    pdf.cell(90, 5, f"Rapport d'Essai n° : {header_info.get('num_rapport', 'N/A')}", 0, 1, "R")
+    pdf.cell(100, 5, clean_text(f"N° Dossier : {header_info.get('num_dossier', 'N/A')}"), 0, 0, "L")
+    pdf.cell(90, 5, clean_text(f"Rapport d'Essai n° : {header_info.get('num_rapport', 'N/A')}"), 0, 1, "R")
     pdf.ln(3)
 
     # --- SECTION I : IDENTIFICATION DU PROJET & DU MATÉRIAU ---
     pdf.set_fill_color(230, 230, 230)
     pdf.set_font("Helvetica", "B", 9.5)
-    pdf.cell(190, 7, " I - Informations Générales & Matériau", 1, 1, "L", fill=True)
+    pdf.cell(190, 7, clean_text(" I - Informations Générales & Matériau"), 1, 1, "L", fill=True)
     pdf.set_font("Helvetica", "", 8.5)
 
-    pdf.cell(95, 6, f"  Client : {header_info.get('client', 'TGCC')}", 1, 0, "L")
-    pdf.cell(95, 6, f"  Date du prélèvement : {header_info.get('date_prelevement', '')}", 1, 1, "L")
+    pdf.cell(95, 6, clean_text(f"  Client : {header_info.get('client', 'TGCC')}"), 1, 0, "L")
+    pdf.cell(95, 6, clean_text(f"  Date du prélèvement : {header_info.get('date_prelevement', '')}"), 1, 1, "L")
 
-    pdf.cell(190, 6, f"  Lieu de prélèvement : {header_info.get('lieu_prelevement', '')}", 1, 1, "L")
+    pdf.cell(190, 6, clean_text(f"  Lieu de prélèvement : {header_info.get('lieu_prelevement', '')}"), 1, 1, "L")
 
-    pdf.cell(95, 6, f"  Type de matériau : {header_info.get('type_materiau', '')[:48]}", 1, 0, "L")
-    pdf.cell(95, 6, f"  Densité Proctor OPN/OPM : {header_info.get('densite_opn', '2.09')} t/m³", 1, 1, "L")
+    type_mat_str = clean_text(header_info.get('type_materiau', '')[:48])
+    pdf.cell(95, 6, f"  Type de materiau : {type_mat_str}", 1, 0, "L")
+    pdf.cell(95, 6, clean_text(f"  Densité Proctor OPN/OPM : {header_info.get('densite_opn', '2.09')} t/m3"), 1, 1, "L")
 
-    pdf.cell(95, 6, f"  Teneur en eau opt. : {header_info.get('w_opn', '6.3')} %", 1, 0, "L")
-    exig_str = header_info.get('exigence_str', '')
-    pdf.cell(95, 6, f"  Exigence CCTP : {exig_str} (mc > {header_info.get('exigence_mc', 95)}% | fc > {header_info.get('exigence_fc', 92)}%)", 1, 1, "L")
+    pdf.cell(95, 6, clean_text(f"  Teneur en eau opt. : {header_info.get('w_opn', '6.3')} %"), 1, 0, "L")
+    exig_str = clean_text(header_info.get('exigence_str', ''))
+    pdf.cell(95, 6, clean_text(f"  Exigence CCTP : {exig_str} (mc > {header_info.get('exigence_mc', 95)}% | fc > {header_info.get('exigence_fc', 92)}%)"), 1, 1, "L")
     pdf.ln(6)
 
     # --- SECTION II : RÉSULTATS DES ESSAIS DE COMPACITÉ ---
     pdf.set_font("Helvetica", "B", 9.5)
-    pdf.cell(190, 7, " II - Résultats des Essais de Compacité", 1, 1, "L", fill=True)
+    pdf.cell(190, 7, clean_text(" II - Résultats des Essais de Compacité"), 1, 1, "L", fill=True)
 
     headers = ["Réf", "Désignation", "D. Sèche", "D. Réf", "w (%)", "% > 20mm", "IC (%)", "Commentaire"]
     widths = [10, 68, 18, 22, 16, 18, 16, 22]
 
     pdf.set_font("Helvetica", "B", 7.5)
     for i, h in enumerate(headers):
-        pdf.cell(widths[i], 7, h, 1, 0, "C")
+        pdf.cell(widths[i], 7, clean_text(h), 1, 0, "C")
     pdf.ln()
 
     # Corps du tableau avec hauteur adaptable pour équilibrer la page A4
@@ -113,18 +129,18 @@ def generate_pv_compacite_pdf(header_info, points_data):
     for p in points_data:
         desig = f"{p.get('designation', '')} ({p.get('type_mesure', 'mc')})"
         
-        pdf.cell(widths[0], row_height, str(p.get("ref_num", "")), 1, 0, "C")
-        pdf.cell(widths[1], row_height, desig[:45], 1, 0, "L")
+        pdf.cell(widths[0], row_height, clean_text(str(p.get("ref_num", ""))), 1, 0, "C")
+        pdf.cell(widths[1], row_height, clean_text(desig[:45]), 1, 0, "L")
         pdf.cell(widths[2], row_height, f"{float(p.get('densite_seche', 0.0)):.3f}", 1, 0, "C")
         pdf.cell(widths[3], row_height, f"{float(p.get('densite_ref', 0.0)):.3f}", 1, 0, "C")
         pdf.cell(widths[4], row_height, f"{float(p.get('w_mesure', 0.0)):.1f}%", 1, 0, "C")
         pdf.cell(widths[5], row_height, f"{float(p.get('refus_20mm', 0.0)):.1f}", 1, 0, "C")
         pdf.cell(widths[6], row_height, f"{float(p.get('ic', 0.0)):.1f}%", 1, 0, "C")
-        pdf.cell(widths[7], row_height, str(p.get("observation", "Conforme")), 1, 1, "C")
+        pdf.cell(widths[7], row_height, clean_text(str(p.get("observation", "Conforme"))), 1, 1, "C")
 
     pdf.ln(3)
     pdf.set_font("Helvetica", "I", 7.5)
-    pdf.cell(0, 4, "Légende : fc = fond de couche de la couche compactée | mc = moyenne sur toute l'épaisseur de la couche compactée", 0, 1, "L")
+    pdf.cell(0, 4, clean_text("Légende : fc = fond de couche de la couche compactée | mc = moyenne sur toute l'épaisseur de la couche compactée"), 0, 1, "L")
 
     # --- BLOC SIGNATURES ---
     if pdf.get_y() < 220:
@@ -133,18 +149,18 @@ def generate_pv_compacite_pdf(header_info, points_data):
         pdf.ln(8)
 
     pdf.set_font("Helvetica", "B", 8.5)
-    pdf.cell(63, 5, "REÇU PAR LE CLIENT", 0, 0, "C")
-    pdf.cell(64, 5, "LE COORDINATEUR DES ESSAIS", 0, 0, "C")
-    pdf.cell(63, 5, "LE CHEF DU LABORATOIRE", 0, 1, "C")
+    pdf.cell(63, 5, clean_text("REÇU PAR LE CLIENT"), 0, 0, "C")
+    pdf.cell(64, 5, clean_text("LE COORDINATEUR DES ESSAIS"), 0, 0, "C")
+    pdf.cell(63, 5, clean_text("LE CHEF DU LABORATOIRE"), 0, 1, "C")
 
     pdf.set_font("Helvetica", "I", 8.5)
-    pdf.cell(63, 5, "Nom: TGCC", 0, 0, "C")
-    pdf.cell(64, 5, "Nom: O. IKEN", 0, 0, "C")
-    pdf.cell(63, 5, "Nom: H. BAALLAL", 0, 1, "C")
+    pdf.cell(63, 5, clean_text("Nom: TGCC"), 0, 0, "C")
+    pdf.cell(64, 5, clean_text("Nom: O. IKEN"), 0, 0, "C")
+    pdf.cell(63, 5, clean_text("Nom: H. BAALLAL"), 0, 1, "C")
 
-    pdf.cell(63, 4, "Visa:", 0, 0, "C")
-    pdf.cell(64, 4, "Visa:", 0, 0, "C")
-    pdf.cell(63, 4, "Visa:", 0, 1, "C")
+    pdf.cell(63, 4, clean_text("Visa:"), 0, 0, "C")
+    pdf.cell(64, 4, clean_text("Visa:"), 0, 0, "C")
+    pdf.cell(63, 4, clean_text("Visa:"), 0, 1, "C")
 
     return bytes(pdf.output())
 
@@ -181,7 +197,7 @@ def show(supabase_client, can_edit=False, is_admin=False):
         default_lieu = st.session_state.get("edit_comp_lieu", "OA-SOUS-RN11/12éme couche de remblai contigu du plot 2 gauche (Inferieur 1,50m)")
         default_d_opn = float(st.session_state.get("edit_comp_d_opn", 2.09))
         default_w_opn = float(st.session_state.get("edit_comp_w_opn", 6.3))
-        default_mat = st.session_state.get("edit_comp_mat", "GNT / matériaux Type 1 ou Type 2 – remblais contigus OA")
+        default_mat = st.session_state.get("edit_comp_mat", "GNT / matériaux Type 1 ou Type 2 - remblais contigus OA")
 
         with col_h1:
             st.markdown("**N° Rapport d'essai**")
