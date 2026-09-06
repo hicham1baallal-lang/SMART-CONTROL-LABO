@@ -5,11 +5,14 @@ import plotly.graph_objects as go
 from datetime import datetime
 import io
 
+# ------------------------------------------------------------------------------
+# CONSTANTES & FONCTIONS UTILES
+# ------------------------------------------------------------------------------
 STANDARD_SIEVES = [0.063, 0.08, 0.1, 0.125, 0.16, 0.2, 0.25, 0.315, 0.4, 0.5, 0.63, 0.8, 1.0, 1.25, 1.6, 2.0, 2.5, 3.15, 4.0, 5.0, 5.6, 6.3, 8.0, 10.0, 12.5, 14.0, 16.0, 20.0, 25.0, 28.0, 31.5, 40.0]
 
 def get_passant_at_sieve(sieves, passings, target_sieve):
     """ Calcule ou interpole le passant au tamis cible """
-    if target_sieve is None or np.isnan(target_sieve):
+    if target_sieve is None:
         return np.nan
     s_arr = np.array(sieves)
     p_arr = np.array(passings)
@@ -36,12 +39,17 @@ def compute_D95(sieves, passings):
             d_val = s_arr[i] + (95.0 - p_arr[i]) * (s_arr[i+1] - s_arr[i]) / (p_arr[i+1] - p_arr[i])
             return round(float(d_val), 2)
     
+    # Si > 95% partout ou < 95% partout
     closest_idx = (np.abs(p_arr - 95.0)).argmin()
     return round(float(s_arr[closest_idx]), 2)
 
-def init_session_state():
-    """ Initialise les clés nécessaires dans st.session_state """
+# ------------------------------------------------------------------------------
+# FONCTION PRINCIPALE EXPORTÉE (ROUTAGE APP.PY)
+# ------------------------------------------------------------------------------
+def show(supabase_client=None, can_edit=False, is_admin=False, **kwargs):
+    # INITIALISATION DU SESSION STATE
     if 'data_granulats' not in st.session_state:
+        # Données par défaut pré-remplies basées sur le PV modèle
         st.session_state['data_granulats'] = {
             'GII': {
                 'nom': 'Gravillons GII - 10/20',
@@ -101,11 +109,10 @@ def init_session_state():
             'commentaires': "Les essais d'identifications des granulats pour béton sont conformes aux exigences de la norme NF EN 12620 et NF P 18-545"
         }
 
-def show():
-    """ Fonction point d'entrée pour le routeur multi-pages Streamlit """
-    init_session_state()
-    
     st.title("🏗️ Module Identification des Granulats pour Béton")
+    
+    if not can_edit:
+        st.info("👁️ **Mode Consultation** : Vous êtes en lecture seule.")
 
     tabs = st.tabs([
         "1️⃣ Feuilles d'Essais Complets (GII, GI, SC, SD)",
@@ -113,9 +120,9 @@ def show():
         "3️⃣ Historique & Téléchargement de PV"
     ])
 
-    # --------------------------------------------------------------------------
+    # ------------------------------------------------------------------------------
     # FENÊTRE 1 : FEUILLES D'ESSAIS COMPLETS
-    # --------------------------------------------------------------------------
+    # ------------------------------------------------------------------------------
     with tabs[0]:
         st.header("Feuilles d'Analyse Granulométrique et Caractéristiques")
         
@@ -148,30 +155,33 @@ def show():
                 df_input,
                 num_rows="dynamic",
                 use_container_width=True,
-                key=f"editor_{key}"
+                key=f"editor_{key}",
+                disabled=not can_edit
             )
             
-            st.session_state['data_granulats'][key]['sieves'] = list(edited_df["Tamis (mm)"])
-            st.session_state['data_granulats'][key]['passants'] = list(edited_df["% Passant Cumulé"])
+            if can_edit:
+                st.session_state['data_granulats'][key]['sieves'] = list(edited_df["Tamis (mm)"])
+                st.session_state['data_granulats'][key]['passants'] = list(edited_df["% Passant Cumulé"])
             
             st.markdown("---")
-            st.subheader("Caractéristiques complémentaires (Saisie Manuelle)")
-            st.info("Laissez vide si l'essai n'est pas applicable pour cette fraction.")
+            st.subheader("Caractéristiques complémentaires")
+            st.info("Laissez à 0.0 si l'essai n'est pas applicable pour cette fraction.")
             
             col_a, col_b = st.columns(2)
             with col_a:
-                fi_val = st.number_input("Coefficient d'Aplatissement (FI)", value=float(mat_data['fi']) if mat_data['fi'] is not None else 0.0, step=0.1, key=f"fi_{key}")
-                la_val = st.number_input("Los Angeles (LA)", value=float(mat_data['la']) if mat_data['la'] is not None else 0.0, step=0.1, key=f"la_{key}")
-                mb_val = st.number_input("Valeur de Bleu (MB)", value=float(mat_data['mb']) if mat_data['mb'] is not None else 0.0, step=0.1, key=f"mb_{key}")
+                fi_val = st.number_input("Coefficient d'Aplatissement (FI)", value=float(mat_data['fi']) if mat_data['fi'] is not None else 0.0, step=0.1, disabled=not can_edit)
+                la_val = st.number_input("Los Angeles (LA)", value=float(mat_data['la']) if mat_data['la'] is not None else 0.0, step=0.1, disabled=not can_edit)
+                mb_val = st.number_input("Valeur de Bleu (MB)", value=float(mat_data['mb']) if mat_data['mb'] is not None else 0.0, step=0.1, disabled=not can_edit)
             with col_b:
-                mf_val = st.number_input("Module de Finesse (MF)", value=float(mat_data['mf']) if mat_data['mf'] is not None else 0.0, step=0.01, key=f"mf_{key}")
-                se_val = st.number_input("Équivalent de Sable (SE 10)", value=float(mat_data['se']) if mat_data['se'] is not None else 0.0, step=0.1, key=f"se_{key}")
+                mf_val = st.number_input("Module de Finesse (MF)", value=float(mat_data['mf']) if mat_data['mf'] is not None else 0.0, step=0.01, disabled=not can_edit)
+                se_val = st.number_input("Équivalent de Sable (SE 10)", value=float(mat_data['se']) if mat_data['se'] is not None else 0.0, step=0.1, disabled=not can_edit)
                 
-            st.session_state['data_granulats'][key]['fi'] = fi_val if fi_val > 0 else None
-            st.session_state['data_granulats'][key]['la'] = la_val if la_val > 0 else None
-            st.session_state['data_granulats'][key]['mb'] = mb_val if mb_val > 0 else None
-            st.session_state['data_granulats'][key]['mf'] = mf_val if mf_val > 0 else None
-            st.session_state['data_granulats'][key]['se'] = se_val if se_val > 0 else None
+            if can_edit:
+                st.session_state['data_granulats'][key]['fi'] = fi_val if fi_val > 0 else None
+                st.session_state['data_granulats'][key]['la'] = la_val if la_val > 0 else None
+                st.session_state['data_granulats'][key]['mb'] = mb_val if mb_val > 0 else None
+                st.session_state['data_granulats'][key]['mf'] = mf_val if mf_val > 0 else None
+                st.session_state['data_granulats'][key]['se'] = se_val if se_val > 0 else None
 
         with col2:
             st.subheader("Courbe Granulométrique Individuelle")
@@ -180,7 +190,6 @@ def show():
             st.metric(label="Tamis D (95% de passant calculé)", value=f"{d95} mm")
             
             fig_ind = go.Figure()
-            
             s_sorted, p_sorted = zip(*sorted(zip(mat_data['sieves'], mat_data['passants'])))
             
             fig_ind.add_trace(go.Scatter(
@@ -199,18 +208,24 @@ def show():
             )
             st.plotly_chart(fig_ind, use_container_width=True)
 
-    # --------------------------------------------------------------------------
+    # ------------------------------------------------------------------------------
     # FENÊTRE 2 : PV D'IDENTIFICATION / SYNTHÈSE
-    # --------------------------------------------------------------------------
+    # ------------------------------------------------------------------------------
     with tabs[1]:
         st.header("PV d'Identification des Granulats pour Béton")
         
-        with st.expander("📝 Entête & Informations du Procès-Verbal", expanded=False):
+        with st.expander("📝 Entête & Informations du Proces-Verbal", expanded=False):
             c1, c2, c3, c4 = st.columns(4)
-            st.session_state['pv_info']['projet'] = c1.text_input("Projet / Chantier", st.session_state['pv_info']['projet'])
-            st.session_state['pv_info']['client'] = c2.text_input("Client", st.session_state['pv_info']['client'])
-            st.session_state['pv_info']['ref_pv'] = c3.text_input("Référence PV", st.session_state['pv_info']['ref_pv'])
-            st.session_state['pv_info']['date'] = c4.text_input("Date", st.session_state['pv_info']['date'])
+            projet_val = c1.text_input("Projet / Chantier", st.session_state['pv_info']['projet'], disabled=not can_edit)
+            client_val = c2.text_input("Client", st.session_state['pv_info']['client'], disabled=not can_edit)
+            ref_val = c3.text_input("Référence PV", st.session_state['pv_info']['ref_pv'], disabled=not can_edit)
+            date_val = c4.text_input("Date", st.session_state['pv_info']['date'], disabled=not can_edit)
+
+            if can_edit:
+                st.session_state['pv_info']['projet'] = projet_val
+                st.session_state['pv_info']['client'] = client_val
+                st.session_state['pv_info']['ref_pv'] = ref_val
+                st.session_state['pv_info']['date'] = date_val
 
         gii_data = st.session_state['data_granulats']['GII']
         gi_data  = st.session_state['data_granulats']['GI']
@@ -230,6 +245,7 @@ def show():
         .pv-table { width: 100%; border-collapse: collapse; margin-top: 5px; font-size: 12px; }
         .pv-table th, .pv-table td { border: 1px solid #475569; padding: 4px; text-align: center; }
         .pv-bg-gray { background-color: #e2e8f0; font-weight: bold; }
+        .pv-title-row { background-color: #cbd5e1; font-weight: bold; text-align: left; }
         </style>
         """, unsafe_allow_html=True)
 
@@ -412,35 +428,41 @@ def show():
         st.plotly_chart(fig_global, use_container_width=True)
         
         st.subheader("COMMENTAIRES & CONCLUSION")
-        st.session_state['pv_info']['commentaires'] = st.text_area(
+        commentaires_val = st.text_area(
             "Commentaires sur la conformité :",
             value=st.session_state['pv_info']['commentaires'],
-            height=70
+            height=70,
+            disabled=not can_edit
         )
+        if can_edit:
+            st.session_state['pv_info']['commentaires'] = commentaires_val
 
-    # --------------------------------------------------------------------------
+    # ------------------------------------------------------------------------------
     # FENÊTRE 3 : HISTORIQUE ET TÉLÉCHARGEMENT DE PV
-    # --------------------------------------------------------------------------
+    # ------------------------------------------------------------------------------
     with tabs[2]:
         st.header("Historique et Sauvegarde des PV")
         
         col_btn1, col_btn2 = st.columns([1, 2])
         
         with col_btn1:
-            if st.button("💾 Enregistrer le PV actuel dans l'historique", use_container_width=True):
-                pv_snapshot = {
-                    'Ref_PV': st.session_state['pv_info']['ref_pv'],
-                    'Date': st.session_state['pv_info']['date'],
-                    'Projet': st.session_state['pv_info']['projet'],
-                    'Client': st.session_state['pv_info']['client'],
-                    'D_GII': D_gii,
-                    'D_GI': D_gi,
-                    'D_SD': D_sd,
-                    'D_SC': D_sc,
-                    'Commentaires': st.session_state['pv_info']['commentaires']
-                }
-                st.session_state['historique_pv'].append(pv_snapshot)
-                st.success(f"PV {pv_snapshot['Ref_PV']} enregistré avec succès !")
+            if can_edit:
+                if st.button("💾 Enregistrer le PV", use_container_width=True):
+                    pv_snapshot = {
+                        'Ref_PV': st.session_state['pv_info']['ref_pv'],
+                        'Date': st.session_state['pv_info']['date'],
+                        'Projet': st.session_state['pv_info']['projet'],
+                        'Client': st.session_state['pv_info']['client'],
+                        'D_GII': D_gii,
+                        'D_GI': D_gi,
+                        'D_SD': D_sd,
+                        'D_SC': D_sc,
+                        'Commentaires': st.session_state['pv_info']['commentaires']
+                    }
+                    st.session_state['historique_pv'].append(pv_snapshot)
+                    st.success(f"PV {pv_snapshot['Ref_PV']} enregistré avec succès !")
+            else:
+                st.info("⚠️ L'enregistrement de nouveaux PV est réservé au laboratoire.")
 
         st.markdown("---")
         st.subheader("📋 Historique des Procès-Verbaux Enregistrés")
@@ -454,6 +476,7 @@ def show():
         st.markdown("---")
         st.subheader("📥 Téléchargement & Exportation")
         
+        # Export au format HTML complet
         full_pv_html_export = f"""
         <!DOCTYPE html>
         <html>
@@ -462,6 +485,7 @@ def show():
             <title>{st.session_state['pv_info']['ref_pv']}</title>
             <style>
                 body {{ font-family: Arial, sans-serif; margin: 20px; }}
+                .header-table {{ width: 100%; margin-bottom: 20px; }}
                 {pv_html}
                 .comments {{ margin-top: 20px; padding: 10px; border: 1px solid #ccc; background-color: #f9f9f9; }}
             </style>
