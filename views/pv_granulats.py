@@ -1,4 +1,3 @@
-# views/pv_granulats.py
 import datetime
 from fpdf import FPDF
 import pandas as pd
