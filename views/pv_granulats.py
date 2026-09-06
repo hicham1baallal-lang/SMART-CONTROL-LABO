@@ -210,10 +210,80 @@ def generer_courbe_granulo(pv_data):
 
 
 # ------------------------------------------------------------------------------
+# LISTE DES TAMIS NORMATIFS POUR LA FEUILLE D'ESSAI DÉTAILLÉE
+# ------------------------------------------------------------------------------
+TAMIS_NORMATIFS = [
+    100.0,
+    80.0,
+    63.0,
+    50.0,
+    40.0,
+    31.5,
+    25.0,
+    20.0,
+    16.0,
+    14.0,
+    12.5,
+    10.0,
+    8.0,
+    6.3,
+    5.0,
+    4.0,
+    3.15,
+    2.5,
+    2.0,
+    1.6,
+    1.25,
+    1.0,
+    0.8,
+    0.63,
+    0.5,
+    0.4,
+    0.315,
+    0.25,
+    0.2,
+    0.16,
+    0.125,
+    0.1,
+    0.08,
+    0.063,
+]
+
+REFUS_DEFAULT_1020 = {
+    20.0: 199.7,
+    16.0: 2200.3,
+    14.0: 732.7,
+    12.5: 308.7,
+    10.0: 424.0,
+    8.0: 163.2,
+    6.3: 45.0,
+    5.0: 6.9,
+    4.0: 2.1,
+    3.15: 0.2,
+    2.5: 0.1,
+    2.0: 0.2,
+    1.6: 0.2,
+    1.25: 0.1,
+    1.0: 0.1,
+    0.8: 0.1,
+    0.63: 0.2,
+    0.5: 0.1,
+    0.4: 0.1,
+    0.315: 0.1,
+    0.25: 0.1,
+    0.2: 0.1,
+    0.16: 0.2,
+    0.125: 0.1,
+    0.1: 0.1,
+    0.08: 0.1,
+    0.063: 0.1,
+}
+
+
+# ------------------------------------------------------------------------------
 # FONCTION PRINCIPALE APPELÉE PAR APP.PY
 # ------------------------------------------------------------------------------
 def show(supabase_client=None, can_edit=False, is_admin=False):
-    # Injection du CSS personnalisé pour l'affichage du PV
     st.markdown(
         """
     <style>
@@ -279,6 +349,13 @@ def show(supabase_client=None, can_edit=False, is_admin=False):
             padding: 5px;
             border-radius: 4px;
         }
+        .sheet-card {
+            background-color: #F8FAFC;
+            border: 1px solid #CBD5E1;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
     </style>
     """,
         unsafe_allow_html=True,
@@ -296,6 +373,7 @@ def show(supabase_client=None, can_edit=False, is_admin=False):
                     " 10+000-GARE CASA SUD"
                 ),
                 "date_prelevement": "2026-07-23",
+                "date_essai": "2026-07-24",
                 "ref_echantillon": "TG PREFA OULAD SALEH",
                 "lieu_prelevement": "Stock sur centrale à béton",
                 "objet": "IDENTIFICATION DES GRANULATS POUR BETON",
@@ -346,7 +424,7 @@ def show(supabase_client=None, can_edit=False, is_admin=False):
             }
         ]
 
-    # Onglets d'action selon le droit d'édition
+    # Verification des droits de saisie
     if can_edit or is_admin:
         tabs = st.tabs(["📝 Saisie & Enregistrement", "📚 Historique & PV (Impression)"])
         tab_saisie, tab_historique = tabs[0], tabs[1]
@@ -355,17 +433,17 @@ def show(supabase_client=None, can_edit=False, is_admin=False):
         tab_saisie = None
 
     # --------------------------------------------------------------------------
-    # SAISIE ET ENREGISTREMENT
+    # SAISIE ET ENREGISTREMENT (AVEC FEUILLE D'ESSAI DÉTAILLÉE)
     # --------------------------------------------------------------------------
     if tab_saisie:
         with tab_saisie:
-            st.title("📝 Saisie de la Feuille d'Essai Granulats")
+            st.title("📝 Saisie de la Feuille d'Essai & PV Granulats")
 
             top_col1, top_col2 = st.columns([3, 1])
             with top_col1:
                 st.info(
-                    "Renseignez les données d'essais ci-dessous puis cliquez sur"
-                    " **Enregistrer**."
+                    "Saisissez les masses d'essais dans la **Feuille de calcul**"
+                    " ci-dessous ou directement dans le formulaire de synthèse."
                 )
             with top_col2:
                 btn_save_top = st.button(
@@ -377,6 +455,9 @@ def show(supabase_client=None, can_edit=False, is_admin=False):
 
             st.markdown("---")
 
+            # ------------------------------------------------------------------
+            # 1. ENTÊTE & INFORMATIONS CHANTIER
+            # ------------------------------------------------------------------
             st.subheader("1. Entête du PV & Informations Chantier")
             col1, col2, col3 = st.columns(3)
             with col1:
@@ -397,17 +478,22 @@ def show(supabase_client=None, can_edit=False, is_admin=False):
                     datetime.date(2026, 7, 23),
                     key="input_date_prelevement",
                 )
+                date_essai = st.date_input(
+                    "Date de l'essai",
+                    datetime.date(2026, 7, 24),
+                    key="input_date_essai",
+                )
                 lieu_prelevement = st.text_input(
                     "Lieu de prélèvement",
                     "Stock sur centrale à béton",
                     key="input_lieu_prelevement",
                 )
+            with col3:
                 ref_echantillon = st.text_input(
-                    "Provenance / Réf Échantillon",
-                    "TG PREFA OULAD SALEH",
+                    "Référence / Provenance échantillon",
+                    "10/20 - TG PREFA OULAD SALEH",
                     key="input_ref_echantillon",
                 )
-            with col3:
                 chantier = st.text_area(
                     "Chantier",
                     (
@@ -416,6 +502,7 @@ def show(supabase_client=None, can_edit=False, is_admin=False):
                         " 10+000-GARE CASA SUD"
                     ),
                     key="input_chantier",
+                    height=68,
                 )
                 objet = st.text_input(
                     "Objet",
@@ -425,7 +512,165 @@ def show(supabase_client=None, can_edit=False, is_admin=False):
 
             st.markdown("---")
 
-            st.subheader("2. Résultats Granulométriques & Caractéristiques")
+            # ------------------------------------------------------------------
+            # 2. FEUILLE D'ESSAI DÉTAILLÉE DE LABORATOIRE (SAISIE DES MASSES)
+            # ------------------------------------------------------------------
+            st.subheader("2. Feuille d'Essai de Tamisage (Calcul détaillé de Laboratoire)")
+
+            with st.expander("🔬 **Ouvrir la Feuille de Calcul du Tamisage (Analyse par Masses Ri)**", expanded=True):
+                st.markdown(
+                    "### 📄 Saisie du détail de pesée (Norme NF EN 933-1)"
+                )
+
+                c_proc1, c_proc2, c_proc3 = st.columns(3)
+                with c_proc1:
+                    procede = st.radio(
+                        "Procédé utilisé :",
+                        [
+                            "Lavage et tamisage",
+                            "Tamisage par voie sèche (granulats impropres)",
+                        ],
+                        index=0,
+                        key="sheet_procede",
+                    )
+                with c_proc2:
+                    m1 = st.number_input(
+                        "Masse sèche totale $M_1$ (g)",
+                        value=4110.5,
+                        step=0.1,
+                        format="%.1f",
+                        key="sheet_m1",
+                    )
+                with c_proc3:
+                    m2 = st.number_input(
+                        "Masse sèche après lavage $M_2$ (g)",
+                        value=4095.2,
+                        step=0.1,
+                        format="%.1f",
+                        key="sheet_m2",
+                    )
+
+                # Calcul des fines retirées par lavage
+                m1_m2 = round(m1 - m2, 1) if m1 >= m2 else 0.0
+
+                f_col1, f_col2, f_col3, f_col4 = st.columns(4)
+                f_col1.metric("Masse fines retirées ($M_1 - M_2$)", f"{m1_m2:.1f} g")
+
+                p_fond = f_col2.number_input(
+                    "Matériau resté au fond $P$ (g)",
+                    value=1.3,
+                    step=0.1,
+                    format="%.1f",
+                    key="sheet_p_fond",
+                )
+
+                # Table interactive de la feuille d'essai
+                st.markdown("#### 📊 Tableau d'enregistrement des refus ($R_i$)")
+
+                # Initialisation de la dataframe pour l'éditeur
+                if "df_sheet_tamis" not in st.session_state:
+                    init_data = []
+                    for t in TAMIS_NORMATIFS:
+                        init_data.append({
+                            "Tamis (mm)": t,
+                            "Masse de refus Ri (g)": REFUS_DEFAULT_1020.get(t, 0.0)
+                        })
+                    st.session_state["df_sheet_tamis"] = pd.DataFrame(init_data)
+
+                edited_df = st.data_editor(
+                    st.session_state["df_sheet_tamis"],
+                    num_rows="fixed",
+                    column_config={
+                        "Tamis (mm)": st.column_config.NumberColumn(format="%.3f mm", disabled=True),
+                        "Masse de refus Ri (g)": st.column_config.NumberColumn(format="%.1f g", min_value=0.0)
+                    },
+                    use_container_width=True,
+                    key="editor_tamis_sheet"
+                )
+
+                # Traitement des calculs automatiques
+                df_calc = edited_df.copy()
+                sum_ri = df_calc["Masse de refus Ri (g)"].sum()
+                sum_ri_p = round(sum_ri + p_fond, 1)
+
+                if m1 > 0:
+                    df_calc["Pourcentage de refus (%)"] = (df_calc["Masse de refus Ri (g)"] / m1 * 100).round(1)
+                    df_calc["Pourcentage cumulé de refus (%)"] = df_calc["Pourcentage de refus (%)"].cumsum().round(1)
+
+                    def calc_tamisat(row):
+                        val = 100.0 - row["Pourcentage cumulé de refus (%)"]
+                        if row["Tamis (mm)"] == 0.063:
+                            return round(val, 1)
+                        return round(val)
+
+                    df_calc["% Passant Cumulé (*)"] = df_calc.apply(calc_tamisat, axis=1)
+                else:
+                    df_calc["Pourcentage de refus (%)"] = 0.0
+                    df_calc["Pourcentage cumulé de refus (%)"] = 0.0
+                    df_calc["% Passant Cumulé (*)"] = 100.0
+
+                # Formules réglementaires
+                fines_pct = round(100.0 * (m1_m2 + p_fond) / m1, 1) if m1 > 0 else 0.0
+                perte_pct = round(100.0 * (m2 - sum_ri_p) / m2, 2) if m2 > 0 else 0.0
+
+                f_col3.metric("Somme $\Sigma R_i + P$", f"{sum_ri_p:.1f} g")
+                f_col4.metric("Fines sur 63 µm ($f$ %)", f"{fines_pct:.1f} %")
+
+                st.markdown("##### 📌 Résultats calculés & Vérifications d'essai")
+                c_chk1, c_chk2 = st.columns(2)
+                with c_chk1:
+                    st.write(f"**Pourcentage de tamisat de fines ($f$) :** `100 x ((M1 - M2) + P) / M1` = **{fines_pct:.1f} %**")
+                with c_chk2:
+                    if perte_pct <= 1.0:
+                        st.success(f"**Perte de masse au tamisage :** `100 x (M2 - (ΣRi + P)) / M2` = **{perte_pct:.2f} %** (< 1% : Conforme)")
+                    else:
+                        st.error(f"**Perte de masse au tamisage :** `100 x (M2 - (ΣRi + P)) / M2` = **{perte_pct:.2f} %** (≥ 1% : Non Conforme !)")
+
+                # Boutons d'injection rapide dans les fractions
+                st.markdown("**Transférer directement ces résultats vers la synthèse granulométrique :**")
+                b_col1, b_col2, b_col3, b_col4 = st.columns(4)
+                if b_col1.button("👉 Injecter dans Gravillon 10/20"):
+                    p_20 = df_calc.loc[df_calc["Tamis (mm)"] == 20.0, "% Passant Cumulé (*)"].values
+                    p_10 = df_calc.loc[df_calc["Tamis (mm)"] == 10.0, "% Passant Cumulé (*)"].values
+                    p_5 = df_calc.loc[df_calc["Tamis (mm)"] == 5.0, "% Passant Cumulé (*)"].values
+                    st.session_state["g20_20"] = float(p_20[0]) if len(p_20) else 95.0
+                    st.session_state["g20_10"] = float(p_10[0]) if len(p_10) else 6.0
+                    st.session_state["g20_5"] = float(p_5[0]) if len(p_5) else 1.0
+                    st.session_state["g20_f"] = fines_pct
+                    st.success("Données de la feuille d'essai injectées dans Gravillon 10/20 !")
+
+                if b_col2.button("👉 Injecter dans Gravillon 4/10"):
+                    p_10 = df_calc.loc[df_calc["Tamis (mm)"] == 10.0, "% Passant Cumulé (*)"].values
+                    p_4 = df_calc.loc[df_calc["Tamis (mm)"] == 4.0, "% Passant Cumulé (*)"].values
+                    p_2 = df_calc.loc[df_calc["Tamis (mm)"] == 2.0, "% Passant Cumulé (*)"].values
+                    st.session_state["g4_10"] = float(p_10[0]) if len(p_10) else 84.0
+                    st.session_state["g4_4"] = float(p_4[0]) if len(p_4) else 2.0
+                    st.session_state["g4_2"] = float(p_2[0]) if len(p_2) else 1.0
+                    st.session_state["g4_f"] = fines_pct
+                    st.success("Données de la feuille d'essai injectées dans Gravillon 4/10 !")
+
+                if b_col3.button("👉 Injecter dans Sable 0/4"):
+                    p_56 = df_calc.loc[df_calc["Tamis (mm)"] == 5.0, "% Passant Cumulé (*)"].values
+                    p_4 = df_calc.loc[df_calc["Tamis (mm)"] == 4.0, "% Passant Cumulé (*)"].values
+                    p_1 = df_calc.loc[df_calc["Tamis (mm)"] == 1.0, "% Passant Cumulé (*)"].values
+                    p_250 = df_calc.loc[df_calc["Tamis (mm)"] == 0.25, "% Passant Cumulé (*)"].values
+                    st.session_state["s4_56"] = float(p_56[0]) if len(p_56) else 96.0
+                    st.session_state["s4_4"] = float(p_4[0]) if len(p_4) else 92.0
+                    st.session_state["s4_1"] = float(p_1[0]) if len(p_1) else 41.0
+                    st.session_state["s4_250"] = float(p_250[0]) if len(p_250) else 16.0
+                    st.success("Données de la feuille d'essai injectées dans Sable 0/4 !")
+
+                if b_col4.button("👉 Injecter dans Sable Fin 0/0.63"):
+                    p_063 = df_calc.loc[df_calc["Tamis (mm)"] == 0.63, "% Passant Cumulé (*)"].values
+                    st.session_state["sd_063"] = float(p_063[0]) if len(p_063) else 98.0
+                    st.success("Données de la feuille d'essai injectées dans Sable Fin !")
+
+            st.markdown("---")
+
+            # ------------------------------------------------------------------
+            # 3. SYNTHÈSE DES RÉSULTATS POUR LE PV
+            # ------------------------------------------------------------------
+            st.subheader("3. Synthèse des Résultats Granulométriques pour le PV")
             tab_g1020, tab_g410, tab_s4, tab_s063 = st.tabs([
                 "Gravillon 10/20",
                 "Gravillon 4/10",
@@ -441,11 +686,19 @@ def show(supabase_client=None, can_edit=False, is_admin=False):
                 p_g20_28 = c2.number_input(
                     "28 mm (%)", value=100.0, key="g20_28"
                 )
-                p_g20_20 = c3.number_input("20 mm (%)", value=95.0, key="g20_20")
-                p_g20_10 = c4.number_input("10 mm (%)", value=6.0, key="g20_10")
+                p_g20_20 = c3.number_input(
+                    "20 mm (%)", value=st.session_state.get("g20_20", 95.0), key="g20_20"
+                )
+                p_g20_10 = c4.number_input(
+                    "10 mm (%)", value=st.session_state.get("g20_10", 6.0), key="g20_10"
+                )
                 c1, c2, c3 = st.columns(3)
-                p_g20_5 = c1.number_input("5 mm (%)", value=1.0, key="g20_5")
-                p_g20_f = c2.number_input("63 µm (%)", value=0.6, key="g20_f")
+                p_g20_5 = c1.number_input(
+                    "5 mm (%)", value=st.session_state.get("g20_5", 1.0), key="g20_5"
+                )
+                p_g20_f = c2.number_input(
+                    "63 µm (%)", value=st.session_state.get("g20_f", 0.6), key="g20_f"
+                )
                 p_g20_la = c3.number_input(
                     "Los Angeles (LA)", value=26, key="g20_la"
                 )
@@ -453,22 +706,38 @@ def show(supabase_client=None, can_edit=False, is_admin=False):
             with tab_g410:
                 c1, c2, c3, c4 = st.columns(4)
                 p_g4_20 = c1.number_input("20 mm (%)", value=100.0, key="g4_20")
-                p_g4_14 = c1.number_input("14 mm (%)", value=100.0, key="g4_14")
-                p_g4_10 = c3.number_input("10 mm (%)", value=84.0, key="g4_10")
-                p_g4_4 = c4.number_input("4 mm (%)", value=2.0, key="g4_4")
+                p_g4_14 = c2.number_input("14 mm (%)", value=100.0, key="g4_14")
+                p_g4_10 = c3.number_input(
+                    "10 mm (%)", value=st.session_state.get("g4_10", 84.0), key="g4_10"
+                )
+                p_g4_4 = c4.number_input(
+                    "4 mm (%)", value=st.session_state.get("g4_4", 2.0), key="g4_4"
+                )
                 c1, c2, c3 = st.columns(3)
-                p_g4_2 = c1.number_input("2 mm (%)", value=1.0, key="g4_2")
-                p_g4_f = c2.number_input("63 µm (%)", value=1.1, key="g4_f")
+                p_g4_2 = c1.number_input(
+                    "2 mm (%)", value=st.session_state.get("g4_2", 1.0), key="g4_2"
+                )
+                p_g4_f = c2.number_input(
+                    "63 µm (%)", value=st.session_state.get("g4_f", 1.1), key="g4_f"
+                )
                 p_g4_fi = c3.number_input(
                     "Aplatissement (FI)", value=14, key="g4_fi"
                 )
 
             with tab_s4:
                 c1, c2, c3, c4 = st.columns(4)
-                p_s4_56 = c1.number_input("5.6 mm (%)", value=96.0, key="s4_56")
-                p_s4_4 = c2.number_input("4 mm (%)", value=92.0, key="s4_4")
-                p_s4_1 = c3.number_input("1 mm (%)", value=41.0, key="s4_1")
-                p_s4_250 = c4.number_input("250 µm (%)", value=16.0, key="s4_250")
+                p_s4_56 = c1.number_input(
+                    "5.6 mm (%)", value=st.session_state.get("s4_56", 96.0), key="s4_56"
+                )
+                p_s4_4 = c2.number_input(
+                    "4 mm (%)", value=st.session_state.get("s4_4", 92.0), key="s4_4"
+                )
+                p_s4_1 = c3.number_input(
+                    "1 mm (%)", value=st.session_state.get("s4_1", 41.0), key="s4_1"
+                )
+                p_s4_250 = c4.number_input(
+                    "250 µm (%)", value=st.session_state.get("s4_250", 16.0), key="s4_250"
+                )
                 c1, c2 = st.columns(2)
                 p_s4_se = c1.number_input(
                     "Équivalent de Sable (SE)", value=65, key="s4_se"
@@ -480,14 +749,19 @@ def show(supabase_client=None, can_edit=False, is_admin=False):
             with tab_s063:
                 c1, c2, c3 = st.columns(3)
                 p_sd_088 = c1.number_input("0.88 mm (%)", value=98.0, key="sd_088")
-                p_sd_063 = c2.number_input("0.63 mm (%)", value=98.0, key="sd_063")
+                p_sd_063 = c2.number_input(
+                    "0.63 mm (%)", value=st.session_state.get("sd_063", 98.0), key="sd_063"
+                )
                 p_sd_mb = c3.number_input(
                     "Bleu de Méthylène (MB)", value=0.7, key="sd_mb"
                 )
 
             st.markdown("---")
 
-            st.subheader("3. Validation & Signatures")
+            # ------------------------------------------------------------------
+            # 4. VALIDATION & SIGNATURES
+            # ------------------------------------------------------------------
+            st.subheader("4. Validation & Signatures")
             col_c, col_h = st.columns(2)
             coordinateur = col_c.text_input(
                 "Coordinateur des Essais", "O. IKEN", key="input_coordinateur"
@@ -521,6 +795,7 @@ def show(supabase_client=None, can_edit=False, is_admin=False):
                     "client": client,
                     "chantier": chantier,
                     "date_prelevement": str(date_prelevement),
+                    "date_essai": str(date_essai),
                     "ref_echantillon": ref_echantillon,
                     "lieu_prelevement": lieu_prelevement,
                     "objet": objet,
