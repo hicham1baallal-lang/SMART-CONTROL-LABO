@@ -7,10 +7,6 @@ from openpyxl.utils.dataframe import dataframe_to_rows
 import pandas as pd
 import streamlit as st
 
-st.set_page_config(
-    page_title="Analyse Granulométrique - Granulats Béton", layout="wide"
-)
-
 # ------------------------------------------------------------------------------
 # CONSTANTES & SÉRIES DE TAMIS REGLEMENTAIRES (NF EN 933-1 / NM 10.1.271)
 # ------------------------------------------------------------------------------
@@ -451,242 +447,243 @@ def generer_pv_excel_complet(infos_pv, resultats_fractions):
 
 
 # ------------------------------------------------------------------------------
-# INTERFACE UTILISATEUR STREAMLIT
+# ENTRYPOINT / INTERFACE UTILISATEUR COMPATIBLE ROUTEUR STREAMLIT
 # ------------------------------------------------------------------------------
-st.title("🧪 Module Granulats : Analyse Granulométrique & Feuilles d'Essais")
-st.markdown(
-    "Saisie complète des feuilles d'essais pour **GII, GI, SC, SD** selon NF EN 933-1 / NM 10.1.271."
-)
+def show():
+    st.title("🧪 Module Granulats : Analyse Granulométrique & Feuilles d'Essais")
+    st.markdown(
+        "Saisie complète des feuilles d'essais pour **GII, GI, SC, SD** selon NF EN 933-1 / NM 10.1.271."
+    )
 
-# Section 1: Informations Générales du PV
-with st.expander("📌 Informations du Procès-Verbal (PV)", expanded=True):
-    col_a, col_b, col_c = st.columns(3)
-    with col_a:
-        num_pv = st.text_input("N° PV", value="PV-2026-1237")
-        client = st.text_input("Client", value="LPEE - Projet BTP")
-    with col_b:
-        chantier = st.text_input("Chantier / Ouvrage", value="LGV / Ouvrage d'art")
-        date_essai = st.date_input("Date de l'essai")
-    with col_c:
-        norme = st.text_input("Norme d'essai", value="NM 10.1.271 / NF EN 933-1")
-        operateur = st.text_input("Technicien / Opérateur", value="Laboratoire LPEE")
+    # Section 1: Informations Générales du PV
+    with st.expander("📌 Informations du Procès-Verbal (PV)", expanded=True):
+        col_a, col_b, col_c = st.columns(3)
+        with col_a:
+            num_pv = st.text_input("N° PV", value="PV-2026-1237")
+            client = st.text_input("Client", value="LPEE - Projet BTP")
+        with col_b:
+            chantier = st.text_input("Chantier / Ouvrage", value="LGV / Ouvrage d'art")
+            date_essai = st.date_input("Date de l'essai")
+        with col_c:
+            norme = st.text_input("Norme d'essai", value="NM 10.1.271 / NF EN 933-1")
+            operateur = st.text_input("Technicien / Opérateur", value="Laboratoire LPEE")
 
-infos_pv = {
-    "num_pv": num_pv,
-    "client": client,
-    "chantier": chantier,
-    "date_essai": date_essai,
-    "norme": norme,
-    "operateur": operateur,
-}
+    infos_pv = {
+        "num_pv": num_pv,
+        "client": client,
+        "chantier": chantier,
+        "date_essai": date_essai,
+        "norme": norme,
+        "operateur": operateur,
+    }
 
-st.divider()
+    st.divider()
 
-# Section 2: Saisie des feuilles d'essais par fraction
-st.subheader("📝 Saisie des Feuilles d'Essais")
+    # Section 2: Saisie des feuilles d'essais par fraction
+    st.subheader("📝 Saisie des Feuilles d'Essais")
 
-tabs = st.tabs(
-    [
-        "GII - Gravette II",
-        "GI - Gravette I",
-        "SC - Sable Concassé",
-        "SD - Sable Doux",
-    ]
-)
+    tabs = st.tabs(
+        [
+            "GII - Gravette II",
+            "GI - Gravette I",
+            "SC - Sable Concassé",
+            "SD - Sable Doux",
+        ]
+    )
 
-dict_fractions_data = {}
-keys_fractions = ["GII", "GI", "SC", "SD"]
+    dict_fractions_data = {}
+    keys_fractions = ["GII", "GI", "SC", "SD"]
 
-for i, tab in enumerate(tabs):
-    key = keys_fractions[i]
-    config = FRACTIONS_CONFIG[key]
+    for i, tab in enumerate(tabs):
+        key = keys_fractions[i]
+        config = FRACTIONS_CONFIG[key]
 
-    with tab:
-        st.markdown(f"### **Feuille d'Essai : {config['nom']}**")
+        with tab:
+            st.markdown(f"### **Feuille d'Essai : {config['nom']}**")
 
-        c_p1, c_p2, c_p3, c_p4 = st.columns(4)
-        with c_p1:
-            procede_lavage = (
-                st.radio(
-                    f"Procédé utilisé [{key}]",
-                    ["Lavage et tamisage", "Tamisage à sec"],
-                    key=f"proc_{key}",
+            c_p1, c_p2, c_p3, c_p4 = st.columns(4)
+            with c_p1:
+                procede_lavage = (
+                    st.radio(
+                        f"Procédé utilisé [{key}]",
+                        ["Lavage et tamisage", "Tamisage à sec"],
+                        key=f"proc_{key}",
+                    )
+                    == "Lavage et tamisage"
                 )
-                == "Lavage et tamisage"
+            with c_p2:
+                m1 = st.number_input(
+                    f"Masse sèche totale M1 (g) [{key}]",
+                    min_value=100.0,
+                    max_value=20000.0,
+                    value=4110.5 if key == "GII" else (5000.0 if "G" in key else 1000.0),
+                    step=10.0,
+                    key=f"m1_{key}",
+                )
+            with c_p3:
+                m2 = st.number_input(
+                    f"Masse sèche après lavage M2 (g) [{key}]",
+                    min_value=0.0,
+                    max_value=m1,
+                    value=4095.2 if key == "GII" else m1,
+                    step=10.0,
+                    disabled=not procede_lavage,
+                    key=f"m2_{key}",
+                )
+            with c_p4:
+                fond_p = st.number_input(
+                    f"Matériau resté au fond P (g) [{key}]",
+                    min_value=0.0,
+                    max_value=500.0,
+                    value=1.3 if key == "GII" else 0.5,
+                    step=0.1,
+                    key=f"p_{key}",
+                )
+
+            # Choix des tamis
+            tamis_choisis = st.multiselect(
+                f"Série de tamis pour {key} (mm)",
+                options=TAMIS_STANDARD,
+                default=config["tamis_defaut"],
+                key=f"tamis_select_{key}",
             )
-        with c_p2:
-            m1 = st.number_input(
-                f"Masse sèche totale M1 (g) [{key}]",
-                min_value=100.0,
-                max_value=20000.0,
-                value=4110.5 if key == "GII" else (5000.0 if "G" in key else 1000.0),
-                step=10.0,
-                key=f"m1_{key}",
+            tamis_choisis = sorted(tamis_choisis, reverse=True)
+
+            st.caption("Saisie des masses de refus partiels Ri (g) :")
+
+            refus_dict = {}
+            cols_per_row = 6
+            cols = st.columns(cols_per_row)
+
+            for idx, t in enumerate(tamis_choisis):
+                col_curr = cols[idx % cols_per_row]
+
+                # Valeurs de démonstration par défaut pour GII
+                val_defaut = 0.0
+                if key == "GII":
+                    ex_vals = {
+                        20.0: 199.7,
+                        16.0: 2200.3,
+                        14.0: 732.7,
+                        12.5: 308.7,
+                        10.0: 424.0,
+                        8.0: 163.2,
+                        6.3: 45.0,
+                        5.0: 6.9,
+                        4.0: 2.1,
+                        3.15: 0.2,
+                        2.5: 0.1,
+                        2.0: 0.2,
+                        1.6: 0.2,
+                        1.25: 0.1,
+                        1.0: 0.1,
+                        0.8: 0.1,
+                        0.63: 0.2,
+                        0.5: 0.1,
+                        0.4: 0.1,
+                        0.315: 0.1,
+                        0.25: 0.1,
+                        0.2: 0.1,
+                        0.16: 0.2,
+                        0.125: 0.1,
+                        0.1: 0.1,
+                        0.08: 0.1,
+                        0.063: 0.1,
+                    }
+                    val_defaut = ex_vals.get(t, 0.0)
+
+                val_refus = col_curr.number_input(
+                    f"{t} mm",
+                    min_value=0.0,
+                    max_value=m1,
+                    value=val_defaut,
+                    step=1.0,
+                    key=f"refus_{key}_{t}",
+                )
+                refus_dict[t] = val_refus
+
+            # Calculs granulométriques complets
+            res = calculer_feuille_essai(
+                m1, m2, fond_p, refus_dict, tamis_choisis, procede_lavage
             )
-        with c_p3:
-            m2 = st.number_input(
-                f"Masse sèche après lavage M2 (g) [{key}]",
-                min_value=0.0,
-                max_value=m1,
-                value=4095.2 if key == "GII" else m1,
-                step=10.0,
-                disabled=not procede_lavage,
-                key=f"m2_{key}",
+
+            mf_val = None
+            if key in ["SC", "SD"]:
+                mf_val = calculer_module_finesse(res["df"])
+                res["mf"] = mf_val
+
+            res["nom"] = config["nom"]
+            dict_fractions_data[key] = res
+
+            # Affichage synthétique des résultats d'essai
+            col_res1, col_res2, col_res3 = st.columns(3)
+            col_res1.metric("Fines lavées (M1 - M2)", f"{res['fines_lavage']:.1f} g")
+            col_res2.metric(
+                "Passants fines (< 63 µm)", f"{res['pct_fines']:.2f} %"
             )
-        with c_p4:
-            fond_p = st.number_input(
-                f"Matériau resté au fond P (g) [{key}]",
-                min_value=0.0,
-                max_value=500.0,
-                value=1.3 if key == "GII" else 0.5,
-                step=0.1,
-                key=f"p_{key}",
+            col_res3.metric(
+                "Écart de masse",
+                f"{res['ecart_masse']:.2f} %",
+                delta="Conforme (<1%)"
+                if abs(res["ecart_masse"]) < 1.0
+                else "Non conforme",
             )
 
-        # Choix des tamis
-        tamis_choisis = st.multiselect(
-            f"Série de tamis pour {key} (mm)",
-            options=TAMIS_STANDARD,
-            default=config["tamis_defaut"],
-            key=f"tamis_select_{key}",
-        )
-        tamis_choisis = sorted(tamis_choisis, reverse=True)
-
-        st.caption("Saisie des masses de refus partiels Ri (g) :")
-
-        refus_dict = {}
-        cols_per_row = 6
-        cols = st.columns(cols_per_row)
-
-        for idx, t in enumerate(tamis_choisis):
-            col_curr = cols[idx % cols_per_row]
-
-            # Valeurs de démonstration par défaut pour GII
-            val_defaut = 0.0
-            if key == "GII":
-                ex_vals = {
-                    20.0: 199.7,
-                    16.0: 2200.3,
-                    14.0: 732.7,
-                    12.5: 308.7,
-                    10.0: 424.0,
-                    8.0: 163.2,
-                    6.3: 45.0,
-                    5.0: 6.9,
-                    4.0: 2.1,
-                    3.15: 0.2,
-                    2.5: 0.1,
-                    2.0: 0.2,
-                    1.6: 0.2,
-                    1.25: 0.1,
-                    1.0: 0.1,
-                    0.8: 0.1,
-                    0.63: 0.2,
-                    0.5: 0.1,
-                    0.4: 0.1,
-                    0.315: 0.1,
-                    0.25: 0.1,
-                    0.2: 0.1,
-                    0.16: 0.2,
-                    0.125: 0.1,
-                    0.1: 0.1,
-                    0.08: 0.1,
-                    0.063: 0.1,
-                }
-                val_defaut = ex_vals.get(t, 0.0)
-
-            val_refus = col_curr.number_input(
-                f"{t} mm",
-                min_value=0.0,
-                max_value=m1,
-                value=val_defaut,
-                step=1.0,
-                key=f"refus_{key}_{t}",
+            # Affichage du tableau d'essai complet
+            st.dataframe(
+                res["df"].style.format(
+                    {
+                        "Refus Partiel Ri (g)": "{:.1f}",
+                        "% Refus Partiel": "{:.1f} %",
+                        "% Refus Cumulé": "{:.1f} %",
+                        "% Passant Cumulé": "{:.1f} %",
+                    }
+                ),
+                use_container_width=True,
             )
-            refus_dict[t] = val_refus
 
-        # Calculs granulométriques complets
-        res = calculer_feuille_essai(
-            m1, m2, fond_p, refus_dict, tamis_choisis, procede_lavage
-        )
+    st.divider()
 
-        mf_val = None
-        if key in ["SC", "SD"]:
-            mf_val = calculer_module_finesse(res["df"])
-            res["mf"] = mf_val
+    # Section 3: Courbe Granulométrique Systématique
+    st.subheader("📈 Courbe Granulométrique Globale")
 
-        res["nom"] = config["nom"]
-        dict_fractions_data[key] = res
+    fig, ax = plt.subplots(figsize=(10, 5))
+    colors = {"GII": "#1f77b4", "GI": "#ff7f0e", "SC": "#2ca02c", "SD": "#d62728"}
 
-        # Affichage synthétique des résultats d'essai
-        col_res1, col_res2, col_res3 = st.columns(3)
-        col_res1.metric("Fines lavées (M1 - M2)", f"{res['fines_lavage']:.1f} g")
-        col_res2.metric(
-            "Passants fines (< 63 µm)", f"{res['pct_fines']:.2f} %"
-        )
-        col_res3.metric(
-            "Écart de masse",
-            f"{res['ecart_masse']:.2f} %",
-            delta="Conforme (<1%)"
-            if abs(res["ecart_masse"]) < 1.0
-            else "Non conforme",
-        )
+    for key in keys_fractions:
+        df_f = dict_fractions_data[key]["df"]
+        if not df_f.empty:
+            ax.plot(
+                df_f["Tamis (mm)"],
+                df_f["% Passant Cumulé"],
+                marker="o",
+                linewidth=2,
+                label=f"{key} - {FRACTIONS_CONFIG[key]['nom']}",
+                color=colors[key],
+            )
 
-        # Affichage du tableau d'essai complet
-        st.dataframe(
-            res["df"].style.format(
-                {
-                    "Refus Partiel Ri (g)": "{:.1f}",
-                    "% Refus Partiel": "{:.1f} %",
-                    "% Refus Cumulé": "{:.1f} %",
-                    "% Passant Cumulé": "{:.1f} %",
-                }
-            ),
-            use_container_width=True,
-        )
+    ax.set_xscale("log")
+    ax.set_xticks([0.063, 0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 31.5, 63.0])
+    ax.get_xaxis().set_major_formatter(plt.ScalarFormatter())
 
-st.divider()
+    ax.set_xlim(0.063, 100)
+    ax.set_ylim(0, 105)
+    ax.set_xlabel("Ouverture des tamis (mm) - Échelle Log", fontsize=10, fontweight="bold")
+    ax.set_ylabel("% Passants Cumulés", fontsize=10, fontweight="bold")
+    ax.set_title("Courbes Granulométriques des Granulats", fontsize=12, fontweight="bold")
+    ax.grid(True, which="both", linestyle="--", linewidth=0.5)
+    ax.legend(loc="upper left")
 
-# Section 3: Courbe Granulométrique Systématique
-st.subheader("📈 Courbe Granulométrique Globale")
+    st.pyplot(fig)
 
-fig, ax = plt.subplots(figsize=(10, 5))
-colors = {"GII": "#1f77b4", "GI": "#ff7f0e", "SC": "#2ca02c", "SD": "#d62728"}
+    # Section 4: Exportation du PV et des Feuilles d'Essai
+    st.subheader("📄 Exportation Excel (PV + Feuille d'Essai par Classe)")
 
-for key in keys_fractions:
-    df_f = dict_fractions_data[key]["df"]
-    if not df_f.empty:
-        ax.plot(
-            df_f["Tamis (mm)"],
-            df_f["% Passant Cumulé"],
-            marker="o",
-            linewidth=2,
-            label=f"{key} - {FRACTIONS_CONFIG[key]['nom']}",
-            color=colors[key],
-        )
+    pv_excel_bytes = generer_pv_excel_complet(infos_pv, dict_fractions_data)
 
-ax.set_xscale("log")
-ax.set_xticks([0.063, 0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 31.5, 63.0])
-ax.get_xaxis().set_major_formatter(plt.ScalarFormatter())
-
-ax.set_xlim(0.063, 100)
-ax.set_ylim(0, 105)
-ax.set_xlabel("Ouverture des tamis (mm) - Échelle Log", fontsize=10, fontweight="bold")
-ax.set_ylabel("% Passants Cumulés", fontsize=10, fontweight="bold")
-ax.set_title("Courbes Granulométriques des Granulats", fontsize=12, fontweight="bold")
-ax.grid(True, which="both", linestyle="--", linewidth=0.5)
-ax.legend(loc="upper left")
-
-st.pyplot(fig)
-
-# Section 4: Exportation du PV et des Feuilles d'Essai
-st.subheader("📄 Exportation Excel (PV + Feuille d'Essai par Classe)")
-
-pv_excel_bytes = generer_pv_excel_complet(infos_pv, dict_fractions_data)
-
-st.download_button(
-    label="📥 Télécharger le PV et les 4 Feuilles d'Essais (Excel multi-onglets)",
-    data=pv_excel_bytes,
-    file_name=f"Analyse_Granulometrique_Complete_{num_pv}.xlsx",
-    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-)
+    st.download_button(
+        label="📥 Télécharger le PV et les 4 Feuilles d'Essais (Excel multi-onglets)",
+        data=pv_excel_bytes,
+        file_name=f"Analyse_Granulometrique_Complete_{num_pv}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
