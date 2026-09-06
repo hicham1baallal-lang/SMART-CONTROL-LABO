@@ -162,8 +162,11 @@ def show(supabase_client, can_edit=False, is_admin=False):
     st.title("🪨 Identification Granulats pour Béton")
     st.caption("Laboratoire de Contrôle Externe - Projet LGV CASA SUD")
 
-    tabs = st.tabs(["➕ Saisie & Génération", "📋 Base de Données"])
+    tabs = st.tabs(["➕ Saisie & Génération", "📋 Consultation & Base de Données"])
 
+    # ----------------------------------------------------
+    # ONGLET 1 : SAISIE ET ENREGISTREMENT
+    # ----------------------------------------------------
     with tabs[0]:
         st.subheader("1. Informations Générales")
         c1, c2 = st.columns(2)
@@ -236,17 +239,11 @@ def show(supabase_client, can_edit=False, is_admin=False):
         st.markdown("---")
         
         header_data = {
-            "num_pv_seq": num_pv_seq,
-            "num_rapport": num_rapport, 
-            "client": client, 
-            "chantier": chantier,
-            "num_dossier": num_dossier, 
-            "date_prelevement": str(date_prelevement),
-            "lieux": lieux, 
-            "provenance": provenance
+            "num_pv_seq": num_pv_seq, "num_rapport": num_rapport, "client": client, 
+            "chantier": chantier, "num_dossier": num_dossier, 
+            "date_prelevement": str(date_prelevement), "lieux": lieux, "provenance": provenance
         }
 
-        # Assemblage complet du payload pour Supabase
         payload_db = {
             **header_data,
             "g10_2d": g10_20["2d"], "g10_14d": g10_20["1_4d"], "g10_d": g10_20["d"], "g10_dmin": g10_20["d_min"],
@@ -284,14 +281,85 @@ def show(supabase_client, can_edit=False, is_admin=False):
                 else:
                     st.warning("Client Supabase non connecté.")
 
+    # ----------------------------------------------------
+    # ONGLET 2 : CONSULTATION, IMPRESSION & GESTION DU PV
+    # ----------------------------------------------------
     with tabs[1]:
-        st.subheader("🗄️ Base de données brutes")
         if supabase_client:
             try:
                 res = supabase_client.table("pv_granulats").select("*").order("created_at", desc=True).execute()
                 if res.data:
-                    st.dataframe(pd.DataFrame(res.data), use_container_width=True)
+                    df = pd.DataFrame(res.data)
+                    
+                    # 1. Menu de sélection du PV (Identique à l'image)
+                    rapports_list = df["num_rapport"].tolist()
+                    selected_rapport = st.selectbox("🔍 Choisir un N° de Rapport / PV :", options=rapports_list)
+                    
+                    pv_data = df[df["num_rapport"] == selected_rapport].iloc[0]
+                    
+                    # 2. Section d'affichage structurée
+                    with st.expander(f"📄 Détails du PV Granulats : {pv_data['num_rapport']}", expanded=True):
+                        c1, c2 = st.columns(2)
+                        with c1:
+                            st.markdown(f"**Client :** {pv_data.get('client', '-')}")
+                            st.markdown(f"**N° Dossier :** {pv_data.get('num_dossier', '-')}")
+                            st.markdown(f"**Lieu de prélèvement :** {pv_data.get('lieux', '-')}")
+                        with c2:
+                            st.markdown(f"**Date Prélèvement :** {pv_data.get('date_prelevement', '-')}")
+                            st.markdown(f"**Chantier :** {pv_data.get('chantier', '-')}")
+                            st.markdown(f"**Provenance :** {pv_data.get('provenance', '-')}")
+                        
+                        st.markdown("---")
+                        st.markdown("**Synthèse des mesures granulométriques :**")
+                        
+                        # Tableau récapitulatif
+                        summary_rows = [
+                            {"Classe Granulaire": "Gravillons GII 10/20", "2D": pv_data.get("g10_2d"), "1.4D": pv_data.get("g10_14d"), "D": pv_data.get("g10_d"), "d": pv_data.get("g10_dmin"), "d/2": pv_data.get("g10_d2"), "f (<63µm)": pv_data.get("g10_f"), "FI": pv_data.get("g10_fi"), "LA": pv_data.get("g10_la")},
+                            {"Classe Granulaire": "Gravillons GI 4/10", "2D": pv_data.get("g4_2d"), "1.4D": pv_data.get("g4_14d"), "D": pv_data.get("g4_d"), "d": pv_data.get("g4_dmin"), "d/2": pv_data.get("g4_d2"), "f (<63µm)": pv_data.get("g4_f"), "FI": pv_data.get("g4_fi"), "LA": pv_data.get("g4_la")},
+                            {"Classe Granulaire": "Sable fin 0/0.630", "2D": pv_data.get("sf_2d"), "1.4D": pv_data.get("sf_14d"), "D": pv_data.get("sf_d"), "d": "-", "d/2": "-", "f (<63µm)": pv_data.get("sf_f"), "MB": pv_data.get("sf_mb"), "LA": "-"},
+                            {"Classe Granulaire": "Sable grossier 0/4", "2D": pv_data.get("sg_2d"), "1.4D": pv_data.get("sg_14d"), "D": pv_data.get("sg_d"), "d": "-", "d/2": "-", "f (<63µm)": pv_data.get("sg_f"), "Mod. CF": pv_data.get("sg_mf"), "SE(10)": pv_data.get("sg_se")}
+                        ]
+                        st.dataframe(pd.DataFrame(summary_rows), use_container_width=True, hide_index=True)
+                        
+                        st.markdown("<br>", unsafe_allow_html=True)
+                        
+                        # 3. Rangée des 3 boutons d'action (Même disposition que sur l'image)
+                        b_col1, b_col2, b_col3 = st.columns(3)
+                        
+                        with b_col1:
+                            # Re-génération du PDF pour téléchargement direct
+                            header_pdf = {
+                                "num_rapport": pv_data["num_rapport"], "client": pv_data["client"],
+                                "chantier": pv_data["chantier"], "num_dossier": pv_data["num_dossier"],
+                                "date_prelevement": str(pv_data["date_prelevement"]),
+                                "lieux": pv_data["lieux"], "provenance": pv_data["provenance"]
+                            }
+                            g10 = {"2d": pv_data["g10_2d"], "1_4d": pv_data["g10_14d"], "d": pv_data["g10_d"], "d_min": pv_data["g10_dmin"], "d_2": pv_data["g10_d2"], "f": pv_data["g10_f"], "fi": pv_data["g10_fi"], "la": pv_data["g10_la"]}
+                            g4 = {"2d": pv_data["g4_2d"], "1_4d": pv_data["g4_14d"], "d": pv_data["g4_d"], "d_min": pv_data["g4_dmin"], "d_2": pv_data["g4_d2"], "f": pv_data["g4_f"], "fi": pv_data["g4_fi"], "la": pv_data["g4_la"]}
+                            sf = {"2d": pv_data["sf_2d"], "1_4d": pv_data["sf_14d"], "d": pv_data["sf_d"], "p_1mm": pv_data["sf_p1"], "p_250": pv_data["sf_p250"], "f": pv_data["sf_f"], "mb": pv_data["sf_mb"]}
+                            sg = {"2d": pv_data["sg_2d"], "1_4d": pv_data["sg_14d"], "d": pv_data["sg_d"], "p_1mm": pv_data["sg_p1"], "p_250": pv_data["sg_p250"], "f": pv_data["sg_f"], "mf": pv_data["sg_mf"], "se": pv_data["sg_se"]}
+                            
+                            pdf_export = generate_pv_granulats_pdf(header_pdf, g10, g4, sf, sg)
+                            st.download_button(
+                                label="🖨️ Imprimer / PDF",
+                                data=pdf_export,
+                                file_name=f"PV_Granulats_{pv_data.get('num_pv_seq', 'export')}.pdf",
+                                mime="application/pdf",
+                                use_container_width=True,
+                                type="primary"
+                            )
+                        
+                        with b_col2:
+                            if st.button("✏️ Modifier ce PV", use_container_width=True):
+                                st.info("Pensez à charger ce PV dans le premier onglet pour le modifier.")
+                        
+                        with b_col3:
+                            if st.button("🗑️ Supprimer ce PV", use_container_width=True):
+                                supabase_client.table("pv_granulats").delete().eq("num_rapport", pv_data["num_rapport"]).execute()
+                                st.success(f"PV {pv_data['num_rapport']} supprimé avec succès !")
+                                st.rerun()
+
                 else:
-                    st.info("Aucun PV enregistré pour le moment.")
+                    st.info("Aucun PV enregistré dans la base de données.")
             except Exception as e:
-                st.error("Table 'pv_granulats' non trouvée ou erreur de lecture.")
+                st.error(f"Erreur lors du chargement des PVs : {e}")
