@@ -13,7 +13,6 @@ def clean_text(text):
     if text is None:
         return ""
     text_str = str(text)
-    # Remplacement des caractères typographiques courants incompatibles avec latin-1
     text_str = text_str.replace("–", "-").replace("—", "-").replace("’", "'").replace("³", "3")
     return text_str.encode("latin-1", "replace").decode("latin-1")
 
@@ -121,7 +120,7 @@ def generate_pv_compacite_pdf(header_info, points_data):
         pdf.cell(widths[i], 7, clean_text(h), 1, 0, "C")
     pdf.ln()
 
-    # Corps du tableau avec hauteur adaptable pour équilibrer la page A4
+    # Corps du tableau avec hauteur adaptable
     pdf.set_font("Helvetica", "", 7.5)
     nb_samples = max(len(points_data), 1)
     row_height = 8 if nb_samples <= 6 else 6.5
@@ -247,7 +246,7 @@ def show(supabase_client, can_edit=False, is_admin=False):
         st.markdown("---")
         st.subheader("2. Points de Mesure de Compacité")
 
-        # Initialisation par défaut avec références successives 1, 2, 3...
+        # Initialisation avec rérérences successives strictes
         if "compacite_samples" not in st.session_state:
             st.session_state["compacite_samples"] = [
                 {"ref_num": 1, "designation": lieu_prelevement, "type_mesure": "mc", "densite_seche": 2.162, "densite_ref": 2.217, "w_mesure": 6.2, "refus_20mm": 27.0},
@@ -258,10 +257,7 @@ def show(supabase_client, can_edit=False, is_admin=False):
         col_b1, col_b2, col_b3 = st.columns([1.5, 1.5, 3])
         with col_b1:
             if st.button("➕ Ajouter un point de mesure", disabled=not user_can_edit):
-                # Calcul de la prochaine référence successive
-                existing_refs = [s.get("ref_num", 0) for s in st.session_state["compacite_samples"]]
-                next_ref = max(existing_refs) + 1 if existing_refs else 1
-                
+                next_ref = len(st.session_state["compacite_samples"]) + 1
                 st.session_state["compacite_samples"].append({
                     "ref_num": next_ref,
                     "designation": lieu_prelevement,
@@ -281,13 +277,13 @@ def show(supabase_client, can_edit=False, is_admin=False):
         samples_calculated = []
 
         for i, sample in enumerate(st.session_state["compacite_samples"]):
-            # Récupérer la valeur de réf actuelle pour l'affichage de l'expander
-            current_ref_val = int(sample["ref_num"])
-            
-            with st.expander(f"📍 Point N° {i+1} : Réf {current_ref_val} [{sample['type_mesure'].upper()}]", expanded=True):
+            # Synchronisation stricte : Point N° X = Réf X
+            point_num = i + 1
+
+            with st.expander(f"📍 Point N° {point_num} : Réf {point_num} [{sample['type_mesure'].upper()}]", expanded=True):
                 c1, c2, c3, c4, c5, c6, c7 = st.columns([1, 2.5, 1.2, 1.5, 1.5, 1.2, 1.2])
                 with c1:
-                    ref_num = st.number_input("Réf", value=current_ref_val, step=1, key=f"comp_ref_{i}", disabled=not user_can_edit)
+                    ref_num = st.number_input("Réf", value=point_num, step=1, key=f"comp_ref_{i}", disabled=True)
                 with c2:
                     desig = st.text_input("Désignation / Localisation", value=sample["designation"], key=f"comp_desig_{i}", disabled=not user_can_edit)
                 with c3:
@@ -305,9 +301,9 @@ def show(supabase_client, can_edit=False, is_admin=False):
 
                 st.caption(f"📊 **Indice de Compacité (IC)** = `{ic:.1f} %` | **Observation** = `{obs}`")
 
-                # Mise à jour de l'échantillon dans session_state
+                # Mise à jour synchronisée dans la session
                 st.session_state["compacite_samples"][i] = {
-                    "ref_num": ref_num,
+                    "ref_num": point_num,
                     "designation": desig,
                     "type_mesure": type_m,
                     "densite_seche": d_s,
@@ -317,7 +313,7 @@ def show(supabase_client, can_edit=False, is_admin=False):
                 }
 
                 samples_calculated.append({
-                    "ref_num": ref_num,
+                    "ref_num": point_num,
                     "designation": desig,
                     "type_mesure": type_m,
                     "densite_seche": d_s,
@@ -363,7 +359,7 @@ def show(supabase_client, can_edit=False, is_admin=False):
                     st.error("❌ Connexion Supabase indisponible.")
                 else:
                     try:
-                        # VÉRIFICATION ANTI-DOUBLON (Mode création)
+                        # VÉRIFICATION ANTI-DOUBLON
                         if not is_editing_mode:
                             check_pv = supabase_client.table("pv_compacite").select("num_rapport").eq("num_rapport", num_rapport).execute()
                             if check_pv.data:
@@ -373,7 +369,7 @@ def show(supabase_client, can_edit=False, is_admin=False):
                         # ENREGISTREMENT DE L'EN-TÊTE
                         supabase_client.table("pv_compacite").upsert(header_data).execute()
 
-                        # NETTOYAGE ANCIENS POINTS (Mode modification)
+                        # NETTOYAGE ANCIENS POINTS
                         if is_editing_mode:
                             supabase_client.table("essai_compacite").delete().eq("num_rapport", num_rapport).execute()
 
@@ -475,7 +471,7 @@ def show(supabase_client, can_edit=False, is_admin=False):
                                 if samples_data:
                                     st.session_state["compacite_samples"] = [
                                         {
-                                            "ref_num": s.get("ref_num", idx + 1),
+                                            "ref_num": idx + 1,
                                             "designation": s.get("designation", ""),
                                             "type_mesure": s.get("type_mesure", "mc"),
                                             "densite_seche": s.get("densite_seche", 2.15),
