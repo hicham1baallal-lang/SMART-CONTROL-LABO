@@ -73,6 +73,7 @@ def show(supabase_client=None, can_edit=False, is_admin=False, **kwargs):
             'GII': {
                 'nom': 'Gravillons GII - 10/20',
                 'classe': '10/20',
+                'ref_client': '', 'date_prelevement': '', 'lieu_prelevement': '',
                 'sieves': [100, 80, 63, 50, 40, 31.5, 25, 20, 16, 14, 12.5, 10, 8, 6.3, 5, 4, 3.15, 2.5, 2, 1.6, 1.25, 1, 0.8, 0.63, 0.5, 0.4, 0.315, 0.25, 0.2, 0.16, 0.125, 0.1, 0.08, 0.063],
                 'refus': [0, 0, 0, 0, 0, 0, 0, 199.7, 2200.3, 732.7, 308.7, 424, 163.2, 45, 6.9, 2.1, 0.2, 0.1, 0.2, 0.2, 0.1, 0, 0.1, 0.2, 0.1, 0.1, 0.1, 0.1, 0, 0.2, 0.1, 0.1, 0.1, 0.1],
                 'M1': 4110.5, 'M2': 4095.2, 'P': 1.3,
@@ -82,6 +83,7 @@ def show(supabase_client=None, can_edit=False, is_admin=False, **kwargs):
             'GI': {
                 'nom': 'Gravillons GI - 4/10',
                 'classe': '4/10',
+                'ref_client': '', 'date_prelevement': '', 'lieu_prelevement': '',
                 'sieves': [20.0, 14.0, 10.0, 4.0, 2.0, 0.063],
                 'refus': [0.0, 0.0, 320.0, 1640.0, 20.0, 10.0],
                 'M1': 2000.0, 'M2': 1990.0, 'P': 0.0,
@@ -91,6 +93,7 @@ def show(supabase_client=None, can_edit=False, is_admin=False, **kwargs):
             'SD': {
                 'nom': 'Sable fin 0/0,630 (Dune)',
                 'classe': '0/0,63',
+                'ref_client': '', 'date_prelevement': '', 'lieu_prelevement': '',
                 'sieves': [1.26, 1.0, 0.88, 0.63, 0.25, 0.063],
                 'refus': [10.0, 10.0, 0.0, 0.0, 160.0, 718.0],
                 'M1': 1000.0, 'M2': 900.0, 'P': 2.0,
@@ -100,6 +103,7 @@ def show(supabase_client=None, can_edit=False, is_admin=False, **kwargs):
             'SC': {
                 'nom': 'Sable grossier 0/4 (Concassé)',
                 'classe': '0/4',
+                'ref_client': '', 'date_prelevement': '', 'lieu_prelevement': '',
                 'sieves': [8.0, 5.6, 4.0, 1.0, 0.25, 0.063],
                 'refus': [0.0, 40.0, 40.0, 510.0, 250.0, 67.0],
                 'M1': 1000.0, 'M2': 910.0, 'P': 3.0,
@@ -156,6 +160,13 @@ def show(supabase_client=None, can_edit=False, is_admin=False, **kwargs):
         with col1:
             st.subheader(f"Saisie des données : {mat_data['nom']}")
             
+            # --- BLOC 0 : INFORMATIONS DE PRÉLÈVEMENT ---
+            st.markdown("##### 📍 Informations de prélèvement")
+            c_ref, c_date, c_lieu = st.columns(3)
+            new_ref_client = c_ref.text_input("Référence client", value=mat_data.get('ref_client', ''), disabled=not can_edit)
+            new_date_prelev = c_date.text_input("Date de prélèvement", value=mat_data.get('date_prelevement', ''), disabled=not can_edit)
+            new_lieu_prelev = c_lieu.text_input("Lieu de prélèvement", value=mat_data.get('lieu_prelevement', ''), disabled=not can_edit)
+
             # --- BLOC 1 : PESÉES ---
             st.markdown("##### ⚖️ Pesées (Procédé : Lavage et tamisage)")
             c_m1, c_m2, c_p = st.columns(3)
@@ -200,6 +211,9 @@ def show(supabase_client=None, can_edit=False, is_admin=False, **kwargs):
 
             # --- MISE À JOUR TEMPS RÉEL ---
             if can_edit:
+                st.session_state['data_granulats'][key]['ref_client'] = new_ref_client
+                st.session_state['data_granulats'][key]['date_prelevement'] = new_date_prelev
+                st.session_state['data_granulats'][key]['lieu_prelevement'] = new_lieu_prelev
                 st.session_state['data_granulats'][key]['M1'] = new_M1
                 st.session_state['data_granulats'][key]['M2'] = new_M2
                 st.session_state['data_granulats'][key]['P'] = new_P
