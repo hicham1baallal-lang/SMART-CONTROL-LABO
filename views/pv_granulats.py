@@ -164,6 +164,7 @@ def show(supabase_client=None, can_edit=False, is_admin=False, **kwargs):
             st.markdown("##### 📍 Informations de prélèvement")
             c_ref, c_date, c_lieu = st.columns(3)
             new_ref_client = c_ref.text_input("Référence client", value=mat_data.get('ref_client', ''), disabled=not can_edit)
+            new_ref = c_ref.text_input("Référence", value=mat_data.get('ref', ''), disabled=not can_edit)
             new_date_prelev = c_date.text_input("Date de prélèvement", value=mat_data.get('date_prelevement', ''), disabled=not can_edit)
             new_lieu_prelev = c_lieu.text_input("Lieu de prélèvement", value=mat_data.get('lieu_prelevement', ''), disabled=not can_edit)
 
