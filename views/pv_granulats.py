@@ -94,8 +94,8 @@ def show(supabase_client=None, can_edit=False, is_admin=False, **kwargs):
                 'nom': 'Sable fin 0/0,630 (Dune)',
                 'classe': '0/0,63',
                 'ref_client': '', 'date_prelevement': '', 'lieu_prelevement': '',
-                'sieves': [1.26, 1.0, 0.88, 0.63, 0.25, 0.063],
-                'refus': [10.0, 10.0, 0.0, 0.0, 160.0, 718.0],
+                'sieves': [6.3, 5, 4, 3.15, 2.5, 2, 1.6, 1.25, 1, 0.8, 0.63, 0.5, 0.4, 0.315, 0.25, 0.2, 0.16, 0.125, 0.1, 0.08, 0.063],
+                'refus': [3.7, 5.0, 3.0, 4.0, 4.0, 12.0 5.0, 42.0, 14.0, 14.0, 3.0, 4.0, 42.0, 72.0 , 55.0, 42.0, 14.0 , 16.8 , 22.8 , 26.5 , 9.4],
                 'M1': 1000.0, 'M2': 900.0, 'P': 2.0,
                 'passants': [],
                 'fi': None, 'la': None, 'mb': 0.7, 'mf': None, 'se': None
