@@ -3,200 +3,66 @@ import matplotlib.pyplot as plt
 import numpy as np
 import openpyxl
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
-from openpyxl.utils.dataframe import dataframe_to_rows
 import pandas as pd
 import streamlit as st
 
-# ------------------------------------------------------------------------------
-# CONSTANTES & SÉRIES DE TAMIS REGLEMENTAIRES (NF EN 933-1 / NM 10.1.271)
-# ------------------------------------------------------------------------------
+# ==========================================
+# CONSTANTES ET CONFIGURATION DES TAMIS
+# ==========================================
 TAMIS_STANDARD = [
-    100.0,
-    80.0,
-    63.0,
-    50.0,
-    40.0,
-    31.5,
-    25.0,
-    20.0,
-    16.0,
-    14.0,
-    12.5,
-    10.0,
-    8.0,
-    6.3,
-    5.0,
-    4.0,
-    3.15,
-    2.5,
-    2.0,
-    1.6,
-    1.25,
-    1.0,
-    0.8,
-    0.63,
-    0.5,
-    0.4,
-    0.315,
-    0.25,
-    0.2,
-    0.16,
-    0.125,
-    0.1,
-    0.08,
-    0.063,
+    100.0, 80.0, 63.0, 50.0, 40.0, 31.5, 25.0, 20.0, 16.0, 14.0, 12.5,
+    10.0, 8.0, 6.3, 5.0, 4.0, 3.15, 2.5, 2.0, 1.6, 1.25, 1.0, 0.8,
+    0.63, 0.5, 0.4, 0.315, 0.25, 0.2, 0.16, 0.125, 0.1, 0.08, 0.063,
 ]
 
-TAMIS_MF = [4.0, 2.0, 1.0, 0.5, 0.25, 0.125]  # Tamis pour module de finesse
+TAMIS_MF = [4.0, 2.0, 1.0, 0.5, 0.25, 0.125]
 
 FRACTIONS_CONFIG = {
     "GII": {
         "nom": "Gravette II (10/20)",
         "tamis_defaut": [
-            100.0,
-            80.0,
-            63.0,
-            50.0,
-            40.0,
-            31.5,
-            25.0,
-            20.0,
-            16.0,
-            14.0,
-            12.5,
-            10.0,
-            8.0,
-            6.3,
-            5.0,
-            4.0,
-            3.15,
-            2.5,
-            2.0,
-            1.6,
-            1.25,
-            1.0,
-            0.8,
-            0.63,
-            0.5,
-            0.4,
-            0.315,
-            0.25,
-            0.2,
-            0.16,
-            0.125,
-            0.1,
-            0.08,
-            0.063,
+            100.0, 80.0, 63.0, 50.0, 40.0, 31.5, 25.0, 20.0, 16.0, 14.0,
+            12.5, 10.0, 8.0, 6.3, 5.0, 4.0, 3.15, 2.5, 2.0, 1.6, 1.25,
+            1.0, 0.8, 0.63, 0.5, 0.4, 0.315, 0.25, 0.2, 0.16, 0.125,
+            0.1, 0.08, 0.063,
         ],
     },
     "GI": {
         "nom": "Gravette I (4/10)",
         "tamis_defaut": [
-            31.5,
-            25.0,
-            20.0,
-            16.0,
-            14.0,
-            12.5,
-            10.0,
-            8.0,
-            6.3,
-            5.0,
-            4.0,
-            3.15,
-            2.5,
-            2.0,
-            1.6,
-            1.25,
-            1.0,
-            0.8,
-            0.63,
-            0.5,
-            0.4,
-            0.315,
-            0.25,
-            0.2,
-            0.16,
-            0.125,
-            0.1,
-            0.08,
-            0.063,
+            31.5, 25.0, 20.0, 16.0, 14.0, 12.5, 10.0, 8.0, 6.3, 5.0,
+            4.0, 3.15, 2.5, 2.0, 1.6, 1.25, 1.0, 0.8, 0.63, 0.5, 0.4,
+            0.315, 0.25, 0.2, 0.16, 0.125, 0.1, 0.08, 0.063,
         ],
     },
     "SC": {
         "nom": "Sable Concassé (0/4)",
         "tamis_defaut": [
-            10.0,
-            8.0,
-            6.3,
-            5.0,
-            4.0,
-            3.15,
-            2.5,
-            2.0,
-            1.6,
-            1.25,
-            1.0,
-            0.8,
-            0.63,
-            0.5,
-            0.4,
-            0.315,
-            0.25,
-            0.2,
-            0.16,
-            0.125,
-            0.1,
-            0.08,
-            0.063,
+            10.0, 8.0, 6.3, 5.0, 4.0, 3.15, 2.5, 2.0, 1.6, 1.25, 1.0,
+            0.8, 0.63, 0.5, 0.4, 0.315, 0.25, 0.2, 0.16, 0.125, 0.1,
+            0.08, 0.063,
         ],
     },
     "SD": {
         "nom": "Sable Doux / Dune (0/2)",
         "tamis_defaut": [
-            5.0,
-            4.0,
-            3.15,
-            2.5,
-            2.0,
-            1.6,
-            1.25,
-            1.0,
-            0.8,
-            0.63,
-            0.5,
-            0.4,
-            0.315,
-            0.25,
-            0.2,
-            0.16,
-            0.125,
-            0.1,
-            0.08,
-            0.063,
+            5.0, 4.0, 3.15, 2.5, 2.0, 1.6, 1.25, 1.0, 0.8, 0.63, 0.5,
+            0.4, 0.315, 0.25, 0.2, 0.16, 0.125, 0.1, 0.08, 0.063,
         ],
     },
 }
 
-
-# ------------------------------------------------------------------------------
-# FONCTIONS DE CALCUL NORMALISÉES
-# ------------------------------------------------------------------------------
-def calculer_feuille_essai(
-    m1, m2, fond_p, dict_refus, tamis_list, proced_lavage=True
-):
-    """
-    Réalise les calculs complets d'une feuille d'essai d'analyse granulométrique.
-    """
+# ==========================================
+# FONCTIONS DE CALCUL TECHNIQUE
+# ==========================================
+def calculer_feuille_essai(m1, m2, fond_p, dict_refus, tamis_list, proced_lavage=True):
     if not proced_lavage:
         m2 = m1
 
     fines_lavage = max(0.0, m1 - m2)
 
     df = pd.DataFrame({"Tamis (mm)": tamis_list})
-    df["Refus Partiel Ri (g)"] = df["Tamis (mm)"].map(
-        lambda t: float(dict_refus.get(t, 0.0))
-    )
+    df["Refus Partiel Ri (g)"] = df["Tamis (mm)"].map(lambda t: float(dict_refus.get(t, 0.0)))
 
     if m1 > 0:
         df["% Refus Partiel"] = (df["Refus Partiel Ri (g)"] / m1) * 100.0
@@ -213,10 +79,7 @@ def calculer_feuille_essai(
     sum_ri = df["Refus Partiel Ri (g)"].sum()
     sum_ri_p = sum_ri + fond_p
 
-    # Calcul des fines sur 0.063 mm (%) : 100 * ((M1 - M2) + P) / M1
     pct_fines = (((fines_lavage + fond_p) / m1) * 100.0) if m1 > 0 else 0.0
-
-    # Écart de masse (%) : 100 * (M2 - (Sum(Ri) + P)) / M2
     ecart_masse = (((m2 - sum_ri_p) / m2) * 100.0) if m2 > 0 else 0.0
 
     return {
@@ -232,11 +95,7 @@ def calculer_feuille_essai(
         "procede": "Lavage et tamisage" if proced_lavage else "Tamisage à sec",
     }
 
-
 def calculer_module_finesse(df_resultats):
-    """
-    Module de finesse (MF) = somme des % refus cumulés sur la série spécifiée / 100.
-    """
     sum_refus = 0.0
     for t in TAMIS_MF:
         row = df_resultats[df_resultats["Tamis (mm)"] == t]
@@ -244,22 +103,14 @@ def calculer_module_finesse(df_resultats):
             sum_refus += row["% Refus Cumulé"].values[0]
     return round(sum_refus / 100.0, 2)
 
-
-# ------------------------------------------------------------------------------
-# EXPORT EXCEL AVEC FEUILLES D'ESSAIS INDIVIDUELLES + PV DE SYNTHÈSE
-# ------------------------------------------------------------------------------
+# ==========================================
+# GENERATION DU FICHIER EXCEL MULTI-ONGLETS
+# ==========================================
 def ajouter_feuille_essai_excel(wb, title, key, infos_pv, data_frac):
-    """
-    Génère un onglet Excel de feuille d'essai complet conforme à la photo d'illustration.
-    """
     ws = wb.create_sheet(title=f"Feuille {key}")
 
-    yellow_fill = PatternFill(
-        start_color="FFFF00", end_color="FFFF00", fill_type="solid"
-    )
-    gray_fill = PatternFill(
-        start_color="F2F2F2", end_color="F2F2F2", fill_type="solid"
-    )
+    yellow_fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
+    gray_fill = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
     thin_border = Border(
         left=Side(style="thin"),
         right=Side(style="thin"),
@@ -267,7 +118,6 @@ def ajouter_feuille_essai_excel(wb, title, key, infos_pv, data_frac):
         bottom=Side(style="thin"),
     )
 
-    # Entête
     ws["A1"] = f"Référence échantillon : {data_frac['nom']}"
     ws["A1"].font = Font(bold=True)
     ws["F1"] = f"Date de l'essai : {infos_pv.get('date_essai', '')}"
@@ -279,11 +129,8 @@ def ajouter_feuille_essai_excel(wb, title, key, infos_pv, data_frac):
 
     ws["A3"] = f"Masse sèche après lavage M2 = {data_frac['m2']:.1f} g"
     ws["A3"].fill = yellow_fill
-    ws["F3"] = (
-        f"Masse des fines retirées (M1 - M2) = {data_frac['fines_lavage']:.1f} g"
-    )
+    ws["F3"] = f"Masse des fines retirées (M1 - M2) = {data_frac['fines_lavage']:.1f} g"
 
-    # Entêtes du tableau central
     headers = [
         "Ouverture des tamis (mm)",
         "Masse de refus Ri (g)",
@@ -295,9 +142,7 @@ def ajouter_feuille_essai_excel(wb, title, key, infos_pv, data_frac):
     for col_idx, h in enumerate(headers, 1):
         cell = ws.cell(row=5, column=col_idx, value=h)
         cell.font = Font(bold=True, size=9)
-        cell.alignment = Alignment(
-            horizontal="center", vertical="center", wrap_text=True
-        )
+        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
         cell.border = thin_border
         cell.fill = gray_fill
 
@@ -326,12 +171,9 @@ def ajouter_feuille_essai_excel(wb, title, key, infos_pv, data_frac):
         for cell in [c1, c2, c3, c4, c5]:
             cell.border = thin_border
 
-    # Bloc d'information à droite du tableau
     ws["F5"] = "Nota :"
     ws["F5"].font = Font(bold=True)
-    ws["F6"] = (
-        "La masse sèche de la prise d'essai devrait être portée en M1, lorsqu'elle est déterminée directement."
-    )
+    ws["F6"] = "La masse sèche de la prise d'essai devrait être portée en M1, lorsqu'elle est déterminée directement."
 
     ws["F9"] = f"Matériau resté au fond (en g) P = {data_frac['fond_p']:.1f}"
     ws["F9"].fill = yellow_fill
@@ -351,7 +193,6 @@ def ajouter_feuille_essai_excel(wb, title, key, infos_pv, data_frac):
     ws["F21"] = "(doit être < 1 %)"
     ws["F21"].font = Font(italic=True)
 
-    # Largeurs des colonnes
     ws.column_dimensions["A"].width = 22
     ws.column_dimensions["B"].width = 20
     ws.column_dimensions["C"].width = 22
@@ -359,14 +200,9 @@ def ajouter_feuille_essai_excel(wb, title, key, infos_pv, data_frac):
     ws.column_dimensions["E"].width = 25
     ws.column_dimensions["F"].width = 45
 
-
 def generer_pv_excel_complet(infos_pv, resultats_fractions):
-    """
-    Génère le classeur Excel complet (PV de synthèse + 4 feuilles d'essai détaillées).
-    """
     wb = openpyxl.Workbook()
 
-    # 1. Feuille de synthèse (PV)
     ws_pv = wb.active
     ws_pv.title = "PV Synthèse"
 
@@ -391,53 +227,36 @@ def generer_pv_excel_complet(infos_pv, resultats_fractions):
         row_idx += 1
 
     row_idx += 1
-    ws_pv.cell(
-        row=row_idx, column=1, value="Synthèse des Passants Cumulés (%)"
-    ).font = Font(bold=True, size=11)
+    ws_pv.cell(row=row_idx, column=1, value="Synthèse des Passants Cumulés (%)").font = Font(bold=True, size=11)
     row_idx += 1
 
     headers = ["Tamis (mm)"] + list(resultats_fractions.keys())
     for col_idx, h in enumerate(headers, 1):
         cell = ws_pv.cell(row=row_idx, column=col_idx, value=h)
         cell.font = Font(bold=True, color="FFFFFF")
-        cell.fill = PatternFill(
-            start_color="1F497D", end_color="1F497D", fill_type="solid"
-        )
+        cell.fill = PatternFill(start_color="1F497D", end_color="1F497D", fill_type="solid")
         cell.alignment = Alignment(horizontal="center")
 
     row_idx += 1
     for t in TAMIS_STANDARD:
-        ws_pv.cell(row=row_idx, column=1, value=t).alignment = Alignment(
-            horizontal="center"
-        )
+        ws_pv.cell(row=row_idx, column=1, value=t).alignment = Alignment(horizontal="center")
         for col_idx, key in enumerate(resultats_fractions.keys(), 2):
             df_frac = resultats_fractions[key]["df"]
             val_row = df_frac[df_frac["Tamis (mm)"] == t]
             if not val_row.empty:
                 p_val = round(val_row["% Passant Cumulé"].values[0], 1)
-                ws_pv.cell(row=row_idx, column=col_idx, value=p_val).alignment = (
-                    Alignment(horizontal="center")
-                )
+                ws_pv.cell(row=row_idx, column=col_idx, value=p_val).alignment = Alignment(horizontal="center")
             else:
-                ws_pv.cell(row=row_idx, column=col_idx, value="-").alignment = (
-                    Alignment(horizontal="center")
-                )
+                ws_pv.cell(row=row_idx, column=col_idx, value="-").alignment = Alignment(horizontal="center")
         row_idx += 1
 
     row_idx += 1
-    ws_pv.cell(row=row_idx, column=1, value="Module de Finesse (MF)").font = Font(
-        bold=True
-    )
+    ws_pv.cell(row=row_idx, column=1, value="Module de Finesse (MF)").font = Font(bold=True)
     for col_idx, key in enumerate(resultats_fractions.keys(), 2):
         mf = resultats_fractions[key].get("mf", "-")
-        ws_pv.cell(
-            row=row_idx, column=col_idx, value=mf if mf is not None else "-"
-        ).font = Font(bold=True)
-        ws_pv.cell(row=row_idx, column=col_idx).alignment = Alignment(
-            horizontal="center"
-        )
+        ws_pv.cell(row=row_idx, column=col_idx, value=mf if mf is not None else "-").font = Font(bold=True)
+        ws_pv.cell(row=row_idx, column=col_idx).alignment = Alignment(horizontal="center")
 
-    # 2. Génération des feuilles d'essai individuelles
     for key, data in resultats_fractions.items():
         ajouter_feuille_essai_excel(wb, data["nom"], key, infos_pv, data)
 
@@ -445,17 +264,13 @@ def generer_pv_excel_complet(infos_pv, resultats_fractions):
     wb.save(output)
     return output.getvalue()
 
-
-# ------------------------------------------------------------------------------
-# ENTRYPOINT / INTERFACE UTILISATEUR COMPATIBLE ROUTEUR STREAMLIT
-# ------------------------------------------------------------------------------
+# ==========================================
+# FONCTION PRINCIPALE EXECUTEE PAR LE ROUTEUR
+# ==========================================
 def show():
     st.title("🧪 Module Granulats : Analyse Granulométrique & Feuilles d'Essais")
-    st.markdown(
-        "Saisie complète des feuilles d'essais pour **GII, GI, SC, SD** selon NF EN 933-1 / NM 10.1.271."
-    )
+    st.markdown("Saisie complète des feuilles d'essais pour **GII, GI, SC, SD** selon NF EN 933-1 / NM 10.1.271.")
 
-    # Section 1: Informations Générales du PV
     with st.expander("📌 Informations du Procès-Verbal (PV)", expanded=True):
         col_a, col_b, col_c = st.columns(3)
         with col_a:
@@ -478,18 +293,14 @@ def show():
     }
 
     st.divider()
-
-    # Section 2: Saisie des feuilles d'essais par fraction
     st.subheader("📝 Saisie des Feuilles d'Essais")
 
-    tabs = st.tabs(
-        [
-            "GII - Gravette II",
-            "GI - Gravette I",
-            "SC - Sable Concassé",
-            "SD - Sable Doux",
-        ]
-    )
+    tabs = st.tabs([
+        "GII - Gravette II",
+        "GI - Gravette I",
+        "SC - Sable Concassé",
+        "SD - Sable Doux",
+    ])
 
     dict_fractions_data = {}
     keys_fractions = ["GII", "GI", "SC", "SD"]
@@ -540,7 +351,6 @@ def show():
                     key=f"p_{key}",
                 )
 
-            # Choix des tamis
             tamis_choisis = st.multiselect(
                 f"Série de tamis pour {key} (mm)",
                 options=TAMIS_STANDARD,
@@ -558,37 +368,15 @@ def show():
             for idx, t in enumerate(tamis_choisis):
                 col_curr = cols[idx % cols_per_row]
 
-                # Valeurs de démonstration par défaut pour GII
                 val_defaut = 0.0
                 if key == "GII":
                     ex_vals = {
-                        20.0: 199.7,
-                        16.0: 2200.3,
-                        14.0: 732.7,
-                        12.5: 308.7,
-                        10.0: 424.0,
-                        8.0: 163.2,
-                        6.3: 45.0,
-                        5.0: 6.9,
-                        4.0: 2.1,
-                        3.15: 0.2,
-                        2.5: 0.1,
-                        2.0: 0.2,
-                        1.6: 0.2,
-                        1.25: 0.1,
-                        1.0: 0.1,
-                        0.8: 0.1,
-                        0.63: 0.2,
-                        0.5: 0.1,
-                        0.4: 0.1,
-                        0.315: 0.1,
-                        0.25: 0.1,
-                        0.2: 0.1,
-                        0.16: 0.2,
-                        0.125: 0.1,
-                        0.1: 0.1,
-                        0.08: 0.1,
-                        0.063: 0.1,
+                        20.0: 199.7, 16.0: 2200.3, 14.0: 732.7, 12.5: 308.7,
+                        10.0: 424.0, 8.0: 163.2, 6.3: 45.0, 5.0: 6.9,
+                        4.0: 2.1, 3.15: 0.2, 2.5: 0.1, 2.0: 0.2, 1.6: 0.2,
+                        1.25: 0.1, 1.0: 0.1, 0.8: 0.1, 0.63: 0.2, 0.5: 0.1,
+                        0.4: 0.1, 0.315: 0.1, 0.25: 0.1, 0.2: 0.1, 0.16: 0.2,
+                        0.125: 0.1, 0.1: 0.1, 0.08: 0.1, 0.063: 0.1,
                     }
                     val_defaut = ex_vals.get(t, 0.0)
 
@@ -602,7 +390,6 @@ def show():
                 )
                 refus_dict[t] = val_refus
 
-            # Calculs granulométriques complets
             res = calculer_feuille_essai(
                 m1, m2, fond_p, refus_dict, tamis_choisis, procede_lavage
             )
@@ -615,21 +402,15 @@ def show():
             res["nom"] = config["nom"]
             dict_fractions_data[key] = res
 
-            # Affichage synthétique des résultats d'essai
             col_res1, col_res2, col_res3 = st.columns(3)
             col_res1.metric("Fines lavées (M1 - M2)", f"{res['fines_lavage']:.1f} g")
-            col_res2.metric(
-                "Passants fines (< 63 µm)", f"{res['pct_fines']:.2f} %"
-            )
+            col_res2.metric("Passants fines (< 63 µm)", f"{res['pct_fines']:.2f} %")
             col_res3.metric(
                 "Écart de masse",
                 f"{res['ecart_masse']:.2f} %",
-                delta="Conforme (<1%)"
-                if abs(res["ecart_masse"]) < 1.0
-                else "Non conforme",
+                delta="Conforme (<1%)" if abs(res["ecart_masse"]) < 1.0 else "Non conforme",
             )
 
-            # Affichage du tableau d'essai complet
             st.dataframe(
                 res["df"].style.format(
                     {
@@ -644,7 +425,6 @@ def show():
 
     st.divider()
 
-    # Section 3: Courbe Granulométrique Systématique
     st.subheader("📈 Courbe Granulométrique Globale")
 
     fig, ax = plt.subplots(figsize=(10, 5))
@@ -676,7 +456,6 @@ def show():
 
     st.pyplot(fig)
 
-    # Section 4: Exportation du PV et des Feuilles d'Essai
     st.subheader("📄 Exportation Excel (PV + Feuille d'Essai par Classe)")
 
     pv_excel_bytes = generer_pv_excel_complet(infos_pv, dict_fractions_data)
