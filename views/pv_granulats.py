@@ -236,9 +236,30 @@ def show(supabase_client, can_edit=False, is_admin=False):
         st.markdown("---")
         
         header_data = {
-            "num_rapport": num_rapport, "client": client, "chantier": chantier,
-            "num_dossier": num_dossier, "date_prelevement": str(date_prelevement),
-            "lieux": lieux, "provenance": provenance
+            "num_pv_seq": num_pv_seq,
+            "num_rapport": num_rapport, 
+            "client": client, 
+            "chantier": chantier,
+            "num_dossier": num_dossier, 
+            "date_prelevement": str(date_prelevement),
+            "lieux": lieux, 
+            "provenance": provenance
+        }
+
+        # Assemblage complet du payload pour Supabase
+        payload_db = {
+            **header_data,
+            "g10_2d": g10_20["2d"], "g10_14d": g10_20["1_4d"], "g10_d": g10_20["d"], "g10_dmin": g10_20["d_min"],
+            "g10_d2": g10_20["d_2"], "g10_f": g10_20["f"], "g10_fi": g10_20["fi"], "g10_la": g10_20["la"],
+            
+            "g4_2d": g4_10["2d"], "g4_14d": g4_10["1_4d"], "g4_d": g4_10["d"], "g4_dmin": g4_10["d_min"],
+            "g4_d2": g4_10["d_2"], "g4_f": g4_10["f"], "g4_fi": g4_10["fi"], "g4_la": g4_10["la"],
+            
+            "sf_2d": s_fin["2d"], "sf_14d": s_fin["1_4d"], "sf_d": s_fin["d"], "sf_p1": s_fin["p_1mm"],
+            "sf_p250": s_fin["p_250"], "sf_f": s_fin["f"], "sf_mb": s_fin["mb"],
+            
+            "sg_2d": s_gros["2d"], "sg_14d": s_gros["1_4d"], "sg_d": s_gros["d"], "sg_p1": s_gros["p_1mm"],
+            "sg_p250": s_gros["p_250"], "sg_f": s_gros["f"], "sg_mf": s_gros["mf"], "sg_se": s_gros["se"]
         }
 
         pdf_bytes = generate_pv_granulats_pdf(header_data, g10_20, g4_10, s_fin, s_gros)
@@ -256,8 +277,7 @@ def show(supabase_client, can_edit=False, is_admin=False):
             if st.button("💾 Enregistrer dans Supabase", type="primary", use_container_width=True):
                 if supabase_client:
                     try:
-                        # Assurez-vous d'avoir une table "pv_granulats" dans Supabase
-                        supabase_client.table("pv_granulats").upsert(header_data).execute()
+                        supabase_client.table("pv_granulats").upsert(payload_db, on_conflict="num_rapport").execute()
                         st.success(f"✅ PV Granulats {num_rapport} enregistré avec succès !")
                     except Exception as e:
                         st.error(f"❌ Erreur lors de l'enregistrement : {e}")
@@ -268,7 +288,7 @@ def show(supabase_client, can_edit=False, is_admin=False):
         st.subheader("🗄️ Base de données brutes")
         if supabase_client:
             try:
-                res = supabase_client.table("pv_granulats").select("*").execute()
+                res = supabase_client.table("pv_granulats").select("*").order("created_at", desc=True).execute()
                 if res.data:
                     st.dataframe(pd.DataFrame(res.data), use_container_width=True)
                 else:
