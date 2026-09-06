@@ -267,7 +267,7 @@ def generer_pv_excel_complet(infos_pv, resultats_fractions):
 # ==========================================
 # FONCTION PRINCIPALE EXECUTEE PAR LE ROUTEUR
 # ==========================================
-def show():
+def show(supabase=None, supabase_client=None, *args, **kwargs):
     st.title("🧪 Module Granulats : Analyse Granulométrique & Feuilles d'Essais")
     st.markdown("Saisie complète des feuilles d'essais pour **GII, GI, SC, SD** selon NF EN 933-1 / NM 10.1.271.")
 
