@@ -192,12 +192,12 @@ def show(supabase_client, can_edit=False, is_admin=False):
         st.subheader("1. Informations Générales du PV")
         col_h1, col_h2, col_h3 = st.columns(3)
 
-        default_seq = st.session_state.get("edit_comp_num_seq", 1263)
+        default_seq = st.session_state.get("edit_comp_num_seq", 1264)
         default_dossier = st.session_state.get("edit_comp_dossier", "2025-260-05985-2025 0247")
         default_lieu = st.session_state.get("edit_comp_lieu", "OA-SOUS-RN11/12éme couche de remblai contigu du plot 2 gauche (Inferieur 1,50m)")
         default_d_opn = float(st.session_state.get("edit_comp_d_opn", 2.09))
         default_w_opn = float(st.session_state.get("edit_comp_w_opn", 6.3))
-        default_mat = st.session_state.get("edit_comp_mat", "GNT / matériaux Type 1 ou Type 2 - remblais contigus OA")
+        default_mat = st.session_state.get("edit_comp_mat", "GNT / Grave 0/60 - couche de forme LGV")
 
         with col_h1:
             st.markdown("**N° Rapport d'essai**")
@@ -218,7 +218,7 @@ def show(supabase_client, can_edit=False, is_admin=False):
             
             # SELECTBOX DYNAMIQUE MATÉRIAUX
             mat_keys = list(REFERENTIEL_MATERIAUX.keys())
-            default_mat_idx = mat_keys.index(default_mat) if default_mat in mat_keys else 3
+            default_mat_idx = mat_keys.index(default_mat) if default_mat in mat_keys else 1
 
             type_materiau = st.selectbox(
                 "Type de matériau / Famille",
@@ -247,20 +247,29 @@ def show(supabase_client, can_edit=False, is_admin=False):
         st.markdown("---")
         st.subheader("2. Points de Mesure de Compacité")
 
+        # Initialisation par défaut avec références successives 1, 2, 3...
         if "compacite_samples" not in st.session_state:
             st.session_state["compacite_samples"] = [
                 {"ref_num": 1, "designation": lieu_prelevement, "type_mesure": "mc", "densite_seche": 2.162, "densite_ref": 2.217, "w_mesure": 6.2, "refus_20mm": 27.0},
-                {"ref_num": 1, "designation": lieu_prelevement, "type_mesure": "fc", "densite_seche": 2.152, "densite_ref": 2.226, "w_mesure": 6.2, "refus_20mm": 29.0},
-                {"ref_num": 2, "designation": lieu_prelevement, "type_mesure": "mc", "densite_seche": 2.144, "densite_ref": 2.211, "w_mesure": 6.9, "refus_20mm": 26.0},
-                {"ref_num": 2, "designation": lieu_prelevement, "type_mesure": "fc", "densite_seche": 2.137, "densite_ref": 2.206, "w_mesure": 6.0, "refus_20mm": 24.9},
+                {"ref_num": 2, "designation": lieu_prelevement, "type_mesure": "mc", "densite_seche": 2.152, "densite_ref": 2.226, "w_mesure": 6.2, "refus_20mm": 29.0},
+                {"ref_num": 3, "designation": lieu_prelevement, "type_mesure": "mc", "densite_seche": 2.144, "densite_ref": 2.211, "w_mesure": 6.9, "refus_20mm": 26.0},
             ]
 
         col_b1, col_b2, col_b3 = st.columns([1.5, 1.5, 3])
         with col_b1:
             if st.button("➕ Ajouter un point de mesure", disabled=not user_can_edit):
-                next_ref = len(st.session_state["compacite_samples"]) // 2 + 1
+                # Calcul de la prochaine référence successive
+                existing_refs = [s.get("ref_num", 0) for s in st.session_state["compacite_samples"]]
+                next_ref = max(existing_refs) + 1 if existing_refs else 1
+                
                 st.session_state["compacite_samples"].append({
-                    "ref_num": next_ref, "designation": lieu_prelevement, "type_mesure": "mc", "densite_seche": 2.150, "densite_ref": 2.200, "w_mesure": 6.0, "refus_20mm": 25.0
+                    "ref_num": next_ref,
+                    "designation": lieu_prelevement,
+                    "type_mesure": "mc",
+                    "densite_seche": 2.150,
+                    "densite_ref": 2.200,
+                    "w_mesure": 6.0,
+                    "refus_20mm": 25.0
                 })
                 st.rerun()
 
@@ -272,10 +281,13 @@ def show(supabase_client, can_edit=False, is_admin=False):
         samples_calculated = []
 
         for i, sample in enumerate(st.session_state["compacite_samples"]):
-            with st.expander(f"📍 Point N° {i+1} : Réf {sample['ref_num']} [{sample['type_mesure'].upper()}]", expanded=True):
+            # Récupérer la valeur de réf actuelle pour l'affichage de l'expander
+            current_ref_val = int(sample["ref_num"])
+            
+            with st.expander(f"📍 Point N° {i+1} : Réf {current_ref_val} [{sample['type_mesure'].upper()}]", expanded=True):
                 c1, c2, c3, c4, c5, c6, c7 = st.columns([1, 2.5, 1.2, 1.5, 1.5, 1.2, 1.2])
                 with c1:
-                    ref_num = st.number_input("Réf", value=int(sample["ref_num"]), step=1, key=f"comp_ref_{i}", disabled=not user_can_edit)
+                    ref_num = st.number_input("Réf", value=current_ref_val, step=1, key=f"comp_ref_{i}", disabled=not user_can_edit)
                 with c2:
                     desig = st.text_input("Désignation / Localisation", value=sample["designation"], key=f"comp_desig_{i}", disabled=not user_can_edit)
                 with c3:
@@ -292,6 +304,17 @@ def show(supabase_client, can_edit=False, is_admin=False):
                 ic, obs = evaluer_compacite(d_s, d_ref, type_mesure=type_m, exigence_mc=exigence_mc, exigence_fc=exigence_fc)
 
                 st.caption(f"📊 **Indice de Compacité (IC)** = `{ic:.1f} %` | **Observation** = `{obs}`")
+
+                # Mise à jour de l'échantillon dans session_state
+                st.session_state["compacite_samples"][i] = {
+                    "ref_num": ref_num,
+                    "designation": desig,
+                    "type_mesure": type_m,
+                    "densite_seche": d_s,
+                    "densite_ref": d_ref,
+                    "w_mesure": w_m,
+                    "refus_20mm": ref_20
+                }
 
                 samples_calculated.append({
                     "ref_num": ref_num,
@@ -438,7 +461,7 @@ def show(supabase_client, can_edit=False, is_admin=False):
                                 try:
                                     seq_val = int(selected_num_rapport.split('/')[-1])
                                 except Exception:
-                                    seq_val = 1263
+                                    seq_val = 1264
 
                                 st.session_state["compacite_edit_mode"] = True
                                 st.session_state["compacite_edit_num_rapport"] = selected_num_rapport
@@ -452,14 +475,14 @@ def show(supabase_client, can_edit=False, is_admin=False):
                                 if samples_data:
                                     st.session_state["compacite_samples"] = [
                                         {
-                                            "ref_num": s.get("ref_num", 1),
+                                            "ref_num": s.get("ref_num", idx + 1),
                                             "designation": s.get("designation", ""),
                                             "type_mesure": s.get("type_mesure", "mc"),
                                             "densite_seche": s.get("densite_seche", 2.15),
                                             "densite_ref": s.get("densite_ref", 2.20),
                                             "w_mesure": s.get("w_mesure", 6.0),
                                             "refus_20mm": s.get("refus_20mm", 25.0)
-                                        } for s in samples_data
+                                        } for idx, s in enumerate(samples_data)
                                     ]
                                 st.success("PV chargé dans l'onglet 'Saisie & Modification'.")
                                 st.rerun()
