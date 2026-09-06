@@ -452,10 +452,11 @@ try:
 except ImportError:
   essai_compacite = None
 
+# 👉 CORRECTION ICI : Importation du fichier pv_granulats au lieu de essai_granulats_beton
 try:
-  from views import essai_granulats_beton
+  from views import pv_granulats
 except ImportError:
-  essai_granulats_beton = None
+  pv_granulats = None
 
 try:
   from views import essai_identification_materiaux
@@ -847,8 +848,9 @@ elif page == "Teneur en Eau":
   render_view(essai_teneur_eau, supabase)
 elif page == "Contrôle de Compacité":
   render_view(essai_compacite, supabase)
+# 👉 CORRECTION ICI : Appel du bon module
 elif page == "Granulats pour Béton":
-  render_view(essai_granulats_beton, supabase)
+  render_view(pv_granulats, supabase)
 elif page == "Identification Matériau":
   render_view(essai_identification_materiaux, supabase)
 elif page == "Synthèse Plaque":
