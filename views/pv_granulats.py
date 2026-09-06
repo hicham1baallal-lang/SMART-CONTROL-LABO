@@ -20,8 +20,7 @@ def update_passants(mat_data):
         pct_refus_cum = np.cumsum(pct_refus)
         passants = [100.0 - c for c in pct_refus_cum]
         
-        # Application de la règle d'arrondi (Nota de la norme) :
-        # Entier le plus proche sauf pour le tamis 0.063 mm (1 décimale)
+        # Application de la règle d'arrondi (Nota de la norme)
         passants_fmt = []
         for s, p in zip(mat_data['sieves'], passants):
             if s == 0.063:
@@ -74,18 +73,17 @@ def show(supabase_client=None, can_edit=False, is_admin=False, **kwargs):
             'GII': {
                 'nom': 'Gravillons GII - 10/20',
                 'classe': '10/20',
-                # Données exactes tirées de la feuille de calcul LPEE (11/04/2025)
                 'sieves': [100, 80, 63, 50, 40, 31.5, 25, 20, 16, 14, 12.5, 10, 8, 6.3, 5, 4, 3.15, 2.5, 2, 1.6, 1.25, 1, 0.8, 0.63, 0.5, 0.4, 0.315, 0.25, 0.2, 0.16, 0.125, 0.1, 0.08, 0.063],
                 'refus': [0, 0, 0, 0, 0, 0, 0, 199.7, 2200.3, 732.7, 308.7, 424, 163.2, 45, 6.9, 2.1, 0.2, 0.1, 0.2, 0.2, 0.1, 0, 0.1, 0.2, 0.1, 0.1, 0.1, 0.1, 0, 0.2, 0.1, 0.1, 0.1, 0.1],
                 'M1': 4110.5, 'M2': 4095.2, 'P': 1.3,
-                'passants': [], # Calculé dynamiquement
+                'passants': [], 
                 'fi': 16.0, 'la': 26.0, 'mb': None, 'mf': None, 'se': None
             },
             'GI': {
                 'nom': 'Gravillons GI - 4/10',
                 'classe': '4/10',
                 'sieves': [20.0, 14.0, 10.0, 4.0, 2.0, 0.063],
-                'refus': [0.0, 0.0, 320.0, 1640.0, 20.0, 10.0], # Calculé pour simuler l'ancien PV
+                'refus': [0.0, 0.0, 320.0, 1640.0, 20.0, 10.0],
                 'M1': 2000.0, 'M2': 1990.0, 'P': 0.0,
                 'passants': [], 
                 'fi': 14.0, 'la': 26.0, 'mb': None, 'mf': None, 'se': None
@@ -110,7 +108,7 @@ def show(supabase_client=None, can_edit=False, is_admin=False, **kwargs):
             }
         }
 
-    # S'assurer que les passants sont à jour pour tous les matériaux au chargement
+    # Mise à jour initiale des passants
     for k in st.session_state['data_granulats'].keys():
         update_passants(st.session_state['data_granulats'][k])
 
@@ -138,13 +136,13 @@ def show(supabase_client=None, can_edit=False, is_admin=False, **kwargs):
     ])
 
     # ------------------------------------------------------------------------------
-    # FENÊTRE 1 : FEUILLES D'ESSAIS COMPLETS (ADAPTÉE AU FORMAT LABORATOIRE)
+    # FENÊTRE 1 : FEUILLES D'ESSAIS COMPLETS
     # ------------------------------------------------------------------------------
     with tabs[0]:
         st.header("Feuilles d'Analyse Granulométrique et Caractéristiques")
         
         selected_mat = st.radio(
-            "Sélectionner la fraction d'échantillon :",
+            "Sélectionner la fraction d'échantillon à modifier :",
             ["GII (10/20)", "GI (4/10)", "SD (0/0,63)", "SC (0/4)"],
             horizontal=True
         )
@@ -156,7 +154,7 @@ def show(supabase_client=None, can_edit=False, is_admin=False, **kwargs):
         col1, col2 = st.columns([1.1, 0.9])
         
         with col1:
-            st.subheader(f"Données de l'essai : {mat_data['nom']}")
+            st.subheader(f"Saisie des données : {mat_data['nom']}")
             
             # --- BLOC 1 : PESÉES ---
             st.markdown("##### ⚖️ Pesées (Procédé : Lavage et tamisage)")
@@ -168,19 +166,16 @@ def show(supabase_client=None, can_edit=False, is_admin=False, **kwargs):
             # --- BLOC 2 : TABLEAU D'ANALYSE ---
             st.markdown("##### 📊 Analyse par tamisage (Saisie des refus en g)")
             
-            # Préparation du dataframe d'affichage
             df_display = pd.DataFrame({
                 "Tamis (mm)": mat_data['sieves'],
                 "Masse de refus Ri (g)": mat_data.get('refus', [0.0]*len(mat_data['sieves']))
             })
             
-            # Calculs dynamiques pour l'affichage (Lecture seule dans le tableau)
             temp_pct = (df_display["Masse de refus Ri (g)"] / new_M1) * 100 if new_M1 > 0 else 0
             temp_cum = temp_pct.cumsum()
             df_display["% Refus"] = temp_pct
             df_display["% Refus Cumulés"] = temp_cum
             
-            # Fonction d'arrondi normatif
             def calc_passant(row):
                 p = 100.0 - row["% Refus Cumulés"]
                 if row["Tamis (mm)"] == 0.063:
@@ -189,7 +184,6 @@ def show(supabase_client=None, can_edit=False, is_admin=False, **kwargs):
                 
             df_display["% Passants"] = df_display.apply(calc_passant, axis=1)
 
-            # Editeur de données : seule la colonne "Masse de refus Ri (g)" est éditable
             edited_df = st.data_editor(
                 df_display,
                 column_config={
@@ -204,16 +198,15 @@ def show(supabase_client=None, can_edit=False, is_admin=False, **kwargs):
                 height=450
             )
 
-            # --- SAUVEGARDE ET RECALCUL EN TEMPS RÉEL ---
+            # --- MISE À JOUR TEMPS RÉEL ---
             if can_edit:
                 st.session_state['data_granulats'][key]['M1'] = new_M1
                 st.session_state['data_granulats'][key]['M2'] = new_M2
                 st.session_state['data_granulats'][key]['P'] = new_P
                 st.session_state['data_granulats'][key]['refus'] = edited_df["Masse de refus Ri (g)"].tolist()
-                # Met à jour la liste officielle des passants utilisée par Tab 2
                 update_passants(st.session_state['data_granulats'][key]) 
 
-            # --- BLOC 3 : NOTA / VÉRIFICATIONS ---
+            # --- BLOC 3 : VÉRIFICATIONS ---
             st.markdown("##### 🔍 Vérifications et Validations (NF EN 933-1)")
             refus_array = edited_df["Masse de refus Ri (g)"].values
             somme_Ri = sum(refus_array)
@@ -230,33 +223,43 @@ def show(supabase_client=None, can_edit=False, is_admin=False, **kwargs):
                 c_v2.error(f"**Pertes de tamisage :** {perte_fraction:.2f} %\n\n❌ Rejeter l'essai (> 1%)")
 
         with col2:
-            st.subheader("Courbe Granulométrique Individuelle")
+            st.subheader("Courbe Granulométrique Globale")
             
-            # Utilise les passants mis à jour
+            # Affichage du D95 uniquement pour le matériau en cours de modification
             d95 = compute_D95(mat_data['sieves'], mat_data['passants'])
-            st.metric(label="Tamis D (95% de passant calculé)", value=f"{d95} mm")
+            st.metric(label=f"Tamis D (95% de passant) pour {mat_data['nom']}", value=f"{d95} mm")
             
-            fig_ind = go.Figure()
-            s_sorted, p_sorted = zip(*sorted(zip(mat_data['sieves'], mat_data['passants'])))
+            # --- COURBE GLOBALE ---
+            fig_global_tab1 = go.Figure()
+            colors = {'GII': 'blue', 'GI': 'black', 'SC': 'green', 'SD': 'orange'}
             
-            fig_ind.add_trace(go.Scatter(
-                x=s_sorted, y=p_sorted,
-                mode='lines+markers',
-                name=mat_data['nom'],
-                line=dict(color='blue', width=2)
-            ))
-            
-            fig_ind.update_layout(
+            for k, d in st.session_state['data_granulats'].items():
+                s_s, p_s = zip(*sorted(zip(d['sieves'], d['passants'])))
+                
+                # Mise en évidence de la courbe actuellement sélectionnée dans la vue
+                line_width = 3 if k == key else 1.5
+                opacity = 1.0 if k == key else 0.4
+                
+                fig_global_tab1.add_trace(go.Scatter(
+                    x=s_s, y=p_s,
+                    mode='lines+markers',
+                    name=d['nom'],
+                    line=dict(color=colors[k], width=line_width),
+                    opacity=opacity
+                ))
+                
+            fig_global_tab1.update_layout(
                 xaxis=dict(type="log", title="Tamis (mm)", tickvals=[0.063, 0.125, 0.25, 0.5, 1, 2, 4, 8, 16, 31.5, 63]),
                 yaxis=dict(title="% Passants Cumulés", range=[0, 105]),
                 height=400,
-                margin=dict(l=20, r=20, t=20, b=20)
+                margin=dict(l=20, r=20, t=20, b=20),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
             )
-            st.plotly_chart(fig_ind, use_container_width=True)
+            st.plotly_chart(fig_global_tab1, use_container_width=True)
 
             st.markdown("---")
-            st.subheader("Caractéristiques complémentaires")
-            st.info("Laissez à 0.0 si l'essai n'est pas applicable pour cette fraction.")
+            st.subheader(f"Caractéristiques de {mat_data['classe']}")
+            st.info("Laissez à 0.0 si l'essai n'est pas applicable.")
             
             col_a, col_b = st.columns(2)
             with col_a:
@@ -274,8 +277,16 @@ def show(supabase_client=None, can_edit=False, is_admin=False, **kwargs):
                 st.session_state['data_granulats'][key]['mf'] = mf_val if mf_val > 0 else None
                 st.session_state['data_granulats'][key]['se'] = se_val if se_val > 0 else None
 
+        st.markdown("---")
+        # --- BOUTON ENREGISTRER ---
+        if can_edit:
+            if st.button("💾 Enregistrer les données de l'essai", use_container_width=True):
+                # La mise à jour est déjà faite en temps réel par les widgets,
+                # ce bouton sert de validation visuelle pour l'opérateur.
+                st.success(f"✅ Les données de la fraction {mat_data['nom']} ont bien été mises à jour et sauvegardées dans la session !")
+
     # ------------------------------------------------------------------------------
-    # FENÊTRE 2 : PV D'IDENTIFICATION / SYNTHÈSE (Reste inchangée et auto-alimentée)
+    # FENÊTRE 2 : PV D'IDENTIFICATION / SYNTHÈSE (Inchangée)
     # ------------------------------------------------------------------------------
     with tabs[1]:
         st.header("PV d'Identification des Granulats pour Béton")
@@ -327,7 +338,6 @@ def show(supabase_client=None, can_edit=False, is_admin=False, **kwargs):
                     Sable SC {sc_data['classe']} | Sable de dune {sd_data['classe']}</td>
                 </tr>
                 
-                <!-- SECTION GII -->
                 <tr class="pv-sub-header">
                     <td>Désignations</td>
                     <td>2D ({2*D_gii:.0f})</td>
@@ -351,7 +361,6 @@ def show(supabase_client=None, can_edit=False, is_admin=False, **kwargs):
                     <td>{gii_data['la'] if gii_data['la'] is not None else '-'}</td>
                 </tr>
                 
-                <!-- SECTION GI -->
                 <tr class="pv-sub-header">
                     <td>Désignations</td>
                     <td>2D ({2*D_gi:.0f})</td>
@@ -375,7 +384,6 @@ def show(supabase_client=None, can_edit=False, is_admin=False, **kwargs):
                     <td>{gi_data['la'] if gi_data['la'] is not None else '-'}</td>
                 </tr>
 
-                <!-- SECTION SABLE FIN SD -->
                 <tr class="pv-sub-header">
                     <td>Désignations</td>
                     <td>2D (1,26)</td>
@@ -397,7 +405,6 @@ def show(supabase_client=None, can_edit=False, is_admin=False, **kwargs):
                     <td colspan="2">{sd_data['mb'] if sd_data['mb'] is not None else '-'}</td>
                 </tr>
 
-                <!-- SECTION SABLE GROSSIER SC -->
                 <tr class="pv-sub-header">
                     <td>Désignations</td>
                     <td>2D (8)</td>
@@ -428,26 +435,24 @@ def show(supabase_client=None, can_edit=False, is_admin=False, **kwargs):
         st.markdown("<br>", unsafe_allow_html=True)
         
         st.subheader("COURBE GRANULOMETRIQUE GLOBALE")
-        fig_global = go.Figure()
-        
-        colors = {'GII': 'blue', 'GI': 'black', 'SC': 'green', 'SD': 'orange'}
+        fig_global_tab2 = go.Figure()
         
         for k, d in st.session_state['data_granulats'].items():
             s_s, p_s = zip(*sorted(zip(d['sieves'], d['passants'])))
-            fig_global.add_trace(go.Scatter(
+            fig_global_tab2.add_trace(go.Scatter(
                 x=s_s, y=p_s,
                 mode='lines+markers',
                 name=d['nom'],
                 line=dict(color=colors[k], width=2)
             ))
             
-        fig_global.update_layout(
+        fig_global_tab2.update_layout(
             xaxis=dict(type="log", title="Tamis (mm)", tickvals=[0.063, 0.125, 0.25, 0.5, 1, 2, 4, 8, 16, 31.5, 63]),
             yaxis=dict(title="% Passants Cumulés", range=[0, 105]),
             height=450,
             margin=dict(l=20, r=20, t=30, b=20)
         )
-        st.plotly_chart(fig_global, use_container_width=True)
+        st.plotly_chart(fig_global_tab2, use_container_width=True)
         
         st.subheader("COMMENTAIRES & CONCLUSION")
         commentaires_val = st.text_area(
@@ -469,7 +474,7 @@ def show(supabase_client=None, can_edit=False, is_admin=False, **kwargs):
         
         with col_btn1:
             if can_edit:
-                if st.button("💾 Enregistrer le PV", use_container_width=True):
+                if st.button("💾 Enregistrer le PV Complet", use_container_width=True):
                     pv_snapshot = {
                         'Ref_PV': st.session_state['pv_info']['ref_pv'],
                         'Date': st.session_state['pv_info']['date'],
@@ -539,7 +544,6 @@ def show(supabase_client=None, can_edit=False, is_admin=False, **kwargs):
             output_excel = io.BytesIO()
             with pd.ExcelWriter(output_excel, engine='openpyxl') as writer:
                 for k, v in st.session_state['data_granulats'].items():
-                    # Export the full lab data to excel
                     df_ex = pd.DataFrame({
                         "Tamis (mm)": v['sieves'], 
                         "Refus (g)": v.get('refus', []),
@@ -548,7 +552,7 @@ def show(supabase_client=None, can_edit=False, is_admin=False, **kwargs):
                     df_ex.to_excel(writer, sheet_name=k, index=False)
             
             st.download_button(
-                label="📊 Télécharger les Données Granulométriques (Excel)",
+                label="📊 Télécharger les Données (Excel)",
                 data=output_excel.getvalue(),
                 file_name=f"donnees_granulats_{datetime.now().strftime('%Y%m%d')}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
