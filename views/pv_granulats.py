@@ -104,8 +104,8 @@ def show(supabase_client=None, can_edit=False, is_admin=False, **kwargs):
                 'nom': 'Sable grossier 0/4 (Concassé)',
                 'classe': '0/4',
                 'ref_client': '', 'date_prelevement': '', 'lieu_prelevement': '',
-                'sieves': [8.0, 5.6, 4.0, 1.0, 0.25, 0.063],
-                'refus': [0.0, 40.0, 40.0, 510.0, 250.0, 67.0],
+                'sieves': [6.3, 5, 4, 3.15, 2.5, 2, 1.6, 1.25, 1, 0.8, 0.63, 0.5, 0.4, 0.315, 0.25, 0.2, 0.16, 0.125, 0.1, 0.08, 0.063],
+                'refus': [45, 6.9, 2.1, 0.2, 0.1, 0.2, 0.2, 0.1, 0, 0.1, 0.2, 0.1, 0.1, 0.1, 0.1, 0, 0.2, 0.1, 0.1, 0.1, 0.1],
                 'M1': 1000.0, 'M2': 910.0, 'P': 3.0,
                 'passants': [],
                 'fi': None, 'la': None, 'mb': None, 'mf': 3.50, 'se': 65.0
