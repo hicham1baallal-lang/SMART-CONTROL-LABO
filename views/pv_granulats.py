@@ -1,342 +1,204 @@
-import io
-import matplotlib.pyplot as plt
-import numpy as np
-import openpyxl
-from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
-from openpyxl.utils.dataframe import dataframe_to_rows
+# views/pv_granulats.py
+import datetime
+from fpdf import FPDF
 import pandas as pd
 import streamlit as st
 
-st.set_page_config(
-    page_title="Analyse Granulométrique - Granulats Béton", layout="wide"
-)
 
-# ------------------------------------------------------------------------------
-# CONSTANTES & SÉRIES DE TAMIS REGLEMENTAIRES (NF EN 933-1 / NM 10.1.271)
-# ------------------------------------------------------------------------------
-TAMIS_STANDARD = [
-    31.5,
-    25.0,
-    20.0,
-    16.0,
-    12.5,
-    10.0,
-    8.0,
-    6.3,
-    5.0,
-    4.0,
-    2.0,
-    1.0,
-    0.5,
-    0.25,
-    0.125,
-    0.063,
-]
-TAMIS_MF = [4.0, 2.0, 1.0, 0.5, 0.25, 0.125]  # Tamis pour module de finesse
+class PVGranulatsPDF(FPDF):
 
-FRACTIONS_CONFIG = {
-    "GII": {"nom": "Gravette II (10/20)", "tamis_defaut": TAMIS_STANDARD[:10]},
-    "GI": {"nom": "Gravette I (4/10)", "tamis_defaut": TAMIS_STANDARD[5:13]},
-    "SC": {"nom": "Sable Concassé (0/4)", "tamis_defaut": TAMIS_STANDARD[9:]},
-    "SD": {"nom": "Sable Doux / Dune (0/2)", "tamis_defaut": TAMIS_STANDARD[10:]},
-}
+    def header(self):
+        self.set_font("Helvetica", "B", 12)
+        self.cell(
+            0,
+            7,
+            "LABORATOIRE PUBLIC D'ESSAIS ET D'ÉTUDES - LPEE",
+            align="C",
+            new_x="LMARGIN",
+            new_y="NEXT",
+        )
+        self.set_font("Helvetica", "B", 10)
+        self.cell(
+            0,
+            6,
+            "CENTRE TECHNIQUE RÉGIONAL - LGV CASA SUD (CTR-CSB)",
+            align="C",
+            new_x="LMARGIN",
+            new_y="NEXT",
+        )
+        self.set_font("Helvetica", "I", 9)
+        self.cell(
+            0,
+            5,
+            "Procès-Verbal d'Essai sur Granulats pour Béton",
+            align="C",
+            new_x="LMARGIN",
+            new_y="NEXT",
+        )
+        self.ln(2)
+        self.line(10, 27, 200, 27)
+        self.ln(4)
+
+    def footer(self):
+        self.set_y(-15)
+        self.set_font("Helvetica", "I", 8)
+        self.cell(
+            0, 10, f"Page {self.page_no()}/{{nb}}", align="C", border=False
+        )
 
 
-# ------------------------------------------------------------------------------
-# FONCTIONS COMPLEMENTAIRES DE CALCUL ET EXPORT
-# ------------------------------------------------------------------------------
-def calculer_granulo(m_masser_sec, dict_refus_partiels, tamis_list):
-    """
-    Calcule les refus cumulés (g), % refus cumulés et % passants cumulés.
-    """
-    df = pd.DataFrame({"Tamis (mm)": tamis_list})
-    df["Refus Partiel (g)"] = df["Tamis (mm)"].map(
-        lambda t: dict_refus_partiels.get(t, 0.0)
+def generate_pv_granulats_pdf(pv_data):
+    pdf = PVGranulatsPDF()
+    pdf.alias_nb_pages()
+    pdf.add_page()
+
+    pdf.set_font("Helvetica", "B", 10)
+    pdf.cell(0, 6, f"N° PV : {pv_data.get('num_pv', 'N/A')}", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(
+        0,
+        6,
+        f"Date de prélèvement / Essai : {pv_data.get('date_essai', 'N/A')}",
+        new_x="LMARGIN",
+        new_y="NEXT",
     )
+    pdf.cell(
+        0,
+        6,
+        f"Designation Matériau : {pv_data.get('designation', 'N/A')}",
+        new_x="LMARGIN",
+        new_y="NEXT",
+    )
+    pdf.cell(
+        0,
+        6,
+        f"Provenance / Carrière : {pv_data.get('provenance', 'N/A')}",
+        new_x="LMARGIN",
+        new_y="NEXT",
+    )
+    pdf.ln(3)
 
-    df["Refus Cumulé (g)"] = df["Refus Partiel (g)"].cumsum()
+    pdf.set_fill_color(220, 230, 242)
+    pdf.set_font("Helvetica", "B", 10)
+    pdf.cell(190, 7, "Résultats des Essais de Caractérisation", 1, 1, "C", fill=True)
 
-    if m_masser_sec > 0:
-        df["% Refus Cumulé"] = (df["Refus Cumulé (g)"] / m_masser_sec) * 100
-        df["% Passant Cumulé"] = 100.0 - df["% Refus Cumulé"]
-    else:
-        df["% Refus Cumulé"] = 0.0
-        df["% Passant Cumulé"] = 100.0
-
-    # Bornage entre 0 et 100%
-    df["% Passant Cumulé"] = df["% Passant Cumulé"].clip(lower=0.0, upper=100.0)
-    df["% Refus Cumulé"] = df["% Refus Cumulé"].clip(lower=0.0, upper=100.0)
-
-    return df
-
-
-def calculer_module_finesse(df_resultats):
-    """
-    Module de finesse (MF) = somme des % refus cumulés sur la série spécifiée / 100.
-    """
-    sum_refus = 0.0
-    for t in TAMIS_MF:
-        row = df_resultats[df_resultats["Tamis (mm)"] == t]
-        if not row.empty:
-            sum_refus += row["% Refus Cumulé"].values[0]
-    return round(sum_refus / 100.0, 2)
-
-
-def generer_pv_excel(infos_pv, resultats_fractions):
-    """
-    Génère le fichier Excel du Procès-Verbal (PV) mis en forme.
-    """
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "PV Analyse Granulométrique"
-
-    # En-tête du PV
-    ws.merge_cells("A1:G1")
-    ws["A1"] = "PROCES-VERBAL D'ESSAI : ANALYSE GRANULOMETRIQUE"
-    ws["A1"].font = Font(size=14, bold=True, color="1F497D")
-    ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
-
-    infos = [
-        ("N° PV :", infos_pv.get("num_pv", "")),
-        ("Date d'essai :", str(infos_pv.get("date_essai", ""))),
-        ("Chantier / Projet :", infos_pv.get("chantier", "")),
-        ("Client :", infos_pv.get("client", "")),
-        ("Norme de référence :", infos_pv.get("norme", "NM 10.1.271 / EN 933-1")),
+    pdf.set_font("Helvetica", "", 9)
+    results = [
+        ("Équivalent de Sable (ES %)", str(pv_data.get("es_valeur", "N/A"))),
+        ("Valeur au Bleu de Méthylène (VBS)", str(pv_data.get("vbs_valeur", "N/A"))),
+        ("Los Angeles (LA %)", str(pv_data.get("la_valeur", "N/A"))),
+        ("Micro-Deval (MDE %)", str(pv_data.get("mde_valeur", "N/A"))),
+        ("Aplatissement (FI %)", str(pv_data.get("fi_valeur", "N/A"))),
+        ("Conformité globale", str(pv_data.get("conformite", "N/A"))),
     ]
 
-    row_idx = 3
-    for label, val in infos:
-        ws.cell(row=row_idx, column=1, value=label).font = Font(bold=True)
-        ws.cell(row=row_idx, column=2, value=val)
-        row_idx += 1
+    for param, val in results:
+        pdf.cell(110, 6, param, 1, 0, "L")
+        pdf.cell(80, 6, val, 1, 1, "C")
 
-    row_idx += 1
+    pdf.ln(5)
+    pdf.set_font("Helvetica", "I", 9)
+    pdf.multi_cell(0, 5, f"Observations / Remarques : {pv_data.get('remarques', 'Aucune remarque.')}")
 
-    # Tableau récapitulatif des Passants
-    ws.cell(
-        row=row_idx, column=1, value="Synthèse des Passants Cumulés (%)"
-    ).font = Font(bold=True, size=11)
-    row_idx += 1
-
-    headers = ["Tamis (mm)"] + list(resultats_fractions.keys())
-    for col_idx, h in enumerate(headers, 1):
-        cell = ws.cell(row=row_idx, column=col_idx, value=h)
-        cell.font = Font(bold=True, color="FFFFFF")
-        cell.fill = PatternFill(
-            start_color="1F497D", end_color="1F497D", fill_type="solid"
-        )
-        cell.alignment = Alignment(horizontal="center")
-
-    # Consolidation de la liste complète des tamis
-    all_tamis = sorted(list(set(TAMIS_STANDARD)), reverse=True)
-
-    row_idx += 1
-    for t in all_tamis:
-        ws.cell(row=row_idx, column=1, value=t).alignment = Alignment(
-            horizontal="center"
-        )
-        for col_idx, key in enumerate(resultats_fractions.keys(), 2):
-            df_frac = resultats_fractions[key]["data"]
-            val_row = df_frac[df_frac["Tamis (mm)"] == t]
-            if not val_row.empty:
-                p_val = round(val_row["% Passant Cumulé"].values[0], 1)
-                ws.cell(row=row_idx, column=col_idx, value=p_val).alignment = (
-                    Alignment(horizontal="center")
-                )
-            else:
-                ws.cell(row=row_idx, column=col_idx, value="-").alignment = (
-                    Alignment(horizontal="center")
-                )
-        row_idx += 1
-
-    # Modules de finesse pour SC et SD
-    row_idx += 1
-    ws.cell(row=row_idx, column=1, value="Module de Finesse (MF)").font = Font(
-        bold=True
-    )
-    for col_idx, key in enumerate(resultats_fractions.keys(), 2):
-        mf = resultats_fractions[key].get("mf", "-")
-        ws.cell(row=row_idx, column=col_idx, value=mf if mf else "-").font = (
-            Font(bold=True)
-        )
-        ws.cell(row=row_idx, column=col_idx).alignment = Alignment(
-            horizontal="center"
-        )
-
-    # Export buffer
-    output = io.BytesIO()
-    wb.save(output)
-    return output.getvalue()
+    return bytes(pdf.output())
 
 
-# ------------------------------------------------------------------------------
-# INTERFACE STREAMLIT
-# ------------------------------------------------------------------------------
-st.title("🧪 Module Granulats : Analyse Granulométrique")
-st.markdown(
-    "Saisie des feuilles d'essais pour **GII, GI, SC, SD**, génération de la courbe granulométrique et du PV d'essai."
-)
+def show(supabase_client, can_edit=False, is_admin=False, **kwargs):
+    st.title("🪨 Contrôle & Essais sur Granulats pour Béton")
+    st.caption("CTR-CSB - Laboratoire Public d'Essais et d'Études")
 
-# Section 1: Informations Générales du PV
-with st.expander("📌 Informations du Procès-Verbal (PV)", expanded=True):
-    col_a, col_b, col_c = st.columns(3)
-    with col_a:
-        num_pv = st.text_input("N° PV", value="PV-2026-1237")
-        client = st.text_input("Client", value="LPEE - Projet BTP")
-    with col_b:
-        chantier = st.text_input("Chantier / Ouvrage", value="LGV / Ouvrage d'art")
-        date_essai = st.date_input("Date de l'essai")
-    with col_c:
-        norme = st.text_input("Norme d'essai", value="NM 10.1.271 / NF EN 933-1")
-        operateur = st.text_input("Technicien / Opérateur", value="Laboratoire LPEE")
+    tab1, tab2 = st.tabs(["📝 Saisie & Modification Essai", "📋 Historique & Consultation PVs"])
 
-infos_pv = {
-    "num_pv": num_pv,
-    "client": client,
-    "chantier": chantier,
-    "date_essai": date_essai,
-    "norme": norme,
-    "operateur": operateur,
-}
+    with tab1:
+        st.subheader("Nouveau Procès-Verbal - Granulats")
 
-st.divider()
+        if not can_edit and not is_admin:
+            st.info("ℹ️ Mode consultation seule (Droit d'édition non accordé).")
 
-# Section 2: Saisie des feuilles d'essais par fraction
-st.subheader("📝 Saisie des Feuilles d'Essais")
+        with st.form("form_pv_granulats", clear_on_submit=False):
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                num_pv = st.text_input("Numéro de PV *", placeholder="ex: PV-GR-2026-001")
+                date_essai = st.date_input("Date de l'essai", value=datetime.date.today())
+            with c2:
+                designation = st.text_input("Désignation du granulat", placeholder="ex: Sable 0/4, Gravette 8/15")
+                provenance = st.text_input("Provenance / Carrière", placeholder="ex: Carrière Casa Sud")
+            with c3:
+                ouvrage = st.text_input("Ouvrage / Utilisation", placeholder="ex: Béton Piles PRO 0636")
+                operateur = st.text_input("Opérateur / Technicien", value=st.session_state.get("user", {}).get("username", ""))
 
-tabs = st.tabs(
-    [
-        "GII - Gravette II",
-        "GI - Gravette I",
-        "SC - Sable Concassé",
-        "SD - Sable Doux",
-    ]
-)
+            st.markdown("---")
+            st.markdown("##### 🧪 Paramètres Physico-Mécaniques")
 
-dict_fractions_data = {}
-keys_fractions = ["GII", "GI", "SC", "SD"]
+            col_a, col_b, col_c = st.columns(3)
+            with col_a:
+                es_valeur = st.number_input("Équivalent de Sable - ES (%)", min_value=0.0, max_value=100.0, value=75.0, step=0.1)
+                vbs_valeur = st.number_input("Bleu de Méthylène - VBS (g/kg)", min_value=0.0, max_value=10.0, value=0.8, step=0.01)
+            with col_b:
+                la_valeur = st.number_input("Los Angeles - LA (%)", min_value=0.0, max_value=100.0, value=22.0, step=0.1)
+                mde_valeur = st.number_input("Micro-Deval - MDE (%)", min_value=0.0, max_value=100.0, value=18.0, step=0.1)
+            with col_c:
+                fi_valeur = st.number_input("Coefficient d'Aplatissement - FI (%)", min_value=0.0, max_value=100.0, value=12.0, step=0.1)
+                conformite = st.selectbox("Conformité", ["CONFORME", "NON CONFORME", "A CONFIRMER"])
 
-for i, tab in enumerate(tabs):
-    key = keys_fractions[i]
-    config = FRACTIONS_CONFIG[key]
+            remarques = st.text_area("Observations / Remarques", value="", height=80)
 
-    with tab:
-        st.markdown(f"#### Fraction : **{config['nom']}**")
+            submitted = st.form_submit_button("💾 Enregistrer dans Supabase", type="primary", disabled=not (can_edit or is_admin))
 
-        col_m1, col_m2 = st.columns(2)
-        with col_m1:
-            m_sec = st.number_input(
-                f"Masse Sèche Initiale M0 (g) - [{key}]",
-                min_value=100.0,
-                max_value=20000.0,
-                value=5000.0 if "G" in key else 1000.0,
-                step=50.0,
-                key=f"msec_{key}",
-            )
-
-        # Choix de la série de tamis
-        tamis_choisis = st.multiselect(
-            f"Série de tamis pour {key} (mm)",
-            options=TAMIS_STANDARD,
-            default=config["tamis_defaut"],
-            key=f"tamis_select_{key}",
-        )
-        tamis_choisis = sorted(tamis_choisis, reverse=True)
-
-        st.caption(
-            "Entrez la masse du refus partiel pour chaque tamis (en grammes) :"
-        )
-
-        # Grille d'entrée dynamique pour les refus partiels
-        refus_dict = {}
-        cols_per_row = 4
-        cols = st.columns(cols_per_row)
-
-        for idx, t in enumerate(tamis_choisis):
-            col_curr = cols[idx % cols_per_row]
-            val_refus = col_curr.number_input(
-                f"Tamis {t} mm",
-                min_value=0.0,
-                max_value=m_sec,
-                value=0.0,
-                step=5.0,
-                key=f"refus_{key}_{t}",
-            )
-            refus_dict[t] = val_refus
-
-        # Calculs granulométriques
-        df_res = calculer_granulo(m_sec, refus_dict, tamis_choisis)
-
-        mf_val = None
-        if key in ["SC", "SD"]:
-            mf_val = calculer_module_finesse(df_res)
-            st.info(f"**Module de Finesse (MF) : {mf_val}**")
-
-        dict_fractions_data[key] = {
-            "m_sec": m_sec,
-            "data": df_res,
-            "mf": mf_val,
-        }
-
-        # Visualisation locale de la feuille calculée
-        with st.expander(f"📊 Table de calcul détaillée - {key}"):
-            st.dataframe(
-                df_res.style.format(
-                    {
-                        "Refus Partiel (g)": "{:.1f}",
-                        "Refus Cumulé (g)": "{:.1f}",
-                        "% Refus Cumulé": "{:.2f} %",
-                        "% Passant Cumulé": "{:.2f} %",
+            if submitted:
+                if not num_pv:
+                    st.error("❌ Le numéro de PV est obligatoire.")
+                else:
+                    record = {
+                        "num_pv": num_pv,
+                        "date_essai": str(date_essai),
+                        "designation": designation,
+                        "provenance": provenance,
+                        "ouvrage": ouvrage,
+                        "operateur": operateur,
+                        "es_valeur": es_valeur,
+                        "vbs_valeur": vbs_valeur,
+                        "la_valeur": la_valeur,
+                        "mde_valeur": mde_valeur,
+                        "fi_valeur": fi_valeur,
+                        "conformite": conformite,
+                        "remarques": remarques,
+                        "created_at": datetime.datetime.utcnow().isoformat(),
                     }
-                ),
-                use_container_width=True,
+
+                    if supabase_client:
+                        try:
+                            res = supabase_client.table("pv_granulats").upsert(record).execute()
+                            st.success(f"✅ PV `{num_pv}` enregistré avec succès sur Supabase !")
+                        except Exception as e:
+                            st.error(f"❌ Erreur de sauvegarde Supabase : {e}")
+                    else:
+                        st.warning("⚠️ Supabase non connecté. Données traitées localement.")
+
+    with tab2:
+        st.subheader("📋 Historique des Procès-Verbaux Granulats")
+
+        records = []
+        if supabase_client:
+            try:
+                res = supabase_client.table("pv_granulats").select("*").order("created_at", desc=True).execute()
+                records = res.data or []
+            except Exception as e:
+                st.info(f"Impossible de charger l'historique depuis Supabase ({e}).")
+
+        if records:
+            df = pd.DataFrame(records)
+            st.dataframe(df, use_container_width=True)
+
+            selected_pv_num = st.selectbox("Sélectionner un PV pour télécharger le PDF", df["num_pv"].unique())
+            pv_selected = df[df["num_pv"] == selected_pv_num].iloc[0].to_dict()
+
+            pdf_bytes = generate_pv_granulats_pdf(pv_selected)
+            st.download_button(
+                label=f"📄 Télécharger le PDF ({selected_pv_num})",
+                data=pdf_bytes,
+                file_name=f"PV_Granulats_{selected_pv_num}.pdf",
+                mime="application/pdf",
+                type="primary",
             )
-
-st.divider()
-
-# Section 3: Courbe Granulométrique Systématique
-st.subheader("📈 Courbe Granulométrique")
-
-fig, ax = plt.subplots(figsize=(10, 5))
-
-colors = {"GII": "#1f77b4", "GI": "#ff7f0e", "SC": "#2ca02c", "SD": "#d62728"}
-
-for key in keys_fractions:
-    df_f = dict_fractions_data[key]["data"]
-    if not df_f.empty:
-        ax.plot(
-            df_f["Tamis (mm)"],
-            df_f["% Passant Cumulé"],
-            marker="o",
-            linewidth=2,
-            label=f"{key} - {FRACTIONS_CONFIG[key]['nom']}",
-            color=colors[key],
-        )
-
-# Échelle logarithmique sur l'axe des tamis
-ax.set_xscale("log")
-ax.set_xticks(TAMIS_STANDARD)
-ax.get_xaxis().set_major_formatter(plt.ScalarFormatter())
-
-# Limites & Quadrillage
-ax.set_xlim(0.063, 40)
-ax.set_ylim(0, 105)
-ax.set_xlabel("Ouverture des tamis (mm) - Échelle Log", fontsize=10, fontweight="bold")
-ax.set_ylabel("% Passants Cumulés", fontsize=10, fontweight="bold")
-ax.set_title("Courbe Granulométrique des Granulats", fontsize=12, fontweight="bold")
-ax.grid(True, which="both", linestyle="--", linewidth=0.5)
-ax.legend(loc="upper left")
-
-st.pyplot(fig)
-
-# Section 4: Procès-Verbal & Export
-st.subheader("📄 Exportation du Procès-Verbal (PV)")
-
-pv_excel_bytes = generer_pv_excel(infos_pv, dict_fractions_data)
-
-st.download_button(
-    label="📥 Télécharger le PV d'Essai (Excel)",
-    data=pv_excel_bytes,
-    file_name=f"PV_Granulats_{num_pv}.xlsx",
-    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-)
+        else:
+            st.info("Aucun enregistrement trouvé dans la base de données.")
