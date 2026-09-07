@@ -41,7 +41,7 @@ def update_passants(mat_data):
         mat_data['passants'] = [100.0] * len(mat_data['sieves'])
 
 def compute_sieve_at_passant(sieves, passings, target_passant):
-    """ Interpole la taille du tamis (mm) correspondant à un % de passant cible """
+    """ Sélectionne le plus petit tamis normatif (mm) dont le passant atteint au moins le % cible """
     s_arr = np.array(sieves, dtype=float)
     p_arr = np.array(passings, dtype=float)
     
@@ -49,17 +49,18 @@ def compute_sieve_at_passant(sieves, passings, target_passant):
     s_arr = s_arr[idx_sort]
     p_arr = p_arr[idx_sort]
     
-    if target_passant >= p_arr[-1]:
-        return float(s_arr[-1])
-    if target_passant <= p_arr[0]:
-        return float(s_arr[0])
+    valid_sieves = s_arr[p_arr >= target_passant]
+    if len(valid_sieves) > 0:
+        val = valid_sieves[0]
+        return int(val) if float(val).is_integer() else float(val)
         
-    return float(np.interp(target_passant, p_arr, s_arr))
+    val = s_arr[-1]
+    return int(val) if float(val).is_integer() else float(val)
 
 def get_d_D_from_material(mat_data):
     """
     Extrait d et D depuis la classe (ex: '10/20' -> d=10, D=20)
-    ou calcule D (tamis à ~95% passant) et d (tamis à ~5% passant).
+    ou détermine D (tamis normatif à >= 95% passant) et d (tamis normatif à <= 5% passant).
     """
     classe_str = mat_data.get('classe', '')
     if '/' in classe_str:
@@ -136,22 +137,25 @@ def compute_MF(sieves, passings):
     return round(sum_refus_cum / 100.0, 2)
 
 def compute_D95(sieves, passings):
-    """ Détermine D = tamis équivalent correspondant à 95% de passant """
-    s_arr = np.array(sieves)
-    p_arr = np.array(passings)
+    """ 
+    Détermine le tamis normatif D correspondant à au moins 95% de passant (NF EN 933-1).
+    Retourne la taille exacte du tamis normatif de la série (ex: 25, 20, 31.5) sans interpolation.
+    """
+    s_arr = np.array(sieves, dtype=float)
+    p_arr = np.array(passings, dtype=float)
+    
     idx_sort = np.argsort(s_arr)
     s_arr = s_arr[idx_sort]
     p_arr = p_arr[idx_sort]
     
-    for i in range(len(p_arr) - 1):
-        if p_arr[i] <= 95.0 <= p_arr[i+1]:
-            if p_arr[i+1] == p_arr[i]:
-                return float(s_arr[i])
-            d_val = s_arr[i] + (95.0 - p_arr[i]) * (s_arr[i+1] - s_arr[i]) / (p_arr[i+1] - p_arr[i])
-            return round(float(d_val), 2)
+    # Sélectionne le plus petit tamis normatif dont le passant cumulé est >= 95%
+    valid_sieves = s_arr[p_arr >= 95.0]
+    if len(valid_sieves) > 0:
+        val = valid_sieves[0]
+        return int(val) if float(val).is_integer() else float(val)
     
-    closest_idx = (np.abs(p_arr - 95.0)).argmin()
-    return round(float(s_arr[closest_idx]), 2)
+    val = s_arr[-1]
+    return int(val) if float(val).is_integer() else float(val)
 
 # ------------------------------------------------------------------------------
 # FONCTION PRINCIPALE
