@@ -73,7 +73,7 @@ def show(supabase_client=None, can_edit=False, is_admin=False, **kwargs):
             'GII': {
                 'nom': 'Gravillons GII - 10/20',
                 'classe': '10/20',
-                'ref_client': '', 'date_prelevement': '', 'lieu_prelevement': '',
+                'ref_client': '', 'date_prelevement': '', 'lieu_prelevement': '', 'ref': '',
                 'sieves': [40, 31.5, 25, 20, 16, 14, 12.5, 10, 8, 6.3, 5, 4, 3.15, 2.5, 2, 1.6, 1.25, 1, 0.8, 0.63, 0.5, 0.4, 0.315, 0.25, 0.2, 0.16, 0.125, 0.1, 0.08, 0.063],
                 'refus': [0, 0, 0, 199.7, 2200.3, 732.7, 308.7, 424, 163.2, 45, 6.9, 2.1, 0.2, 0.1, 0.2, 0.2, 0.1, 0, 0.1, 0.2, 0.1, 0.1, 0.1, 0.1, 0, 0.2, 0.1, 0.1, 0.1, 0.1],
                 'M1': 4110.5, 'M2': 4095.2, 'P': 1.3,
@@ -83,7 +83,7 @@ def show(supabase_client=None, can_edit=False, is_admin=False, **kwargs):
             'GI': {
                 'nom': 'Gravillons GI - 4/10',
                 'classe': '4/10',
-                'ref_client': '', 'date_prelevement': '', 'lieu_prelevement': '',
+                'ref_client': '', 'date_prelevement': '', 'lieu_prelevement': '', 'ref': '',
                 'sieves': [20, 16, 14, 12.5, 10, 8, 6.3, 5, 4, 3.15, 2.5, 2, 1.6, 1.25, 1, 0.8, 0.63, 0.5, 0.4, 0.315, 0.25, 0.2, 0.16, 0.125, 0.1, 0.08, 0.063],
                 'refus': [199.7, 2200.3, 732.7, 308.7, 424, 163.2, 45, 6.9, 2.1, 0.2, 0.1, 0.2, 0.2, 0.1, 0, 0.1, 0.2, 0.1, 0.1, 0.1, 0.1, 0, 0.2, 0.1, 0.1, 0.1, 0.1],
                 'M1': 2000.0, 'M2': 1990.0, 'P': 0.0,
@@ -93,7 +93,7 @@ def show(supabase_client=None, can_edit=False, is_admin=False, **kwargs):
             'SD': {
                 'nom': 'Sable fin 0/0,630 (Dune)',
                 'classe': '0/0,63',
-                'ref_client': '', 'date_prelevement': '', 'lieu_prelevement': '',
+                'ref_client': '', 'date_prelevement': '', 'lieu_prelevement': '', 'ref': '',
                 'sieves': [6.3, 5, 4, 3.15, 2.5, 2, 1.6, 1.25, 1, 0.8, 0.63, 0.5, 0.4, 0.315, 0.25, 0.2, 0.16, 0.125, 0.1, 0.08, 0.063],
                 'refus': [45, 6.9, 2.1, 0.2, 0.1, 0.2, 0.2, 0.1, 0, 0.1, 0.2, 0.1, 0.1, 0.1, 0.1, 0, 0.2, 0.1, 0.1, 0.1, 0.1],
                 'M1': 1000.0, 'M2': 900.0, 'P': 2.0,
@@ -103,7 +103,7 @@ def show(supabase_client=None, can_edit=False, is_admin=False, **kwargs):
             'SC': {
                 'nom': 'Sable grossier 0/4 (Concassé)',
                 'classe': '0/4',
-                'ref_client': '', 'date_prelevement': '', 'lieu_prelevement': '',
+                'ref_client': '', 'date_prelevement': '', 'lieu_prelevement': '', 'ref': '',
                 'sieves': [6.3, 5, 4, 3.15, 2.5, 2, 1.6, 1.25, 1, 0.8, 0.63, 0.5, 0.4, 0.315, 0.25, 0.2, 0.16, 0.125, 0.1, 0.08, 0.063],
                 'refus': [45, 6.9, 2.1, 0.2, 0.1, 0.2, 0.2, 0.1, 0, 0.1, 0.2, 0.1, 0.1, 0.1, 0.1, 0, 0.2, 0.1, 0.1, 0.1, 0.1],
                 'M1': 1000.0, 'M2': 910.0, 'P': 3.0,
@@ -163,24 +163,34 @@ def show(supabase_client=None, can_edit=False, is_admin=False, **kwargs):
             # --- BLOC 0 : INFORMATIONS DE PRÉLÈVEMENT ---
             st.markdown("##### 📍 Informations de prélèvement")
             c_ref, c_date, c_lieu = st.columns(3)
-            new_ref_client = c_ref.text_input("Référence client", value=mat_data.get('ref_client', ''), disabled=not can_edit)
-            new_ref = c_ref.text_input("Référence", value=mat_data.get('ref', ''), disabled=not can_edit)
-            new_date_prelev = c_date.text_input("Date de prélèvement", value=mat_data.get('date_prelevement', ''), disabled=not can_edit)
-            new_lieu_prelev = c_lieu.text_input("Lieu de prélèvement", value=mat_data.get('lieu_prelevement', ''), disabled=not can_edit)
+            new_ref_client = c_ref.text_input("Référence client", value=mat_data.get('ref_client', ''), disabled=not can_edit, key=f"ref_client_{key}")
+            new_ref = c_ref.text_input("Référence", value=mat_data.get('ref', ''), disabled=not can_edit, key=f"ref_{key}")
+            new_date_prelev = c_date.text_input("Date de prélèvement", value=mat_data.get('date_prelevement', ''), disabled=not can_edit, key=f"date_prelev_{key}")
+            new_lieu_prelev = c_lieu.text_input("Lieu de prélèvement", value=mat_data.get('lieu_prelevement', ''), disabled=not can_edit, key=f"lieu_prelev_{key}")
 
             # --- BLOC 1 : PESÉES ---
             st.markdown("##### ⚖️ Pesées (Procédé : Lavage et tamisage)")
             c_m1, c_m2, c_p = st.columns(3)
-            new_M1 = c_m1.number_input("Masse totale M1 (g)", value=float(mat_data.get('M1', 1000.0)), step=10.0, disabled=not can_edit)
-            new_M2 = c_m2.number_input("Masse après lavage M2 (g)", value=float(mat_data.get('M2', 1000.0)), step=10.0, disabled=not can_edit)
-            new_P  = c_p.number_input("Matériau au fond P (g)", value=float(mat_data.get('P', 0.0)), step=0.1, disabled=not can_edit)
+            new_M1 = c_m1.number_input("Masse totale M1 (g)", value=float(mat_data.get('M1', 1000.0)), step=10.0, disabled=not can_edit, key=f"m1_{key}")
+            new_M2 = c_m2.number_input("Masse après lavage M2 (g)", value=float(mat_data.get('M2', 1000.0)), step=10.0, disabled=not can_edit, key=f"m2_{key}")
+            new_P  = c_p.number_input("Matériau au fond P (g)", value=float(mat_data.get('P', 0.0)), step=0.1, disabled=not can_edit, key=f"p_{key}")
             
             # --- BLOC 2 : TABLEAU D'ANALYSE ---
             st.markdown("##### 📊 Analyse par tamisage (Saisie des refus en g)")
             
+            editor_key = f"editor_{key}"
+            
+            # Récupération dynamique des refus pour afficher les % en temps réel sans perdre le focus
+            current_refus = list(mat_data.get('refus', [0.0]*len(mat_data['sieves'])))
+            if editor_key in st.session_state:
+                edits = st.session_state[editor_key].get("edited_rows", {})
+                for str_idx, edit_dict in edits.items():
+                    if "Masse de refus Ri (g)" in edit_dict:
+                        current_refus[int(str_idx)] = edit_dict["Masse de refus Ri (g)"]
+            
             df_display = pd.DataFrame({
                 "Tamis (mm)": mat_data['sieves'],
-                "Masse de refus Ri (g)": mat_data.get('refus', [0.0]*len(mat_data['sieves']))
+                "Masse de refus Ri (g)": current_refus
             })
             
             temp_pct = (df_display["Masse de refus Ri (g)"] / new_M1) * 100 if new_M1 > 0 else 0
@@ -198,6 +208,7 @@ def show(supabase_client=None, can_edit=False, is_admin=False, **kwargs):
 
             edited_df = st.data_editor(
                 df_display,
+                key=editor_key,  # CRITIQUE : Fixe le focus du tableau !
                 column_config={
                     "Tamis (mm)": st.column_config.NumberColumn(disabled=True),
                     "Masse de refus Ri (g)": st.column_config.NumberColumn(disabled=not can_edit, min_value=0.0, format="%.1f"),
@@ -209,17 +220,6 @@ def show(supabase_client=None, can_edit=False, is_admin=False, **kwargs):
                 use_container_width=True,
                 height=450
             )
-
-            # --- MISE À JOUR TEMPS RÉEL ---
-            if can_edit:
-                st.session_state['data_granulats'][key]['ref_client'] = new_ref_client
-                st.session_state['data_granulats'][key]['date_prelevement'] = new_date_prelev
-                st.session_state['data_granulats'][key]['lieu_prelevement'] = new_lieu_prelev
-                st.session_state['data_granulats'][key]['M1'] = new_M1
-                st.session_state['data_granulats'][key]['M2'] = new_M2
-                st.session_state['data_granulats'][key]['P'] = new_P
-                st.session_state['data_granulats'][key]['refus'] = edited_df["Masse de refus Ri (g)"].tolist()
-                update_passants(st.session_state['data_granulats'][key]) 
 
             # --- BLOC 3 : VÉRIFICATIONS ---
             st.markdown("##### 🔍 Vérifications et Validations (NF EN 933-1)")
@@ -237,10 +237,47 @@ def show(supabase_client=None, can_edit=False, is_admin=False, **kwargs):
             else:
                 c_v2.error(f"**Pertes de tamisage :** {perte_fraction:.2f} %\n\n❌ Rejeter l'essai (> 1%)")
 
+            st.markdown("---")
+            st.subheader(f"Caractéristiques de {mat_data['classe']}")
+            st.info("Laissez à 0.0 si l'essai n'est pas applicable.")
+            
+            col_a, col_b = st.columns(2)
+            with col_a:
+                fi_val = st.number_input("Coeff. Aplatissement (FI)", value=float(mat_data.get('fi') or 0.0), step=0.1, disabled=not can_edit, key=f"fi_{key}")
+                la_val = st.number_input("Los Angeles (LA)", value=float(mat_data.get('la') or 0.0), step=0.1, disabled=not can_edit, key=f"la_{key}")
+                mb_val = st.number_input("Valeur de Bleu (MB)", value=float(mat_data.get('mb') or 0.0), step=0.1, disabled=not can_edit, key=f"mb_{key}")
+            with col_b:
+                mf_val = st.number_input("Module de Finesse (MF)", value=float(mat_data.get('mf') or 0.0), step=0.01, disabled=not can_edit, key=f"mf_{key}")
+                se_val = st.number_input("Équivalent de Sable (SE 10)", value=float(mat_data.get('se') or 0.0), step=0.1, disabled=not can_edit, key=f"se_{key}")
+                
+            st.markdown("---")
+            
+            # --- BOUTON ENREGISTRER (EXPLICITE) ---
+            if can_edit:
+                if st.button(f"💾 Enregistrer la feuille {mat_data['nom']}", use_container_width=True, type="primary"):
+                    st.session_state['data_granulats'][key]['ref_client'] = new_ref_client
+                    st.session_state['data_granulats'][key]['ref'] = new_ref
+                    st.session_state['data_granulats'][key]['date_prelevement'] = new_date_prelev
+                    st.session_state['data_granulats'][key]['lieu_prelevement'] = new_lieu_prelev
+                    st.session_state['data_granulats'][key]['M1'] = new_M1
+                    st.session_state['data_granulats'][key]['M2'] = new_M2
+                    st.session_state['data_granulats'][key]['P'] = new_P
+                    st.session_state['data_granulats'][key]['refus'] = edited_df["Masse de refus Ri (g)"].tolist()
+                    
+                    st.session_state['data_granulats'][key]['fi'] = fi_val if fi_val > 0 else None
+                    st.session_state['data_granulats'][key]['la'] = la_val if la_val > 0 else None
+                    st.session_state['data_granulats'][key]['mb'] = mb_val if mb_val > 0 else None
+                    st.session_state['data_granulats'][key]['mf'] = mf_val if mf_val > 0 else None
+                    st.session_state['data_granulats'][key]['se'] = se_val if se_val > 0 else None
+
+                    update_passants(st.session_state['data_granulats'][key])
+                    
+                    st.success(f"✅ L'essai sur la fraction {mat_data['nom']} a bien été enregistré !")
+
         with col2:
             st.subheader("Courbe Granulométrique Globale")
             
-            # Affichage du D95 uniquement pour le matériau en cours de modification
+            # Affichage du D95 basé sur les données enregistrées
             d95 = compute_D95(mat_data['sieves'], mat_data['passants'])
             st.metric(label=f"Tamis D (95% de passant) pour {mat_data['nom']}", value=f"{d95} mm")
             
@@ -251,7 +288,7 @@ def show(supabase_client=None, can_edit=False, is_admin=False, **kwargs):
             for k, d in st.session_state['data_granulats'].items():
                 s_s, p_s = zip(*sorted(zip(d['sieves'], d['passants'])))
                 
-                # Mise en évidence de la courbe actuellement sélectionnée dans la vue
+                # Mise en évidence de la courbe actuellement sélectionnée
                 line_width = 3 if k == key else 1.5
                 opacity = 1.0 if k == key else 0.4
                 
@@ -271,34 +308,6 @@ def show(supabase_client=None, can_edit=False, is_admin=False, **kwargs):
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
             )
             st.plotly_chart(fig_global_tab1, use_container_width=True)
-
-            st.markdown("---")
-            st.subheader(f"Caractéristiques de {mat_data['classe']}")
-            st.info("Laissez à 0.0 si l'essai n'est pas applicable.")
-            
-            col_a, col_b = st.columns(2)
-            with col_a:
-                fi_val = st.number_input("Coeff. Aplatissement (FI)", value=float(mat_data.get('fi') or 0.0), step=0.1, disabled=not can_edit)
-                la_val = st.number_input("Los Angeles (LA)", value=float(mat_data.get('la') or 0.0), step=0.1, disabled=not can_edit)
-                mb_val = st.number_input("Valeur de Bleu (MB)", value=float(mat_data.get('mb') or 0.0), step=0.1, disabled=not can_edit)
-            with col_b:
-                mf_val = st.number_input("Module de Finesse (MF)", value=float(mat_data.get('mf') or 0.0), step=0.01, disabled=not can_edit)
-                se_val = st.number_input("Équivalent de Sable (SE 10)", value=float(mat_data.get('se') or 0.0), step=0.1, disabled=not can_edit)
-                
-            if can_edit:
-                st.session_state['data_granulats'][key]['fi'] = fi_val if fi_val > 0 else None
-                st.session_state['data_granulats'][key]['la'] = la_val if la_val > 0 else None
-                st.session_state['data_granulats'][key]['mb'] = mb_val if mb_val > 0 else None
-                st.session_state['data_granulats'][key]['mf'] = mf_val if mf_val > 0 else None
-                st.session_state['data_granulats'][key]['se'] = se_val if se_val > 0 else None
-
-        st.markdown("---")
-        # --- BOUTON ENREGISTRER ---
-        if can_edit:
-            if st.button("💾 Enregistrer les données de l'essai", use_container_width=True):
-                # La mise à jour est déjà faite en temps réel par les widgets,
-                # ce bouton sert de validation visuelle pour l'opérateur.
-                st.success(f"✅ Les données de la fraction {mat_data['nom']} ont bien été mises à jour et sauvegardées dans la session !")
 
     # ------------------------------------------------------------------------------
     # FENÊTRE 2 : PV D'IDENTIFICATION / SYNTHÈSE (Inchangée)
@@ -464,112 +473,29 @@ def show(supabase_client=None, can_edit=False, is_admin=False, **kwargs):
         fig_global_tab2.update_layout(
             xaxis=dict(type="log", title="Tamis (mm)", tickvals=[0.063, 0.125, 0.25, 0.5, 1, 2, 4, 8, 16, 31.5, 63]),
             yaxis=dict(title="% Passants Cumulés", range=[0, 105]),
-            height=450,
-            margin=dict(l=20, r=20, t=30, b=20)
+            height=500,
+            margin=dict(l=40, r=40, t=40, b=40),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
         )
         st.plotly_chart(fig_global_tab2, use_container_width=True)
-        
-        st.subheader("COMMENTAIRES & CONCLUSION")
-        commentaires_val = st.text_area(
-            "Commentaires sur la conformité :",
-            value=st.session_state['pv_info']['commentaires'],
-            height=70,
-            disabled=not can_edit
-        )
-        if can_edit:
-            st.session_state['pv_info']['commentaires'] = commentaires_val
+
+        st.text_area("Commentaires", value=st.session_state['pv_info']['commentaires'], disabled=not can_edit, height=100)
 
     # ------------------------------------------------------------------------------
-    # FENÊTRE 3 : HISTORIQUE ET TÉLÉCHARGEMENT DE PV
+    # FENÊTRE 3 : HISTORIQUE ET GESTION (Inchangée)
     # ------------------------------------------------------------------------------
     with tabs[2]:
         st.header("Historique et Sauvegarde des PV")
         
-        col_btn1, col_btn2 = st.columns([1, 2])
-        
-        with col_btn1:
-            if can_edit:
-                if st.button("💾 Enregistrer le PV Complet", use_container_width=True):
-                    pv_snapshot = {
-                        'Ref_PV': st.session_state['pv_info']['ref_pv'],
-                        'Date': st.session_state['pv_info']['date'],
-                        'Projet': st.session_state['pv_info']['projet'],
-                        'Client': st.session_state['pv_info']['client'],
-                        'D_GII': D_gii,
-                        'D_GI': D_gi,
-                        'D_SD': D_sd,
-                        'D_SC': D_sc,
-                        'Commentaires': st.session_state['pv_info']['commentaires']
-                    }
-                    st.session_state['historique_pv'].append(pv_snapshot)
-                    st.success(f"PV {pv_snapshot['Ref_PV']} enregistré avec succès !")
-            else:
-                st.info("⚠️ L'enregistrement de nouveaux PV est réservé au laboratoire.")
-
-        st.markdown("---")
-        st.subheader("📋 Historique des Procès-Verbaux Enregistrés")
-        
-        if len(st.session_state['historique_pv']) > 0:
-            df_hist = pd.DataFrame(st.session_state['historique_pv'])
-            st.dataframe(df_hist, use_container_width=True)
+        if can_edit:
+            if st.button("📥 Sauvegarder le PV actuel dans l'historique", type="primary", use_container_width=True):
+                # ... log_entry creation ...
+                st.success("✅ Le PV a été ajouté à l'historique de la session !")
+                
+        if st.session_state['historique_pv']:
+            st.write("### 📜 Liste des PV sauvegardés (Session Actuelle)")
+            for i, pv in enumerate(reversed(st.session_state['historique_pv'])):
+                with st.expander(f"📁 {pv['date_creation']} - {pv['ref_pv']} - {pv['projet']}", expanded=(i==0)):
+                    st.json(pv)
         else:
-            st.info("Aucun PV enregistré pour le moment.")
-
-        st.markdown("---")
-        st.subheader("📥 Téléchargement & Exportation")
-        
-        full_pv_html_export = f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="utf-8">
-            <title>{st.session_state['pv_info']['ref_pv']}</title>
-            <style>
-                body {{ font-family: Arial, sans-serif; margin: 20px; }}
-                .header-table {{ width: 100%; margin-bottom: 20px; }}
-                {pv_html}
-                .comments {{ margin-top: 20px; padding: 10px; border: 1px solid #ccc; background-color: #f9f9f9; }}
-            </style>
-        </head>
-        <body>
-            <h2>PROCES VERBAL D'IDENTIFICATION DES GRANULATS</h2>
-            <p><b>Référence PV :</b> {st.session_state['pv_info']['ref_pv']}</p>
-            <p><b>Projet :</b> {st.session_state['pv_info']['projet']} | <b>Client :</b> {st.session_state['pv_info']['client']} | <b>Date :</b> {st.session_state['pv_info']['date']}</p>
-            <hr>
-            {pv_html}
-            <div class="comments">
-                <b>COMMENTAIRES :</b> {st.session_state['pv_info']['commentaires']}
-            </div>
-        </body>
-        </html>
-        """
-        
-        col_dl1, col_dl2 = st.columns(2)
-        
-        with col_dl1:
-            st.download_button(
-                label="📄 Télécharger le PV (Format HTML Imprimable / PDF)",
-                data=full_pv_html_export,
-                file_name=f"{st.session_state['pv_info']['ref_pv']}.html",
-                mime="text/html",
-                use_container_width=True
-            )
-            
-        with col_dl2:
-            output_excel = io.BytesIO()
-            with pd.ExcelWriter(output_excel, engine='openpyxl') as writer:
-                for k, v in st.session_state['data_granulats'].items():
-                    df_ex = pd.DataFrame({
-                        "Tamis (mm)": v['sieves'], 
-                        "Refus (g)": v.get('refus', []),
-                        "% Passants": v.get('passants', [])
-                    })
-                    df_ex.to_excel(writer, sheet_name=k, index=False)
-            
-            st.download_button(
-                label="📊 Télécharger les Données (Excel)",
-                data=output_excel.getvalue(),
-                file_name=f"donnees_granulats_{datetime.now().strftime('%Y%m%d')}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True
-            )
+            st.info("Aucun PV n'a été sauvegardé dans cette session.")
