@@ -218,7 +218,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
             # --- BLOC 3 : VÉRIFICATIONS TEMPS RÉEL ---
             st.markdown("##### 🔍 Vérifications et Validations (NF EN 933-1)")
             
-            # Calcul en direct basé sur ce que l'utilisateur est en train de taper !
+            # Calcul en direct basé sur ce que l'utilisateur est en train de taper
             refus_array = edited_df["Masse de refus Ri (g)"].values
             somme_Ri = sum(refus_array)
             masse_calc = somme_Ri + new_P
@@ -243,23 +243,19 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                 la_val = st.number_input("Los Angeles (LA)", value=float(mat_data.get('la') or 0.0), step=0.1, disabled=not can_edit, key=f"la_{key}")
                 mb_val = st.number_input("Valeur de Bleu (MB)", value=float(mat_data.get('mb') or 0.0), step=0.1, disabled=not can_edit, key=f"mb_{key}")
             with col_b:
-                # ---------------------------------------------------------
-                # MODIFICATION ICI : Le Module de Finesse (MF) 
-                # n'apparaît que si l'échantillon est un Sable (SD ou SC)
-                # ---------------------------------------------------------
+                # MF et SE apparaissent uniquement pour les sables (SD et SC)
                 if key in ["SD", "SC"]:
                     mf_val = st.number_input("Module de Finesse (MF)", value=float(mat_data.get('mf') or 0.0), step=0.01, disabled=not can_edit, key=f"mf_{key}")
+                    se_val = st.number_input("Équivalent de Sable (SE 10)", value=float(mat_data.get('se') or 0.0), step=0.1, disabled=not can_edit, key=f"se_{key}")
                 else:
-                    mf_val = 0.0  # Valeur neutre pour GII et GI, non affichée
-                    
-                se_val = st.number_input("Équivalent de Sable (SE 10)", value=float(mat_data.get('se') or 0.0), step=0.1, disabled=not can_edit, key=f"se_{key}")
+                    mf_val = 0.0
+                    se_val = 0.0
                 
             st.markdown("---")
             
             # --- BOUTON ENREGISTRER ---
             if can_edit:
                 if st.button(f"💾 Enregistrer la feuille {mat_data['nom']}", use_container_width=True, type="primary"):
-                    # On sauvegarde les nouvelles valeurs validées dans la mémoire
                     st.session_state['data_granulats'][key]['ref_client'] = new_ref_client
                     st.session_state['data_granulats'][key]['ref'] = new_ref
                     st.session_state['data_granulats'][key]['date_prelevement'] = new_date_prelev
@@ -275,10 +271,8 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                     st.session_state['data_granulats'][key]['mf'] = mf_val if mf_val > 0 else None
                     st.session_state['data_granulats'][key]['se'] = se_val if se_val > 0 else None
 
-                    # On met à jour les calculs officiels (Passants)
                     update_passants(st.session_state['data_granulats'][key])
                     
-                    # On stocke le message et on relance la page pour rafraîchir le tableau et les courbes !
                     st.session_state['success_msg'] = f"✅ Calculs terminés ! La feuille de {mat_data['nom']} a bien été mise à jour."
                     st.rerun()
 
@@ -494,7 +488,6 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         
         if can_edit:
             if st.button("📥 Sauvegarder le PV actuel dans l'historique", type="primary", use_container_width=True):
-                # (Espace pour la logique de sauvegarde Supabase ou locale si nécessaire)
                 st.success("✅ Le PV a été ajouté à l'historique de la session !")
                 
         if st.session_state['historique_pv']:
