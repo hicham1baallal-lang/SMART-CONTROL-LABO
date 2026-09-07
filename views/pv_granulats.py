@@ -243,7 +243,15 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                 la_val = st.number_input("Los Angeles (LA)", value=float(mat_data.get('la') or 0.0), step=0.1, disabled=not can_edit, key=f"la_{key}")
                 mb_val = st.number_input("Valeur de Bleu (MB)", value=float(mat_data.get('mb') or 0.0), step=0.1, disabled=not can_edit, key=f"mb_{key}")
             with col_b:
-                mf_val = st.number_input("Module de Finesse (MF)", value=float(mat_data.get('mf') or 0.0), step=0.01, disabled=not can_edit, key=f"mf_{key}")
+                # ---------------------------------------------------------
+                # MODIFICATION ICI : Le Module de Finesse (MF) 
+                # n'apparaît que si l'échantillon est un Sable (SD ou SC)
+                # ---------------------------------------------------------
+                if key in ["SD", "SC"]:
+                    mf_val = st.number_input("Module de Finesse (MF)", value=float(mat_data.get('mf') or 0.0), step=0.01, disabled=not can_edit, key=f"mf_{key}")
+                else:
+                    mf_val = 0.0  # Valeur neutre pour GII et GI, non affichée
+                    
                 se_val = st.number_input("Équivalent de Sable (SE 10)", value=float(mat_data.get('se') or 0.0), step=0.1, disabled=not can_edit, key=f"se_{key}")
                 
             st.markdown("---")
@@ -274,7 +282,6 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                     st.session_state['success_msg'] = f"✅ Calculs terminés ! La feuille de {mat_data['nom']} a bien été mise à jour."
                     st.rerun()
 
-        # [La suite du code (Courbes Globales et Onglets 2 & 3) reste inchangée]
         with col2:
             st.subheader("Courbe Granulométrique Globale")
             
