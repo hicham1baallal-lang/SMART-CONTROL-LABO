@@ -426,23 +426,44 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                     st.rerun()
 
         with col2:
-            st.subheader("Courbe Granulométrique Globale")
+            st.subheader("Synthèse des Tamis Caractéristiques")
 
-            # Calcul dynamique du Tamis D corrigé
+            # Calcul dynamique du Tamis D
             tamis_D = get_tamis_D(edited_df)
+            char_sieves, char_passants = calculate_characteristic_data(mat_data)
 
-            st.markdown(f"**Tamis D (95% de passant) pour {mat_data['nom']}**")
-            st.markdown(f"# {tamis_D} mm")
+            # Mini-tableau explicatif des ouvertures et % passants calculés pour le matériau sélectionné
+            col_m1, col_m2 = st.columns([1, 1.5])
+            with col_m1:
+                st.markdown(f"**Tamis D (~95%)**")
+                st.markdown(f"# {tamis_D} mm")
+
+            with col_m2:
+                df_char_mat = pd.DataFrame({
+                    "Grandeur": ["2D", "1.4D", "D", "d", "d/2"],
+                    "Tamis (mm)": [char_sieves['2D'], char_sieves['1.4D'], char_sieves['D'], char_sieves['d'], char_sieves['d/2']],
+                    "% Passant": [
+                        f"{char_passants['2D']:.1f} %",
+                        f"{char_passants['1.4D']:.1f} %",
+                        f"{char_passants['D']:.1f} %",
+                        f"{char_passants['d']:.1f} %",
+                        f"{char_passants['d/2']:.1f} %"
+                    ]
+                })
+                st.markdown(f"**Tamis normatifs : {mat_data['nom']}**")
+                st.dataframe(df_char_mat, hide_index=True, use_container_width=True)
+
+            st.markdown("---")
+            st.subheader("Courbe Granulométrique Globale")
 
             # Tracé de la courbe granulométrique
             fig = go.Figure()
-            
             colors = {'GII': 'navy', 'GI': '#0284c7', 'SC': '#16a34a', 'SD': '#ea580c'}
             
             for k, d in st.session_state['data_granulats'].items():
                 s_s, p_s = zip(*sorted(zip(d['sieves'], d['passants'])))
                 
-                line_width = 2 if k == key else 1.5
+                line_width = 2.5 if k == key else 1.5
                 opacity = 1.0 if k == key else 0.4
                 
                 fig.add_trace(go.Scatter(
@@ -465,7 +486,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                     range=[0, 105]
                 ),
                 margin=dict(l=20, r=20, t=30, b=20),
-                height=400,
+                height=380,
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
             )
 
@@ -503,7 +524,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         sc_data  = st.session_state['data_granulats']['SC']
         sd_data  = st.session_state['data_granulats']['SD']
 
-        # Calcul dynamique des ouvertures relatives et des % passants correspondants (avec interpolation linéaire)
+        # Calcul dynamique des ouvertures relatives et des % passants correspondants
         gii_sieves, gii_passants = calculate_characteristic_data(gii_data)
         gi_sieves, gi_passants   = calculate_characteristic_data(gi_data)
         sc_sieves, sc_passants   = calculate_characteristic_data(sc_data)
