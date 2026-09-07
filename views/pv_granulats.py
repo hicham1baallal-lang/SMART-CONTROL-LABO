@@ -590,7 +590,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         st.info("👁️ **Mode Consultation** : Vous êtes en lecture seule.")
 
     # --------------------------------------------------------------------------
-    # LISTE ET VERIFICATION DES NUMEROS DE RAPPORT DEJA ENREGISTRES
+    # LISTE ET VÉRIFICATION DES NUMÉROS DE RAPPORT DÉJÀ ENREGISTRÉS
     # --------------------------------------------------------------------------
     saved_num_rapports = [
         pv.get('ref_pv', '').strip().lower() 
@@ -624,7 +624,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         new_provenance   = c6.text_input("Provenance échantillon", value=info_p.get('provenance', 'TG PREFA OULAD SALEH'), disabled=not can_edit, key="common_provenance")
         
         # N° Rapport d'essai et Référence labo Base (Synchronisés automatiquement)
-        new_num_rapport  = st.text_input("N° Rapport d'essai", value=info_p.get('num_rapport', default_num_rapport), disabled=not can_edit, key="common_num_rapport")
+        new_num_rapport  = st.text_input("N° RAPPORT D'ESSAI N°", value=info_p.get('num_rapport', default_num_rapport), disabled=not can_edit, key="common_num_rapport")
         new_ref_base     = new_num_rapport.strip()
 
         st.text_input(
@@ -638,7 +638,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         # Vérification du doublon du N° de Rapport
         is_duplicate = new_num_rapport.strip().lower() in saved_num_rapports if new_num_rapport.strip() else False
         if is_duplicate:
-            st.error(f"⛔ **ATTENTION : DUPLICATA DÉTECTÉ !** Le N° Rapport d'essai `{new_num_rapport}` a déjà été enregistré dans l'historique. Veuillez saisir un numéro unique pour valider le PV.")
+            st.error(f"⛔ **ATTENTION : DUPLICATA DÉTECTÉ !** Le N° Rapport d'essai `{new_num_rapport}` a déjà été enregistré dans l'historique. Chaque numéro de rapport doit être unique.")
 
         if can_edit:
             st.session_state['info_prelevement']['chantier'] = new_chantier
@@ -657,7 +657,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         st.markdown("---")
 
         selected_mat = st.radio(
-            "Sélectionner la fraction d'échantillon à modifier :",
+            "Sélectionner la fraction d'échantillon à saisir / modifier :",
             ["GII (10/20)", "GI (4/10)", "SC (0/4)", "SD (0/0,63)"],
             horizontal=True
         )
@@ -767,31 +767,25 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                     )
                     se_val = st.number_input("Équivalent de Sable (SE 10)", value=float(mat_data.get('se') or 0.0), step=0.1, format="%.1f", disabled=not can_edit, key=f"se_{key}")
                 fi_val, la_val = 0.0, 0.0
-                
-            st.markdown("---")
-            
+
+            # Sauvegarde locale intermédiaire pour la fraction courante
             if can_edit:
-                if st.button(f"💾 Enregistrer la feuille {mat_data['nom']}", use_container_width=True, type="primary"):
-                    st.session_state['data_granulats'][key]['M1'] = new_M1
-                    st.session_state['data_granulats'][key]['M2'] = new_M2
-                    st.session_state['data_granulats'][key]['P'] = new_P
-                    st.session_state['data_granulats'][key]['refus'] = [round(float(r), 1) for r in edited_df["Masse de refus Ri (g)"].tolist()]
-                    
-                    st.session_state['data_granulats'][key]['fi'] = fi_val if fi_val > 0 else None
-                    st.session_state['data_granulats'][key]['la'] = la_val if la_val > 0 else None
-                    st.session_state['data_granulats'][key]['mb'] = mb_val if mb_val > 0 else None
-                    st.session_state['data_granulats'][key]['se'] = se_val if se_val > 0 else None
+                st.session_state['data_granulats'][key]['M1'] = new_M1
+                st.session_state['data_granulats'][key]['M2'] = new_M2
+                st.session_state['data_granulats'][key]['P'] = new_P
+                st.session_state['data_granulats'][key]['refus'] = [round(float(r), 1) for r in edited_df["Masse de refus Ri (g)"].tolist()]
+                
+                st.session_state['data_granulats'][key]['fi'] = fi_val if fi_val > 0 else None
+                st.session_state['data_granulats'][key]['la'] = la_val if la_val > 0 else None
+                st.session_state['data_granulats'][key]['mb'] = mb_val if mb_val > 0 else None
+                st.session_state['data_granulats'][key]['se'] = se_val if se_val > 0 else None
 
-                    update_passants(st.session_state['data_granulats'][key])
-                    
-                    if key in ["SC", "SD"]:
-                        st.session_state['data_granulats'][key]['mf'] = compute_MF(
-                            st.session_state['data_granulats'][key]['sieves'],
-                            st.session_state['data_granulats'][key]['passants']
-                        )
-
-                    st.session_state['success_msg'] = f"✅ Calculs enregistrés pour {mat_data['nom']} (Sous-réf: {sub_ref})"
-                    st.rerun()
+                update_passants(st.session_state['data_granulats'][key])
+                if key in ["SC", "SD"]:
+                    st.session_state['data_granulats'][key]['mf'] = compute_MF(
+                        st.session_state['data_granulats'][key]['sieves'],
+                        st.session_state['data_granulats'][key]['passants']
+                    )
 
         with col2:
             st.subheader("Synthèse des Tamis Caractéristiques")
@@ -857,6 +851,30 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
 
             st.plotly_chart(fig, use_container_width=True)
 
+        # ----------------------------------------------------------------------
+        # BOUTON GLOBAL DE VALIDATION DE L'ENSEMBLE DES ESSAIS
+        # ----------------------------------------------------------------------
+        st.markdown("---")
+        st.subheader("📋 Validation Globale de tous les Échantillons (GII, GI, SC, SD)")
+
+        if is_duplicate:
+            st.error(f"⛔ **VALIDATION BLOQUÉE :** Le N° Rapport d'essai `{new_num_rapport}` est un doublon. Veuillez saisir un numéro unique avant de valider l'ensemble des essais.")
+            st.button("✅ Valider et enregistrer l'ensemble des essais", type="primary", use_container_width=True, disabled=True, key="btn_validate_all_disabled")
+        else:
+            if can_edit:
+                if st.button("✅ Valider et enregistrer l'ensemble des essais", type="primary", use_container_width=True, key="btn_validate_all"):
+                    # Recalcul global de sécurité de l'ensemble des fractions
+                    for mat_k in st.session_state['data_granulats'].keys():
+                        update_passants(st.session_state['data_granulats'][mat_k])
+                        if mat_k in ["SC", "SD"]:
+                            st.session_state['data_granulats'][mat_k]['mf'] = compute_MF(
+                                st.session_state['data_granulats'][mat_k]['sieves'],
+                                st.session_state['data_granulats'][mat_k]['passants']
+                            )
+
+                    st.session_state['success_msg'] = f"✅ L'ensemble des essais pour le Rapport N° '{new_num_rapport}' (Référence Base: {new_ref_base}) a été validé et enregistré avec succès !"
+                    st.rerun()
+
     # ------------------------------------------------------------------------------
     # FENÊTRE 2 : PV D'IDENTIFICATION / SYNTHÈSE
     # ------------------------------------------------------------------------------
@@ -866,7 +884,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         pv_info_dict = st.session_state['pv_info']
         
         if is_duplicate:
-            st.error(f"⚠️ **Attention :** Le numéro de rapport `{pv_info_dict.get('ref_pv', '')}` a déjà été enregistré dans l'historique des PV.")
+            st.error(f"⚠️ **Attention :** Le N° RAPPORT D'ESSAI `{pv_info_dict.get('ref_pv', '')}` existe déjà dans l'historique des PV.")
 
         with st.expander("⚙️ Modifier les entêtes et signataires du PV", expanded=False):
             c1, c2, c3 = st.columns(3)
@@ -874,7 +892,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
             
             projet_val   = c1.text_input("Chantier / Projet", pv_info_dict.get('projet', ''), disabled=not can_edit, key="pv_proj")
             client_val   = c2.text_input("Client", pv_info_dict.get('client', ''), disabled=not can_edit, key="pv_cli")
-            ref_val      = c3.text_input("N° Rapport d'Essai", pv_info_dict.get('ref_pv', ''), disabled=not can_edit, key="pv_ref")
+            ref_val      = c3.text_input("N° RAPPORT D'ESSAI N°", pv_info_dict.get('ref_pv', ''), disabled=not can_edit, key="pv_ref")
             date_val     = c4.text_input("Date du prélèvement", pv_info_dict.get('date', ''), disabled=not can_edit, key="pv_dt")
             coord_val    = c5.text_input("Coordinateur des essais", pv_info_dict.get('coord_essais', 'O.IKEN'), disabled=not can_edit, key="pv_coo")
             chef_val     = c6.text_input("Chef du laboratoire", pv_info_dict.get('chef_labo', 'H.BAALLAL'), disabled=not can_edit, key="pv_che")
@@ -948,7 +966,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
 
         if can_edit:
             if is_duplicate_pv:
-                st.error(f"⛔ **SAUVEGARDE BLOQUÉE :** Le numéro de rapport d'essai **'{current_ref_pv}'** existe déjà dans l'historique. Veuillez modifier le numéro de rapport dans l'onglet 1 ou 2 pour pouvoir enregistrer.")
+                st.error(f"⛔ **SAUVEGARDE BLOQUÉE :** Le N° RAPPORT D'ESSAI **'{current_ref_pv}'** existe déjà dans l'historique. Saisie d'un numéro unique obligatoire.")
                 st.button("💾 Sauvegarder le PV actuel dans l'historique", type="primary", use_container_width=True, disabled=True)
             else:
                 if st.button("💾 Sauvegarder le PV actuel dans l'historique", type="primary", use_container_width=True):
