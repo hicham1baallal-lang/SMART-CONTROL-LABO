@@ -20,6 +20,16 @@ def clean_html(html_str):
     """Supprime les espaces en début de ligne pour éviter le rendu en bloc de code Markdown dans Streamlit."""
     return "\n".join([line.strip() for line in html_str.splitlines() if line.strip()])
 
+# -----------------------------------------------------------------------------
+# Fonction de calcul du Tamis D (tamis dont le % passant est le plus proche de 95%)
+# -----------------------------------------------------------------------------
+def get_tamis_D(df: pd.DataFrame) -> float:
+    if df is None or df.empty or "% Passants" not in df.columns:
+        return None
+    # Calcul de la différence absolue par rapport à 95%
+    idx_closest = (df["% Passants"] - 95).abs().idxmin()
+    return df.loc[idx_closest, "Tamis (mm)"]
+
 def update_passants(mat_data):
     """Calcule les passants à partir des masses enregistrées (Méthode NF EN 933-1)"""
     M1 = float(mat_data.get('M1', 1000.0))
@@ -135,27 +145,6 @@ def compute_MF(sieves, passings):
         if not np.isnan(passant):
             sum_refus_cum += (100.0 - passant)
     return round(sum_refus_cum / 100.0, 2)
-
-def compute_D95(sieves, passings):
-    """ 
-    Détermine le tamis normatif D correspondant à au moins 95% de passant (NF EN 933-1).
-    Retourne la taille exacte du tamis normatif de la série (ex: 25, 20, 31.5) sans interpolation.
-    """
-    s_arr = np.array(sieves, dtype=float)
-    p_arr = np.array(passings, dtype=float)
-    
-    idx_sort = np.argsort(s_arr)
-    s_arr = s_arr[idx_sort]
-    p_arr = p_arr[idx_sort]
-    
-    # Sélectionne le plus petit tamis normatif dont le passant cumulé est >= 95%
-    valid_sieves = s_arr[p_arr >= 95.0]
-    if len(valid_sieves) > 0:
-        val = valid_sieves[0]
-        return int(val) if float(val).is_integer() else float(val)
-    
-    val = s_arr[-1]
-    return int(val) if float(val).is_integer() else float(val)
 
 # ------------------------------------------------------------------------------
 # FONCTION PRINCIPALE
@@ -310,11 +299,11 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         
         sub_ref = f"{new_ref_base}{SUFFIX_MAP[key]}" if new_ref_base else SUFFIX_MAP[key]
         
-        col1, col2 = st.columns([1.1, 0.9])
+        col1, col2 = st.columns([1, 1])
         
         with col1:
             st.subheader(f"Saisie des données : {mat_data['nom']}")
-            st.info(f"🏷️ **Sous-référence Labo générée :** `{sub_ref}`")
+            st.caption(f"Sous-référence Labo générée : {sub_ref}")
 
             st.markdown("##### ⚖️ Pesées (Procédé : Lavage et tamisage)")
             c_m1, c_m2, c_p = st.columns(3)
@@ -322,7 +311,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
             new_M2 = c_m2.number_input("Masse après lavage M2 (g)", value=float(mat_data.get('M2', 1000.0)), step=10.0, disabled=not can_edit, key=f"m2_{key}")
             new_P  = c_p.number_input("Matériau au fond P (g)", value=float(mat_data.get('P', 0.0)), step=0.1, disabled=not can_edit, key=f"p_{key}")
             
-            st.markdown("##### 📊 Analyse par tamisage (Saisie des refus en g)")
+            st.subheader("Analyse par tamisage (Saisie des refus en g)")
             
             df_display = pd.DataFrame({
                 "Tamis (mm)": mat_data['sieves'],
@@ -426,35 +415,49 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
 
         with col2:
             st.subheader("Courbe Granulométrique Globale")
+
+            # Calcul dynamique du Tamis D corrigé
+            tamis_D = get_tamis_D(edited_df)
+
+            st.markdown(f"**Tamis D (95% de passant) pour {mat_data['nom']}**")
+            st.markdown(f"# {tamis_D} mm")
+
+            # Tracé de la courbe granulométrique
+            fig = go.Figure()
             
-            d95 = compute_D95(mat_data['sieves'], mat_data['passants'])
-            st.metric(label=f"Tamis D (95% de passant) pour {mat_data['nom']}", value=f"{d95} mm")
-            
-            fig_global_tab1 = go.Figure()
-            colors = {'GII': '#1e40af', 'GI': '#0284c7', 'SC': '#16a34a', 'SD': '#ea580c'}
+            colors = {'GII': 'navy', 'GI': '#0284c7', 'SC': '#16a34a', 'SD': '#ea580c'}
             
             for k, d in st.session_state['data_granulats'].items():
                 s_s, p_s = zip(*sorted(zip(d['sieves'], d['passants'])))
                 
-                line_width = 3 if k == key else 1.5
+                line_width = 2 if k == key else 1.5
                 opacity = 1.0 if k == key else 0.4
                 
-                fig_global_tab1.add_trace(go.Scatter(
+                fig.add_trace(go.Scatter(
                     x=s_s, y=p_s,
-                    mode='lines+markers',
+                    mode="lines+markers",
                     name=f"{d['nom']} ({new_ref_base}{SUFFIX_MAP[k]})" if new_ref_base else d['nom'],
                     line=dict(color=colors[k], width=line_width),
+                    marker=dict(size=6),
                     opacity=opacity
                 ))
-                
-            fig_global_tab1.update_layout(
-                xaxis=dict(type="log", title="Tamis (mm)", tickvals=[0.063, 0.125, 0.25, 0.5, 1, 2, 4, 8, 16, 31.5, 63]),
-                yaxis=dict(title="% Passants Cumulés", range=[0, 105]),
+
+            fig.update_layout(
+                xaxis=dict(
+                    title="Tamis (mm)",
+                    type="log",
+                    autorange="reversed"
+                ),
+                yaxis=dict(
+                    title="% Passants Cumulés",
+                    range=[0, 105]
+                ),
+                margin=dict(l=20, r=20, t=30, b=20),
                 height=400,
-                margin=dict(l=20, r=20, t=20, b=20),
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
             )
-            st.plotly_chart(fig_global_tab1, use_container_width=True)
+
+            st.plotly_chart(fig, use_container_width=True)
 
     # ------------------------------------------------------------------------------
     # FENÊTRE 2 : PV D'IDENTIFICATION / SYNTHÈSE (CONFORME RAPPORT LPEE N° 1237)
