@@ -160,17 +160,17 @@ def compute_MF(sieves, passings):
 
 def generate_pv_html(pv_info, info_p, data_granulats):
     """Génère le document HTML complet et autonome du PV pour impression / téléchargement."""
-    gii_data = data_granulats['GII']
-    gi_data  = data_granulats['GI']
-    sc_data  = data_granulats['SC']
-    sd_data  = data_granulats['SD']
+    gii_data = data_granulats.get('GII', {})
+    gi_data  = data_granulats.get('GI', {})
+    sc_data  = data_granulats.get('SC', {})
+    sd_data  = data_granulats.get('SD', {})
 
     ref_b = info_p.get('ref_base', '260/26/100')
 
-    gii_sieves, gii_passants = calculate_characteristic_data(gii_data)
-    gi_sieves, gi_passants   = calculate_characteristic_data(gi_data)
-    sc_sieves, sc_passants   = calculate_characteristic_data(sc_data)
-    sd_sieves, sd_passants   = calculate_characteristic_data(sd_data)
+    gii_sieves, gii_passants = calculate_characteristic_data(gii_data) if gii_data else ({'2D':0,'1.4D':0,'D':0,'d':0,'d/2':0}, {'2D':0,'1.4D':0,'D':0,'d':0,'d/2':0})
+    gi_sieves, gi_passants   = calculate_characteristic_data(gi_data) if gi_data else ({'2D':0,'1.4D':0,'D':0,'d':0,'d/2':0}, {'2D':0,'1.4D':0,'D':0,'d':0,'d/2':0})
+    sc_sieves, sc_passants   = calculate_characteristic_data(sc_data) if sc_data else ({'2D':0,'1.4D':0,'D':0,'d':0,'d/2':0}, {'2D':0,'1.4D':0,'D':0,'d':0,'d/2':0})
+    sd_sieves, sd_passants   = calculate_characteristic_data(sd_data) if sd_data else ({'2D':0,'1.4D':0,'D':0,'d':0,'d/2':0}, {'2D':0,'1.4D':0,'D':0,'d':0,'d/2':0})
 
     html = f"""<!DOCTYPE html>
 <html lang="fr">
@@ -358,27 +358,19 @@ def generate_pv_html(pv_info, info_p, data_granulats):
             </thead>
             <tbody>
                 <tr>
-                    <td class="row-designation">{gii_data['nom']} - ({ref_b}/1)</td>
+                    <td class="row-designation">{gii_data.get('nom', 'GII')} - ({ref_b}/1)</td>
                     <td>{gii_passants['2D']:.0f}</td>
                     <td>{gii_passants['1.4D']:.0f}</td>
                     <td>{gii_passants['D']:.0f}</td>
                     <td>{gii_passants['d']:.0f}</td>
                     <td>{gii_passants['d/2']:.0f}</td>
-                    <td>{get_passant_at_sieve(gii_data['sieves'], gii_data['passants'], 0.063):.1f}</td>
-                    <td>{gii_data['fi'] if gii_data['fi'] is not None else '-'}</td>
-                    <td>{gii_data['la'] if gii_data['la'] is not None else '-'}</td>
+                    <td>{get_passant_at_sieve(gii_data.get('sieves', []), gii_data.get('passants', []), 0.063):.1f}</td>
+                    <td>{gii_data.get('fi', '-') if gii_data.get('fi') is not None else '-'}</td>
+                    <td>{gii_data.get('la', '-') if gii_data.get('la') is not None else '-'}</td>
                 </tr>
                 <tr class="row-limite">
                     <td class="row-designation">Caractéristique générale de granularité</td>
                     <td>100</td><td>98 - 100</td><td>85 - 99</td><td>0 - 20</td><td>0 - 5</td><td>&lt; 1,5</td><td>FI 20</td><td>&lt; 30</td>
-                </tr>
-                <tr class="row-fuseau">
-                    <td class="row-designation">Fuseau de production (Min)</td>
-                    <td>100</td><td>100</td><td>94</td><td>11,5</td><td>1.4</td><td>0.6</td><td>4</td><td>23</td>
-                </tr>
-                <tr class="row-fuseau">
-                    <td class="row-designation">Fuseau de production (Max)</td>
-                    <td>100</td><td>100</td><td>99</td><td>1.4</td><td>0.7</td><td>1.3</td><td>16</td><td>28</td>
                 </tr>
             </tbody>
         </table>
@@ -401,15 +393,15 @@ def generate_pv_html(pv_info, info_p, data_granulats):
             </thead>
             <tbody>
                 <tr>
-                    <td class="row-designation">{gi_data['nom'].strip()} - ({ref_b}/2)</td>
+                    <td class="row-designation">{gi_data.get('nom', 'GI')} - ({ref_b}/2)</td>
                     <td>{gi_passants['2D']:.0f}</td>
                     <td>{gi_passants['1.4D']:.0f}</td>
                     <td>{gi_passants['D']:.0f}</td>
                     <td>{gi_passants['d']:.0f}</td>
                     <td>{gi_passants['d/2']:.0f}</td>
-                    <td>{get_passant_at_sieve(gi_data['sieves'], gi_data['passants'], 0.063):.1f}</td>
-                    <td>{gi_data['fi'] if gi_data['fi'] is not None else '-'}</td>
-                    <td>{gi_data['la'] if gi_data['la'] is not None else '-'}</td>
+                    <td>{get_passant_at_sieve(gi_data.get('sieves', []), gi_data.get('passants', []), 0.063):.1f}</td>
+                    <td>{gi_data.get('fi', '-') if gi_data.get('fi') is not None else '-'}</td>
+                    <td>{gi_data.get('la', '-') if gi_data.get('la') is not None else '-'}</td>
                 </tr>
                 <tr class="row-limite">
                     <td class="row-designation">Caractéristique générale de granularité</td>
@@ -434,15 +426,15 @@ def generate_pv_html(pv_info, info_p, data_granulats):
             </thead>
             <tbody>
                 <tr>
-                    <td class="row-designation">{sc_data['nom']} - ({ref_b}/3)</td>
+                    <td class="row-designation">{sc_data.get('nom', 'SC')} - ({ref_b}/3)</td>
                     <td>{sc_passants['2D']:.0f}</td>
                     <td>{sc_passants['1.4D']:.0f}</td>
                     <td>{sc_passants['D']:.0f}</td>
-                    <td>{get_passant_at_sieve(sc_data['sieves'], sc_data['passants'], 1.0):.0f}</td>
-                    <td>{get_passant_at_sieve(sc_data['sieves'], sc_data['passants'], 0.25):.0f}</td>
-                    <td>{get_passant_at_sieve(sc_data['sieves'], sc_data['passants'], 0.063):.1f}</td>
-                    <td>{sc_data['mf'] if sc_data['mf'] is not None else '-'}</td>
-                    <td>{sc_data['se'] if sc_data['se'] is not None else '-'}</td>
+                    <td>{get_passant_at_sieve(sc_data.get('sieves', []), sc_data.get('passants', []), 1.0):.0f}</td>
+                    <td>{get_passant_at_sieve(sc_data.get('sieves', []), sc_data.get('passants', []), 0.25):.0f}</td>
+                    <td>{get_passant_at_sieve(sc_data.get('sieves', []), sc_data.get('passants', []), 0.063):.1f}</td>
+                    <td>{sc_data.get('mf', '-') if sc_data.get('mf') is not None else '-'}</td>
+                    <td>{sc_data.get('se', '-') if sc_data.get('se') is not None else '-'}</td>
                 </tr>
                 <tr class="row-limite">
                     <td class="row-designation">Caractéristique générale de granularité</td>
@@ -467,14 +459,14 @@ def generate_pv_html(pv_info, info_p, data_granulats):
             </thead>
             <tbody>
                 <tr>
-                    <td class="row-designation">{sd_data['nom']} - ({ref_b}/4)</td>
+                    <td class="row-designation">{sd_data.get('nom', 'SD')} - ({ref_b}/4)</td>
                     <td>{sd_passants['2D']:.0f}</td>
                     <td>{sd_passants['1.4D']:.0f}</td>
                     <td>{sd_passants['D']:.0f}</td>
-                    <td>{get_passant_at_sieve(sd_data['sieves'], sd_data['passants'], 1.0):.0f}</td>
-                    <td>{get_passant_at_sieve(sd_data['sieves'], sd_data['passants'], 0.25):.0f}</td>
-                    <td>{get_passant_at_sieve(sd_data['sieves'], sd_data['passants'], 0.063):.1f}</td>
-                    <td>{sd_data['mb'] if sd_data['mb'] is not None else '-'}</td>
+                    <td>{get_passant_at_sieve(sd_data.get('sieves', []), sd_data.get('passants', []), 1.0):.0f}</td>
+                    <td>{get_passant_at_sieve(sd_data.get('sieves', []), sd_data.get('passants', []), 0.25):.0f}</td>
+                    <td>{get_passant_at_sieve(sd_data.get('sieves', []), sd_data.get('passants', []), 0.063):.1f}</td>
+                    <td>{sd_data.get('mb', '-') if sd_data.get('mb') is not None else '-'}</td>
                 </tr>
                 <tr class="row-limite">
                     <td class="row-designation">Caractéristique générale de granularité</td>
@@ -948,29 +940,47 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         if st.session_state['historique_pv']:
             st.write("### 📜 Liste des PV sauvegardés (Session Actuelle)")
             for i, pv in enumerate(reversed(st.session_state['historique_pv'])):
-                item_title = f"📁 PV N° {pv['ref_pv']} | {pv['date_creation']} | Client: {pv['client']}"
+                ref_pv_disp = pv.get('ref_pv', pv.get('ref_pv', '-'))
+                date_disp = pv.get('date_creation', '-')
+                client_disp = pv.get('client', '-')
+                
+                item_title = f"📁 PV N° {ref_pv_disp} | {date_disp} | Client: {client_disp}"
                 
                 with st.expander(item_title, expanded=(i==0)):
-                    st.markdown(f"**Chantier / Projet :** {pv['projet']}")
-                    st.markdown(f"**Date de création :** {pv['date_creation']}")
-                    st.markdown(f"**Référence Rapport :** `{pv['ref_pv']}`")
+                    st.markdown(f"**Chantier / Projet :** {pv.get('projet', '-')}")
+                    st.markdown(f"**Date de création :** {date_disp}")
+                    st.markdown(f"**Référence Rapport :** `{ref_pv_disp}`")
+
+                    # Extraction sécurisée rétrocompatible avec les anciens PV sauvegardés dans la session
+                    pv_info_hist = pv.get('pv_info', {
+                        'projet': pv.get('projet', ''),
+                        'client': pv.get('client', ''),
+                        'ref_pv': pv.get('ref_pv', ''),
+                        'date': pv.get('date_creation', ''),
+                        'commentaires': pv.get('commentaires', ''),
+                        'coord_essais': 'O.IKEN',
+                        'chef_labo': 'H.BAALLAL'
+                    })
+                    info_p_hist = pv.get('info_prelevement', st.session_state.get('info_prelevement', {}))
+                    data_g_hist = pv.get('data_granulats', st.session_state.get('data_granulats', {}))
 
                     # Génération du HTML spécifique à ce PV historique
                     pv_hist_html = generate_pv_html(
-                        pv['pv_info'],
-                        pv['info_prelevement'],
-                        pv['data_granulats']
+                        pv_info_hist,
+                        info_p_hist,
+                        data_g_hist
                     )
 
                     col_dl1, col_dl2 = st.columns(2)
                     
                     with col_dl1:
+                        pv_id_str = str(pv.get('id', i))
                         st.download_button(
                             label="📄 Télécharger le PV (HTML Imprimable)",
                             data=pv_hist_html,
-                            file_name=f"PV_{pv['ref_pv'].replace('/', '_')}_{pv['id']}.html",
+                            file_name=f"PV_{str(ref_pv_disp).replace('/', '_')}_{pv_id_str}.html",
                             mime="text/html",
-                            key=f"dl_html_{pv['id']}_{i}",
+                            key=f"dl_html_{pv_id_str}_{i}",
                             use_container_width=True
                         )
                         
@@ -978,13 +988,13 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                         st.download_button(
                             label="💾 Exporter les données (JSON)",
                             data=json.dumps(pv, indent=2, ensure_ascii=False),
-                            file_name=f"PV_Data_{pv['ref_pv'].replace('/', '_')}_{pv['id']}.json",
+                            file_name=f"PV_Data_{str(ref_pv_disp).replace('/', '_')}_{pv_id_str}.json",
                             mime="application/json",
-                            key=f"dl_json_{pv['id']}_{i}",
+                            key=f"dl_json_{pv_id_str}_{i}",
                             use_container_width=True
                         )
 
                     with st.popover("👁️ Voir la structure JSON brute"):
                         st.json(pv)
         else:
-            st.info("Abonnement vide : Aucun PV n'a été sauvegardé dans cette session pour l'instant.")
+            st.info("Aucun PV n'a été sauvegardé dans cette session pour l'instant.")
