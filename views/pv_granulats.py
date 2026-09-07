@@ -5,6 +5,11 @@ import plotly.graph_objects as go
 from datetime import datetime
 import json
 import copy
+import io
+import base64
+import matplotlib
+matplotlib.use('Agg')  # Backend non-interactif pour Streamlit
+import matplotlib.pyplot as plt
 
 # ------------------------------------------------------------------------------
 # CONSTANTES & SUFFIXES DES MATÉRIAUX
@@ -66,10 +71,7 @@ def compute_sieve_at_passant(sieves, passings, target_passant):
     return int(val) if float(val).is_integer() else float(val)
 
 def get_d_D_from_material(mat_data):
-    """
-    Détermine d et D à partir de la classe granulaire (ex: '10/20' -> d=10, D=20).
-    En secours, calcule D à partir du passant ~95%.
-    """
+    """Détermine d et D à partir de la classe granulaire ou par calcul."""
     sieves = mat_data.get('sieves', [])
     passants = mat_data.get('passants', [])
 
@@ -117,10 +119,7 @@ def get_passant_at_sieve(sieves, passings, target_sieve):
     return float(np.interp(target_sieve, s_arr, p_arr))
 
 def calculate_characteristic_data(mat_data, tamis_D=None):
-    """
-    Déduit la liste des tamis caractéristiques (2D, 1.4D, D, d, d/2)
-    et calcule leur pourcentage de passant correspondant.
-    """
+    """Déduit les tamis caractéristiques (2D, 1.4D, D, d, d/2) et passants associés."""
     d, D_calc = get_d_D_from_material(mat_data)
     D = float(tamis_D) if (tamis_D is not None and tamis_D > 0) else D_calc
     
@@ -146,10 +145,7 @@ def calculate_characteristic_data(mat_data, tamis_D=None):
     return sieves_dict, passants_dict
 
 def compute_MF(sieves, passings):
-    """
-    Calcule le Module de Finesse (MF) selon NF EN 12620 :
-    MF = Sum( Refus cumulés % sur [4, 2, 1, 0.5, 0.25, 0.125] mm ) / 100
-    """
+    """Calcule le Module de Finesse (MF) selon NF EN 12620."""
     target_sieves = [4.0, 2.0, 1.0, 0.5, 0.25, 0.125]
     sum_refus_cum = 0.0
     for ts in target_sieves:
@@ -158,8 +154,36 @@ def compute_MF(sieves, passings):
             sum_refus_cum += (100.0 - passant)
     return round(sum_refus_cum / 100.0, 2)
 
+def generate_curve_base64(data_granulats, ref_base):
+    """Génère l'image haute définition de la courbe granulométrique au format Base64 pour impression/PDF."""
+    fig, ax = plt.subplots(figsize=(9, 4.2), dpi=250)
+    colors = {'GII': '#1e3a8a', 'GI': '#0284c7', 'SC': '#16a34a', 'SD': '#ea580c'}
+    
+    for k, d in data_granulats.items():
+        if d.get('sieves') and d.get('passants'):
+            s_s, p_s = zip(*sorted(zip(d['sieves'], d['passants'])))
+            label = f"{d['nom']} ({ref_base}{SUFFIX_MAP[k]})" if ref_base else d['nom']
+            ax.plot(s_s, p_s, marker='o', markersize=3.5, label=label, color=colors.get(k, '#000000'), linewidth=1.8)
+
+    ax.set_xscale('log')
+    ax.set_xticks([0.063, 0.125, 0.25, 0.5, 1, 2, 4, 8, 16, 31.5, 63])
+    ax.get_xaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
+    ax.set_xlabel("Tamis (mm)", fontsize=9, fontweight='bold')
+    ax.set_ylabel("% Passants Cumulés", fontsize=9, fontweight='bold')
+    ax.set_ylim(-2, 105)
+    ax.grid(True, which="both", ls="--", lw=0.5, alpha=0.6)
+    ax.legend(loc='lower right', fontsize=8, frameon=True, facecolor='#ffffff', edgecolor='#cbd5e1')
+    ax.set_title("COURBE GRANULOMÉTRIQUE GLOBALE", fontsize=10, fontweight='bold', color='#1e3a8a', pad=8)
+    plt.tight_layout()
+
+    buf = io.BytesIO()
+    plt.savefig(buf, format='png', bbox_inches='tight', dpi=250)
+    plt.close(fig)
+    buf.seek(0)
+    return f"data:image/png;base64,{base64.b64encode(buf.read()).decode('utf-8')}"
+
 def generate_pv_html(pv_info, info_p, data_granulats):
-    """Génère le document HTML complet et autonome du PV pour impression / téléchargement."""
+    """Génère le document HTML complet du PV incluant la courbe et le bouton d'impression PDF."""
     gii_data = data_granulats.get('GII', {})
     gi_data  = data_granulats.get('GI', {})
     sc_data  = data_granulats.get('SC', {})
@@ -172,6 +196,9 @@ def generate_pv_html(pv_info, info_p, data_granulats):
     sc_sieves, sc_passants   = calculate_characteristic_data(sc_data) if sc_data else ({'2D':0,'1.4D':0,'D':0,'d':0,'d/2':0}, {'2D':0,'1.4D':0,'D':0,'d':0,'d/2':0})
     sd_sieves, sd_passants   = calculate_characteristic_data(sd_data) if sd_data else ({'2D':0,'1.4D':0,'D':0,'d':0,'d/2':0}, {'2D':0,'1.4D':0,'D':0,'d':0,'d/2':0})
 
+    # Génération de l'image de la courbe intégrée au PV
+    curve_b64 = generate_curve_base64(data_granulats, ref_b)
+
     html = f"""<!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -183,14 +210,32 @@ def generate_pv_html(pv_info, info_p, data_granulats):
         color: #1e293b;
         background-color: #ffffff;
         margin: 0;
-        padding: 20px;
+        padding: 10px;
+    }}
+    .print-actions {{
+        text-align: right;
+        margin-bottom: 15px;
+    }}
+    .btn-print {{
+        background-color: #2563eb;
+        color: white;
+        border: none;
+        padding: 10px 18px;
+        font-size: 14px;
+        font-weight: bold;
+        border-radius: 6px;
+        cursor: pointer;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }}
+    .btn-print:hover {{
+        background-color: #1d4ed8;
     }}
     .lpee-pv-card {{
         background-color: #ffffff;
         border: 2px solid #1e3a8a;
         border-radius: 8px;
-        padding: 20px;
-        max-width: 1000px;
+        padding: 18px;
+        max-width: 950px;
         margin: 0 auto;
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
     }}
@@ -199,21 +244,21 @@ def generate_pv_html(pv_info, info_p, data_granulats):
         color: #ffffff;
         text-align: center;
         font-weight: bold;
-        font-size: 16px;
-        padding: 10px;
+        font-size: 15px;
+        padding: 8px;
         border-radius: 4px;
         letter-spacing: 0.5px;
-        margin-bottom: 12px;
+        margin-bottom: 10px;
     }}
     .lpee-info-grid {{
         width: 100%;
         border-collapse: collapse;
-        margin-bottom: 15px;
-        font-size: 12px;
+        margin-bottom: 12px;
+        font-size: 11px;
     }}
     .lpee-info-grid td {{
         border: 1px solid #cbd5e1;
-        padding: 6px 10px;
+        padding: 5px 8px;
         vertical-align: top;
     }}
     .lpee-info-label {{
@@ -225,31 +270,31 @@ def generate_pv_html(pv_info, info_p, data_granulats):
     .lpee-norm-table {{
         width: 100%;
         border-collapse: collapse;
-        font-size: 11px;
-        margin-bottom: 15px;
+        font-size: 10px;
+        margin-bottom: 10px;
     }}
     .lpee-norm-table td {{
         border: 1px solid #cbd5e1;
-        padding: 4px 8px;
+        padding: 3px 6px;
     }}
     .lpee-table {{
         width: 100%;
         border-collapse: collapse;
-        margin-top: 8px;
-        margin-bottom: 15px;
-        font-size: 12px;
+        margin-top: 6px;
+        margin-bottom: 10px;
+        font-size: 11px;
     }}
     .lpee-table th {{
         background-color: #2563eb;
         color: #ffffff;
         border: 1px solid #1d4ed8;
-        padding: 6px;
+        padding: 5px;
         text-align: center;
         font-weight: bold;
     }}
     .lpee-table td {{
         border: 1px solid #cbd5e1;
-        padding: 5px;
+        padding: 4px;
         text-align: center;
     }}
     .row-designation {{
@@ -259,42 +304,72 @@ def generate_pv_html(pv_info, info_p, data_granulats):
     }}
     .row-limite {{
         background-color: #fafafa;
-        font-size: 11px;
+        font-size: 10px;
         color: #475569;
     }}
+    .curve-container {{
+        text-align: center;
+        margin: 10px 0;
+        border: 1px solid #cbd5e1;
+        border-radius: 4px;
+        padding: 6px;
+        background-color: #ffffff;
+    }}
+    .curve-img {{
+        width: 100%;
+        max-height: 380px;
+        object-fit: contain;
+    }}
     .comments-box {{
-        margin-top: 15px;
-        padding: 10px;
+        margin-top: 10px;
+        padding: 8px;
         border: 1px solid #cbd5e1;
         border-radius: 4px;
         background-color: #f8fafc;
-        font-size: 12px;
+        font-size: 11px;
     }}
     .signature-box {{
-        margin-top: 20px;
+        margin-top: 15px;
         width: 100%;
         border-collapse: collapse;
-        font-size: 12px;
+        font-size: 11px;
     }}
     .signature-box td {{
         width: 33.33%;
         border: 1px solid #cbd5e1;
-        padding: 8px;
+        padding: 6px;
         text-align: center;
-        height: 80px;
+        height: 70px;
         vertical-align: top;
     }}
+
+    /* STYLES SPÉCIFIQUES D'IMPRESSION ET D'EXPORTATION PDF */
     @media print {{
-        body {{ padding: 0; }}
-        .lpee-pv-card {{ border: none; box-shadow: none; padding: 0; }}
+        .print-actions {{ display: none !important; }}
+        body {{ padding: 0; background-color: #ffffff; }}
+        .lpee-pv-card {{
+            border: none !important;
+            box-shadow: none !important;
+            padding: 0 !important;
+            width: 100% !important;
+            max-width: 100% !important;
+        }}
+        @page {{
+            size: A4 portrait;
+            margin: 8mm;
+        }}
     }}
 </style>
 </head>
 <body>
+    <div class="print-actions">
+        <button onclick="window.print()" class="btn-print">🖨️ Imprimer / Enregistrer en PDF</button>
+    </div>
+
     <div class="lpee-pv-card">
         <div class="lpee-header-title">
             RAPPORT D'ESSAI N° : {pv_info.get('ref_pv', '')}<br>
-            <span style="font-size:13px; font-weight:normal;">OBJET : IDENTIFICATION DES GRANULATS POUR BETON</span>
+            <span style="font-size:12px; font-weight:normal;">OBJET : IDENTIFICATION DES GRANULATS POUR BETON</span>
         </div>
 
         <table class="lpee-info-grid">
@@ -470,6 +545,11 @@ def generate_pv_html(pv_info, info_p, data_granulats):
             </tbody>
         </table>
 
+        <!-- COURBE GRANULOMÉTRIQUE INTÉGRÉE DANS LE PV -->
+        <div class="curve-container">
+            <img src="{curve_b64}" class="curve-img" alt="Courbe Granulométrique Globale">
+        </div>
+
         <div class="comments-box">
             <b>COMMENTAIRES :</b><br>
             {pv_info.get('commentaires', '')}
@@ -589,9 +669,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
     if not can_edit:
         st.info("👁️ **Mode Consultation** : Vous êtes en lecture seule.")
 
-    # --------------------------------------------------------------------------
-    # LISTE ET VÉRIFICATION DES NUMÉROS DE RAPPORT DÉJÀ ENREGISTRÉS
-    # --------------------------------------------------------------------------
+    # Vérification des doublons de numéros de rapport
     saved_num_rapports = [
         pv.get('ref_pv', '').strip().lower() 
         for pv in st.session_state.get('historique_pv', []) 
@@ -623,7 +701,6 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         new_lieu_prelev  = c5.text_input("Lieu de prélèvement", value=info_p.get('lieu_prelevement', 'Stock sur centrale à béton'), disabled=not can_edit, key="common_lieu_prelev")
         new_provenance   = c6.text_input("Provenance échantillon", value=info_p.get('provenance', 'TG PREFA OULAD SALEH'), disabled=not can_edit, key="common_provenance")
         
-        # N° Rapport d'essai et Référence labo Base (Synchronisés automatiquement)
         new_num_rapport  = st.text_input("N° RAPPORT D'ESSAI N°", value=info_p.get('num_rapport', default_num_rapport), disabled=not can_edit, key="common_num_rapport")
         new_ref_base     = new_num_rapport.strip()
 
@@ -635,7 +712,6 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
             help="La Référence labo (Base) reprend automatiquement le numéro du rapport d'essai."
         )
 
-        # Vérification du doublon du N° de Rapport
         is_duplicate = new_num_rapport.strip().lower() in saved_num_rapports if new_num_rapport.strip() else False
         if is_duplicate:
             st.error(f"⛔ **ATTENTION : DUPLICATA DÉTECTÉ !** Le N° Rapport d'essai `{new_num_rapport}` a déjà été enregistré dans l'historique. Chaque numéro de rapport doit être unique.")
@@ -762,13 +838,11 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                         "Module de Finesse (MF - Calculé Auto)", 
                         value=float(calculated_mf), 
                         disabled=True, 
-                        help="FM = Σ(Refus cumulés sur 4, 2, 1, 0.5, 0.25, 0.125 mm) / 100",
                         key=f"mf_{key}"
                     )
                     se_val = st.number_input("Équivalent de Sable (SE 10)", value=float(mat_data.get('se') or 0.0), step=0.1, format="%.1f", disabled=not can_edit, key=f"se_{key}")
                 fi_val, la_val = 0.0, 0.0
 
-            # Sauvegarde locale intermédiaire pour la fraction courante
             if can_edit:
                 st.session_state['data_granulats'][key]['M1'] = new_M1
                 st.session_state['data_granulats'][key]['M2'] = new_M2
@@ -835,15 +909,8 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                 ))
 
             fig.update_layout(
-                xaxis=dict(
-                    title="Tamis (mm)",
-                    type="log",
-                    autorange="reversed"
-                ),
-                yaxis=dict(
-                    title="% Passants Cumulés",
-                    range=[0, 105]
-                ),
+                xaxis=dict(title="Tamis (mm)", type="log", autorange="reversed"),
+                yaxis=dict(title="% Passants Cumulés", range=[0, 105]),
                 margin=dict(l=20, r=20, t=30, b=20),
                 height=380,
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
@@ -851,19 +918,15 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
 
             st.plotly_chart(fig, use_container_width=True)
 
-        # ----------------------------------------------------------------------
-        # BOUTON GLOBAL DE VALIDATION DE L'ENSEMBLE DES ESSAIS
-        # ----------------------------------------------------------------------
         st.markdown("---")
         st.subheader("📋 Validation Globale de tous les Échantillons (GII, GI, SC, SD)")
 
         if is_duplicate:
-            st.error(f"⛔ **VALIDATION BLOQUÉE :** Le N° Rapport d'essai `{new_num_rapport}` est un doublon. Veuillez saisir un numéro unique avant de valider l'ensemble des essais.")
+            st.error(f"⛔ **VALIDATION BLOQUÉE :** Le N° Rapport d'essai `{new_num_rapport}` est un doublon. Saisissez un numéro unique.")
             st.button("✅ Valider et enregistrer l'ensemble des essais", type="primary", use_container_width=True, disabled=True, key="btn_validate_all_disabled")
         else:
             if can_edit:
                 if st.button("✅ Valider et enregistrer l'ensemble des essais", type="primary", use_container_width=True, key="btn_validate_all"):
-                    # Recalcul global de sécurité de l'ensemble des fractions
                     for mat_k in st.session_state['data_granulats'].keys():
                         update_passants(st.session_state['data_granulats'][mat_k])
                         if mat_k in ["SC", "SD"]:
@@ -872,11 +935,11 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                                 st.session_state['data_granulats'][mat_k]['passants']
                             )
 
-                    st.session_state['success_msg'] = f"✅ L'ensemble des essais pour le Rapport N° '{new_num_rapport}' (Référence Base: {new_ref_base}) a été validé et enregistré avec succès !"
+                    st.session_state['success_msg'] = f"✅ L'ensemble des essais pour le Rapport N° '{new_num_rapport}' a été validé avec succès !"
                     st.rerun()
 
     # ------------------------------------------------------------------------------
-    # FENÊTRE 2 : PV D'IDENTIFICATION / SYNTHÈSE
+    # FENÊTRE 2 : PV D'IDENTIFICATION / SYNTHÈSE (AVEC COURBE ET EXPORT PDF)
     # ------------------------------------------------------------------------------
     with tabs[1]:
         st.header("PV d'Identification des Granulats pour Béton")
@@ -884,7 +947,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         pv_info_dict = st.session_state['pv_info']
         
         if is_duplicate:
-            st.error(f"⚠️ **Attention :** Le N° RAPPORT D'ESSAI `{pv_info_dict.get('ref_pv', '')}` existe déjà dans l'historique des PV.")
+            st.error(f"⚠️ **Attention :** Le N° RAPPORT D'ESSAI `{pv_info_dict.get('ref_pv', '')}` existe déjà dans l'historique.")
 
         with st.expander("⚙️ Modifier les entêtes et signataires du PV", expanded=False):
             c1, c2, c3 = st.columns(3)
@@ -905,55 +968,32 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                 st.session_state['pv_info']['coord_essais'] = coord_val
                 st.session_state['pv_info']['chef_labo'] = chef_val
 
-        # Génération du HTML complet imprimable du PV
+        # Modificateur de commentaires
+        comm_input = st.text_area("COMMENTAIRES SUR LE PV :", value=st.session_state['pv_info'].get('commentaires', ''), disabled=not can_edit, height=70)
+        if can_edit:
+            st.session_state['pv_info']['commentaires'] = comm_input
+
+        # Génération du document HTML autonome contenant la courbe en Base64
         current_pv_html = generate_pv_html(
             st.session_state['pv_info'],
             st.session_state['info_prelevement'],
             st.session_state['data_granulats']
         )
 
+        # Affichage du PV complet (avec courbe et bouton d'impression en PDF)
         st.markdown(clean_html(current_pv_html), unsafe_allow_html=True)
         
         st.markdown("<br>", unsafe_allow_html=True)
         
-        # Bouton d'export direct HTML / Imprimable
+        # Bouton de téléchargement du fichier HTML (avec la courbe incorporée)
         st.download_button(
-            label="📄 Télécharger le Rapport PV (Format HTML Imprimable)",
+            label="💾 Télécharger le fichier PV complet (avec courbe incorporée)",
             data=current_pv_html,
             file_name=f"PV_Granulats_{st.session_state['pv_info'].get('ref_pv', 'rapport').replace('/', '_')}.html",
             mime="text/html",
             use_container_width=True,
             type="primary"
         )
-
-        st.markdown("---")
-        st.subheader("COURBE GRANULOMETRIQUE GLOBALE DU PV")
-        fig_global_tab2 = go.Figure()
-        
-        colors = {'GII': '#1e40af', 'GI': '#0284c7', 'SC': '#16a34a', 'SD': '#ea580c'}
-        ref_b = st.session_state['info_prelevement'].get('num_rapport', default_num_rapport)
-        
-        for k, d in st.session_state['data_granulats'].items():
-            s_s, p_s = zip(*sorted(zip(d['sieves'], d['passants'])))
-            fig_global_tab2.add_trace(go.Scatter(
-                x=s_s, y=p_s,
-                mode='lines+markers',
-                name=f"{d['nom']} ({ref_b}{SUFFIX_MAP[k]})" if ref_b else d['nom'],
-                line=dict(color=colors[k], width=2)
-            ))
-            
-        fig_global_tab2.update_layout(
-            xaxis=dict(type="log", title="Tamis (mm)", tickvals=[0.063, 0.125, 0.25, 0.5, 1, 2, 4, 8, 16, 31.5, 63]),
-            yaxis=dict(title="% Passants Cumulés", range=[0, 105]),
-            height=440,
-            margin=dict(l=30, r=30, t=30, b=30),
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-        )
-        st.plotly_chart(fig_global_tab2, use_container_width=True)
-
-        comm_input = st.text_area("COMMENTAIRES :", value=st.session_state['pv_info'].get('commentaires', ''), disabled=not can_edit, height=80)
-        if can_edit:
-            st.session_state['pv_info']['commentaires'] = comm_input
 
     # ------------------------------------------------------------------------------
     # FENÊTRE 3 : HISTORIQUE ET GESTION / TÉLÉCHARGEMENT
@@ -966,7 +1006,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
 
         if can_edit:
             if is_duplicate_pv:
-                st.error(f"⛔ **SAUVEGARDE BLOQUÉE :** Le N° RAPPORT D'ESSAI **'{current_ref_pv}'** existe déjà dans l'historique. Saisie d'un numéro unique obligatoire.")
+                st.error(f"⛔ **SAUVEGARDE BLOQUÉE :** Le N° RAPPORT D'ESSAI **'{current_ref_pv}'** existe déjà dans l'historique.")
                 st.button("💾 Sauvegarder le PV actuel dans l'historique", type="primary", use_container_width=True, disabled=True)
             else:
                 if st.button("💾 Sauvegarder le PV actuel dans l'historique", type="primary", use_container_width=True):
@@ -998,7 +1038,6 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                     st.markdown(f"**Date de création :** {date_disp}")
                     st.markdown(f"**Référence Rapport :** `{ref_pv_disp}`")
 
-                    # Extraction sécurisée rétrocompatible
                     pv_info_hist = pv.get('pv_info', {
                         'projet': pv.get('projet', ''),
                         'client': pv.get('client', ''),
@@ -1011,7 +1050,6 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                     info_p_hist = pv.get('info_prelevement', st.session_state.get('info_prelevement', {}))
                     data_g_hist = pv.get('data_granulats', st.session_state.get('data_granulats', {}))
 
-                    # Génération du HTML spécifique à ce PV historique
                     pv_hist_html = generate_pv_html(
                         pv_info_hist,
                         info_p_hist,
@@ -1023,7 +1061,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                     with col_dl1:
                         pv_id_str = str(pv.get('id', i))
                         st.download_button(
-                            label="📄 Télécharger le PV (HTML Imprimable)",
+                            label="📄 Télécharger le PV avec Courbe (HTML/PDF)",
                             data=pv_hist_html,
                             file_name=f"PV_{str(ref_pv_disp).replace('/', '_')}_{pv_id_str}.html",
                             mime="text/html",
