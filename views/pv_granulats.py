@@ -40,19 +40,87 @@ def update_passants(mat_data):
     else:
         mat_data['passants'] = [100.0] * len(mat_data['sieves'])
 
-def get_passant_at_sieve(sieves, passings, target_sieve):
-    """ Calcule ou interpole le passant au tamis cible """
-    if target_sieve is None:
-        return np.nan
-    s_arr = np.array(sieves)
-    p_arr = np.array(passings)
+def compute_sieve_at_passant(sieves, passings, target_passant):
+    """ Interpole la taille du tamis (mm) correspondant à un % de passant cible """
+    s_arr = np.array(sieves, dtype=float)
+    p_arr = np.array(passings, dtype=float)
+    
     idx_sort = np.argsort(s_arr)
     s_arr = s_arr[idx_sort]
     p_arr = p_arr[idx_sort]
     
-    if target_sieve in s_arr:
-        return float(p_arr[np.where(s_arr == target_sieve)[0][0]])
+    if target_passant >= p_arr[-1]:
+        return float(s_arr[-1])
+    if target_passant <= p_arr[0]:
+        return float(s_arr[0])
+        
+    return float(np.interp(target_passant, p_arr, s_arr))
+
+def get_d_D_from_material(mat_data):
+    """
+    Extrait d et D depuis la classe (ex: '10/20' -> d=10, D=20)
+    ou calcule D (tamis à ~95% passant) et d (tamis à ~5% passant).
+    """
+    classe_str = mat_data.get('classe', '')
+    if '/' in classe_str:
+        try:
+            parts = classe_str.replace(',', '.').split('/')
+            d_val = float(parts[0])
+            D_val = float(parts[1])
+            return d_val, D_val
+        except ValueError:
+            pass
+            
+    sieves = mat_data.get('sieves', [])
+    passants = mat_data.get('passants', [])
+    
+    if not sieves or not passants:
+        return 0.0, 0.0
+
+    D_val = compute_sieve_at_passant(sieves, passants, 95.0)
+    d_val = compute_sieve_at_passant(sieves, passants, 5.0)
+    return d_val, D_val
+
+def get_passant_at_sieve(sieves, passings, target_sieve):
+    """ Calcule ou interpole le passant au tamis cible """
+    if target_sieve is None or target_sieve <= 0:
+        return 0.0
+        
+    s_arr = np.array(sieves, dtype=float)
+    p_arr = np.array(passings, dtype=float)
+    
+    idx_sort = np.argsort(s_arr)
+    s_arr = s_arr[idx_sort]
+    p_arr = p_arr[idx_sort]
+    
+    if target_sieve >= s_arr[-1]:
+        return 100.0
+    if target_sieve <= s_arr[0]:
+        return float(p_arr[0])
+        
     return float(np.interp(target_sieve, s_arr, p_arr))
+
+def calculate_characteristic_data(mat_data):
+    """
+    Génère automatiquement la liste des tamis (2D, 1.4D, D, d, d/2) 
+    et leurs passants respectifs (%).
+    """
+    d, D = get_d_D_from_material(mat_data)
+    
+    sieves_dict = {
+        '2D': round(2 * D, 2) if (2 * D) % 1 != 0 else round(2 * D, 1),
+        '1.4D': round(1.4 * D, 2) if (1.4 * D) % 1 != 0 else round(1.4 * D, 1),
+        'D': round(D, 2) if D % 1 != 0 else round(D, 1),
+        'd': round(d, 2) if d % 1 != 0 else round(d, 1),
+        'd/2': round(d / 2, 2) if (d / 2) % 1 != 0 else round(d / 2, 1)
+    }
+    
+    passants_dict = {}
+    for key, sieve_size in sieves_dict.items():
+        val = get_passant_at_sieve(mat_data['sieves'], mat_data['passants'], sieve_size)
+        passants_dict[key] = val
+
+    return sieves_dict, passants_dict
 
 def compute_MF(sieves, passings):
     """
@@ -416,6 +484,11 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         sc_data  = st.session_state['data_granulats']['SC']
         sd_data  = st.session_state['data_granulats']['SD']
 
+        gii_sieves, gii_passants = calculate_characteristic_data(gii_data)
+        gi_sieves, gi_passants   = calculate_characteristic_data(gi_data)
+        sc_sieves, sc_passants   = calculate_characteristic_data(sc_data)
+        sd_sieves, sd_passants   = calculate_characteristic_data(sd_data)
+
         info_p = st.session_state['info_prelevement']
         ref_b = info_p.get('ref_base', '260/26/100')
 
@@ -573,17 +646,22 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                         <th>2D</th><th>1,4D</th><th>D</th><th>d</th><th>d/2</th><th>f</th><th>FI</th><th>LA</th>
                     </tr>
                     <tr>
-                        <th>40</th><th>28</th><th>20</th><th>10</th><th>5</th><th>% &lt; 63µm</th><th>-</th><th>-</th>
+                        <th>{gii_sieves['2D']}</th>
+                        <th>{gii_sieves['1.4D']}</th>
+                        <th>{gii_sieves['D']}</th>
+                        <th>{gii_sieves['d']}</th>
+                        <th>{gii_sieves['d/2']}</th>
+                        <th>% &lt; 63µm</th><th>-</th><th>-</th>
                     </tr>
                 </thead>
                 <tbody>
                     <tr>
-                        <td class="row-designation">Gravillons GII-10/20 ({ref_b}/1)</td>
-                        <td>{get_passant_at_sieve(gii_data['sieves'], gii_data['passants'], 40):.1f}</td>
-                        <td>{get_passant_at_sieve(gii_data['sieves'], gii_data['passants'], 28):.0f}</td>
-                        <td>{get_passant_at_sieve(gii_data['sieves'], gii_data['passants'], 20):.0f}</td>
-                        <td>{get_passant_at_sieve(gii_data['sieves'], gii_data['passants'], 10):.0f}</td>
-                        <td>{get_passant_at_sieve(gii_data['sieves'], gii_data['passants'], 5):.0f}</td>
+                        <td class="row-designation">{gii_data['nom']} ({ref_b}/1)</td>
+                        <td>{gii_passants['2D']:.1f}</td>
+                        <td>{gii_passants['1.4D']:.0f}</td>
+                        <td>{gii_passants['D']:.0f}</td>
+                        <td>{gii_passants['d']:.0f}</td>
+                        <td>{gii_passants['d/2']:.0f}</td>
                         <td>{get_passant_at_sieve(gii_data['sieves'], gii_data['passants'], 0.063):.1f}</td>
                         <td>{gii_data['fi'] if gii_data['fi'] is not None else '-'}</td>
                         <td>{gii_data['la'] if gii_data['la'] is not None else '-'}</td>
@@ -611,17 +689,22 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                         <th>2D</th><th>1,4D</th><th>D</th><th>d</th><th>d/2</th><th>f</th><th>FI</th><th>LA</th>
                     </tr>
                     <tr>
-                        <th>20</th><th>14</th><th>10</th><th>4</th><th>2</th><th>% &lt; 63µm</th><th>-</th><th>-</th>
+                        <th>{gi_sieves['2D']}</th>
+                        <th>{gi_sieves['1.4D']}</th>
+                        <th>{gi_sieves['D']}</th>
+                        <th>{gi_sieves['d']}</th>
+                        <th>{gi_sieves['d/2']}</th>
+                        <th>% &lt; 63µm</th><th>-</th><th>-</th>
                     </tr>
                 </thead>
                 <tbody>
                     <tr>
-                        <td class="row-designation">Gravillons GI-4/10 ({ref_b}/2)</td>
-                        <td>{get_passant_at_sieve(gi_data['sieves'], gi_data['passants'], 20):.0f}</td>
-                        <td>{get_passant_at_sieve(gi_data['sieves'], gi_data['passants'], 14):.0f}</td>
-                        <td>{get_passant_at_sieve(gi_data['sieves'], gi_data['passants'], 10):.0f}</td>
-                        <td>{get_passant_at_sieve(gi_data['sieves'], gi_data['passants'], 4):.0f}</td>
-                        <td>{get_passant_at_sieve(gi_data['sieves'], gi_data['passants'], 2):.0f}</td>
+                        <td class="row-designation">{gi_data['nom']} ({ref_b}/2)</td>
+                        <td>{gi_passants['2D']:.0f}</td>
+                        <td>{gi_passants['1.4D']:.0f}</td>
+                        <td>{gi_passants['D']:.0f}</td>
+                        <td>{gi_passants['d']:.0f}</td>
+                        <td>{gi_passants['d/2']:.0f}</td>
                         <td>{get_passant_at_sieve(gi_data['sieves'], gi_data['passants'], 0.063):.1f}</td>
                         <td>{gi_data['fi'] if gi_data['fi'] is not None else '-'}</td>
                         <td>{gi_data['la'] if gi_data['la'] is not None else '-'}</td>
@@ -641,15 +724,18 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                         <th>2D</th><th>1,4D</th><th>D</th><th>% &lt; 1mm</th><th>% &lt; 250µm</th><th>% &lt; 63µm</th><th>MF</th><th>SE (10)</th>
                     </tr>
                     <tr>
-                        <th>8</th><th>5,6</th><th>4</th><th>-</th><th>-</th><th>-</th><th>CF</th><th>-</th>
+                        <th>{sc_sieves['2D']}</th>
+                        <th>{sc_sieves['1.4D']}</th>
+                        <th>{sc_sieves['D']}</th>
+                        <th>-</th><th>-</th><th>-</th><th>CF</th><th>-</th>
                     </tr>
                 </thead>
                 <tbody>
                     <tr>
-                        <td class="row-designation">Sable grossier 0/4 ({ref_b}/3)</td>
-                        <td>{get_passant_at_sieve(sc_data['sieves'], sc_data['passants'], 8.0):.0f}</td>
-                        <td>{get_passant_at_sieve(sc_data['sieves'], sc_data['passants'], 5.6):.0f}</td>
-                        <td>{get_passant_at_sieve(sc_data['sieves'], sc_data['passants'], 4.0):.0f}</td>
+                        <td class="row-designation">{sc_data['nom']} ({ref_b}/3)</td>
+                        <td>{sc_passants['2D']:.0f}</td>
+                        <td>{sc_passants['1.4D']:.0f}</td>
+                        <td>{sc_passants['D']:.0f}</td>
                         <td>{get_passant_at_sieve(sc_data['sieves'], sc_data['passants'], 1.0):.0f}</td>
                         <td>{get_passant_at_sieve(sc_data['sieves'], sc_data['passants'], 0.25):.0f}</td>
                         <td>{get_passant_at_sieve(sc_data['sieves'], sc_data['passants'], 0.063):.1f}</td>
@@ -671,15 +757,18 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                         <th>2D</th><th>1,4D</th><th>D</th><th>% &lt; 1mm</th><th>% &lt; 250µm</th><th>% &lt; 63µm</th><th>MB</th>
                     </tr>
                     <tr>
-                        <th>1,26</th><th>0,88</th><th>0,63</th><th>-</th><th>-</th><th>-</th><th>-</th>
+                        <th>{sd_sieves['2D']}</th>
+                        <th>{sd_sieves['1.4D']}</th>
+                        <th>{sd_sieves['D']}</th>
+                        <th>-</th><th>-</th><th>-</th><th>-</th>
                     </tr>
                 </thead>
                 <tbody>
                     <tr>
-                        <td class="row-designation">Sable fin 0/0,630 ({ref_b}/4)</td>
-                        <td>{get_passant_at_sieve(sd_data['sieves'], sd_data['passants'], 1.26):.0f}</td>
-                        <td>{get_passant_at_sieve(sd_data['sieves'], sd_data['passants'], 0.88):.0f}</td>
-                        <td>{get_passant_at_sieve(sd_data['sieves'], sd_data['passants'], 0.63):.0f}</td>
+                        <td class="row-designation">{sd_data['nom']} ({ref_b}/4)</td>
+                        <td>{sd_passants['2D']:.0f}</td>
+                        <td>{sd_passants['1.4D']:.0f}</td>
+                        <td>{sd_passants['D']:.0f}</td>
                         <td>{get_passant_at_sieve(sd_data['sieves'], sd_data['passants'], 1.0):.0f}</td>
                         <td>{get_passant_at_sieve(sd_data['sieves'], sd_data['passants'], 0.25):.0f}</td>
                         <td>{get_passant_at_sieve(sd_data['sieves'], sd_data['passants'], 0.063):.1f}</td>
