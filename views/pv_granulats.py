@@ -89,18 +89,22 @@ def compute_D95(sieves, passings):
 # FONCTION PRINCIPALE
 # ------------------------------------------------------------------------------
 def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
-    # INITIALISATION DU SESSION STATE COMMUN
+    # INITIALISATION DU SESSION STATE SÉCURISÉE AVEC SETDEFAULT
     if 'info_prelevement' not in st.session_state:
-        st.session_state['info_prelevement'] = {
-            'chantier': "TRAVAUX D'EXECUTION DE TERRASSEMENT, OUVRAGES D'ART ET RETABLISSEMENTS DE COMMUNICATION ENTRE PK 5+450 et PK 10+000-GARE CASA SUD",
-            'client': 'TGCC',
-            'dossier_no': '2025-260-05985-2025 0247',
-            'date_prelevement': '23/07/2026',
-            'lieu_prelevement': 'Stock sur centrale à béton',
-            'provenance': 'TG PREFA OULAD SALEH',
-            'ref_base': '260/26/100',
-            'num_rapport': '26/260/LGV/CS/1237'
-        }
+        st.session_state['info_prelevement'] = {}
+
+    info_defaults = {
+        'chantier': "TRAVAUX D'EXECUTION DE TERRASSEMENT, OUVRAGES D'ART ET RETABLISSEMENTS DE COMMUNICATION ENTRE PK 5+450 et PK 10+000-GARE CASA SUD",
+        'client': 'TGCC',
+        'dossier_no': '2025-260-05985-2025 0247',
+        'date_prelevement': '23/07/2026',
+        'lieu_prelevement': 'Stock sur centrale à béton',
+        'provenance': 'TG PREFA OULAD SALEH',
+        'ref_base': '260/26/100',
+        'num_rapport': '26/260/LGV/CS/1237'
+    }
+    for k, v in info_defaults.items():
+        st.session_state['info_prelevement'].setdefault(k, v)
 
     if 'data_granulats' not in st.session_state:
         st.session_state['data_granulats'] = {
@@ -155,15 +159,19 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         st.session_state['historique_pv'] = []
 
     if 'pv_info' not in st.session_state:
-        st.session_state['pv_info'] = {
-            'projet': st.session_state['info_prelevement']['chantier'],
-            'client': st.session_state['info_prelevement']['client'],
-            'ref_pv': st.session_state['info_prelevement']['num_rapport'],
-            'date': st.session_state['info_prelevement']['date_prelevement'],
-            'commentaires': "Les essais d'identifications des granulats pour béton sont conformes aux exigences de la norme NF EN 12620 et NF P 18-545",
-            'coord_essais': 'O.IKEN',
-            'chef_labo': 'H.BAALLAL'
-        }
+        st.session_state['pv_info'] = {}
+
+    pv_defaults = {
+        'projet': st.session_state['info_prelevement'].get('chantier', ''),
+        'client': st.session_state['info_prelevement'].get('client', ''),
+        'ref_pv': st.session_state['info_prelevement'].get('num_rapport', ''),
+        'date': st.session_state['info_prelevement'].get('date_prelevement', ''),
+        'commentaires': "Les essais d'identifications des granulats pour béton sont conformes aux exigences de la norme NF EN 12620 et NF P 18-545",
+        'coord_essais': 'O.IKEN',
+        'chef_labo': 'H.BAALLAL'
+    }
+    for k, v in pv_defaults.items():
+        st.session_state['pv_info'].setdefault(k, v)
 
     if 'success_msg' in st.session_state:
         st.success(st.session_state['success_msg'])
@@ -382,16 +390,18 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
     with tabs[1]:
         st.header("PV d'Identification des Granulats pour Béton")
         
+        pv_info_dict = st.session_state['pv_info']
+        
         with st.expander("⚙️ Modifier les entêtes et signataires du PV", expanded=False):
             c1, c2, c3 = st.columns(3)
             c4, c5, c6 = st.columns(3)
             
-            projet_val   = c1.text_input("Chantier / Projet", st.session_state['pv_info']['projet'], disabled=not can_edit, key="pv_proj")
-            client_val   = c2.text_input("Client", st.session_state['pv_info']['client'], disabled=not can_edit, key="pv_cli")
-            ref_val      = c3.text_input("N° Rapport d'Essai", st.session_state['pv_info']['ref_pv'], disabled=not can_edit, key="pv_ref")
-            date_val     = c4.text_input("Date du prélèvement", st.session_state['pv_info']['date'], disabled=not can_edit, key="pv_dt")
-            coord_val    = c5.text_input("Coordinateur des essais", st.session_state['pv_info']['coord_essais'], disabled=not can_edit, key="pv_coo")
-            chef_val     = c6.text_input("Chef du laboratoire", st.session_state['pv_info']['chef_labo'], disabled=not can_edit, key="pv_che")
+            projet_val   = c1.text_input("Chantier / Projet", pv_info_dict.get('projet', ''), disabled=not can_edit, key="pv_proj")
+            client_val   = c2.text_input("Client", pv_info_dict.get('client', ''), disabled=not can_edit, key="pv_cli")
+            ref_val      = c3.text_input("N° Rapport d'Essai", pv_info_dict.get('ref_pv', ''), disabled=not can_edit, key="pv_ref")
+            date_val     = c4.text_input("Date du prélèvement", pv_info_dict.get('date', ''), disabled=not can_edit, key="pv_dt")
+            coord_val    = c5.text_input("Coordinateur des essais", pv_info_dict.get('coord_essais', 'O.IKEN'), disabled=not can_edit, key="pv_coo")
+            chef_val     = c6.text_input("Chef du laboratoire", pv_info_dict.get('chef_labo', 'H.BAALLAL'), disabled=not can_edit, key="pv_che")
 
             if can_edit:
                 st.session_state['pv_info']['projet'] = projet_val
@@ -409,7 +419,6 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         info_p = st.session_state['info_prelevement']
         ref_b = info_p.get('ref_base', '260/26/100')
 
-        # CSS ÉPURÉ CONFORME AU FORMAT MODERNE LPEE
         style_css = """
         <style>
         .lpee-pv-card {
@@ -514,24 +523,24 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         pv_html = f"""
         <div class="lpee-pv-card">
             <div class="lpee-header-title">
-                RAPPORT D'ESSAI N° : {st.session_state['pv_info']['ref_pv']}<br>
+                RAPPORT D'ESSAI N° : {st.session_state['pv_info'].get('ref_pv', '')}<br>
                 <span style="font-size:13px; font-weight:normal;">OBJET : IDENTIFICATION DES GRANULATS POUR BETON</span>
             </div>
 
             <table class="lpee-info-grid">
                 <tr>
                     <td class="lpee-info-label">Client :</td>
-                    <td><b>{st.session_state['pv_info']['client']}</b></td>
+                    <td><b>{st.session_state['pv_info'].get('client', '')}</b></td>
                     <td class="lpee-info-label">N° Dossier :</td>
                     <td>{info_p.get('dossier_no', '-')}</td>
                 </tr>
                 <tr>
                     <td class="lpee-info-label">Chantier :</td>
-                    <td colspan="3">{st.session_state['pv_info']['projet']}</td>
+                    <td colspan="3">{st.session_state['pv_info'].get('projet', '')}</td>
                 </tr>
                 <tr>
                     <td class="lpee-info-label">Date du prélèvement :</td>
-                    <td>{st.session_state['pv_info']['date']}</td>
+                    <td>{st.session_state['pv_info'].get('date', '')}</td>
                     <td class="lpee-info-label">Provenance :</td>
                     <td>{info_p.get('provenance', '-')}</td>
                 </tr>
@@ -686,15 +695,14 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
             <!-- SIGNATURES -->
             <table class="signature-box">
                 <tr>
-                    <td><b>LE COORDINATEUR DES ESSAIS</b><br><br><span style="color:#64748b;">Nom: {st.session_state['pv_info']['coord_essais']}</span><br>Visa:</td>
-                    <td><b>LE CHEF DU LABORATOIRE</b><br><br><span style="color:#64748b;">Nom: {st.session_state['pv_info']['chef_labo']}</span><br>Visa:</td>
+                    <td><b>LE COORDINATEUR DES ESSAIS</b><br><br><span style="color:#64748b;">Nom: {st.session_state['pv_info'].get('coord_essais', 'O.IKEN')}</span><br>Visa:</td>
+                    <td><b>LE CHEF DU LABORATOIRE</b><br><br><span style="color:#64748b;">Nom: {st.session_state['pv_info'].get('chef_labo', 'H.BAALLAL')}</span><br>Visa:</td>
                     <td><b>REÇU PAR LE CLIENT</b><br><br><span style="color:#64748b;">Nom:</span><br>Visa:</td>
                 </tr>
             </table>
         </div>
         """
         
-        # NETTOYAGE ET AFFICHAGE DU HTML RECTIFIÉ
         st.markdown(style_css, unsafe_allow_html=True)
         st.markdown(clean_html(pv_html), unsafe_allow_html=True)
         
@@ -722,7 +730,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         )
         st.plotly_chart(fig_global_tab2, use_container_width=True)
 
-        st.text_area("COMMENTAIRES :", value=st.session_state['pv_info']['commentaires'], disabled=not can_edit, height=80)
+        st.text_area("COMMENTAIRES :", value=st.session_state['pv_info'].get('commentaires', ''), disabled=not can_edit, height=80)
 
     # ------------------------------------------------------------------------------
     # FENÊTRE 3 : HISTORIQUE ET GESTION
@@ -734,9 +742,9 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
             if st.button("📥 Sauvegarder le PV actuel dans l'historique", type="primary", use_container_width=True):
                 st.session_state['historique_pv'].append({
                     'date_creation': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                    'ref_pv': st.session_state['pv_info']['ref_pv'],
-                    'projet': st.session_state['pv_info']['projet'],
-                    'client': st.session_state['pv_info']['client'],
+                    'ref_pv': st.session_state['pv_info'].get('ref_pv', ''),
+                    'projet': st.session_state['pv_info'].get('projet', ''),
+                    'client': st.session_state['pv_info'].get('client', ''),
                     'data': st.session_state['data_granulats']
                 })
                 st.success("✅ Le PV a été ajouté à l'historique de la session !")
