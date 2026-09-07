@@ -26,7 +26,6 @@ def clean_html(html_str):
 def get_tamis_D(df: pd.DataFrame) -> float:
     if df is None or df.empty or "% Passants" not in df.columns:
         return None
-    # Calcul du tamis dont le % passant est le plus proche de 95%
     diffs = (df["% Passants"] - 95.0).abs()
     idx_closest = diffs.idxmin()
     val = df.loc[idx_closest, "Tamis (mm)"]
@@ -68,9 +67,8 @@ def compute_sieve_at_passant(sieves, passings, target_passant):
 
 def get_d_D_from_material(mat_data):
     """
-    Calcule dynamiquement la dimension du tamis D déterminée depuis la feuille d'essai 
-    (tamis normatif où le passant atteint >= 98% depuis les données d'analyse)
-    et déduit d (depuis la classe ou la feuille d'essai).
+    Calcule dynamiquement la dimension du tamis D (tamis dont le % passant est le plus proche de 95%)
+    et déduit d (depuis la classe granulaire d/D).
     """
     sieves = mat_data.get('sieves', [])
     passants = mat_data.get('passants', [])
@@ -85,10 +83,13 @@ def get_d_D_from_material(mat_data):
             pass
 
     if sieves and passants:
-        D_val = compute_sieve_at_passant(sieves, passants, 98.0)
+        diffs = [abs(p - 95.0) for p in passants]
+        min_idx = diffs.index(min(diffs))
+        D_val = sieves[min_idx]
+        
         if d_val is None:
             d_val = compute_sieve_at_passant(sieves, passants, 5.0)
-        return d_val, D_val
+        return float(d_val), float(D_val)
 
     return d_val or 0.0, 0.0
 
@@ -111,12 +112,14 @@ def get_passant_at_sieve(sieves, passings, target_sieve):
         
     return float(np.interp(target_sieve, s_arr, p_arr))
 
-def calculate_characteristic_data(mat_data):
+def calculate_characteristic_data(mat_data, tamis_D=None):
     """
     Déduit automatiquement la liste des tamis (2D, 1.4D, D, d, d/2) 
-    et calcule leur pourcentage de passant correspondant par interpolation linéaire.
+    en utilisant la valeur exacte de D (ex: D=25 -> 2D=50, 1.4D=35, D=25, d=10, d/2=5)
+    et calcule leur pourcentage de passant correspondant.
     """
-    d, D = get_d_D_from_material(mat_data)
+    d, D_calc = get_d_D_from_material(mat_data)
+    D = float(tamis_D) if (tamis_D is not None and tamis_D > 0) else D_calc
     
     def fmt_sieve(val):
         if val is None or val == 0:
@@ -345,7 +348,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                 height=350
             )
 
-            # Recalcul dynamique immédiat sur edited_df pour la prise en compte en temps réel des modifications utilisateur
+            # Recalcul dynamique immédiat sur edited_df pour la prise en compte en temps réel
             if new_M1 > 0:
                 pct_r_edit = (edited_df["Masse de refus Ri (g)"] / new_M1) * 100
                 pct_cum_edit = pct_r_edit.cumsum()
@@ -428,11 +431,10 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         with col2:
             st.subheader("Synthèse des Tamis Caractéristiques")
 
-            # Calcul dynamique du Tamis D
+            # Calcul dynamique du Tamis D à partir du tableau d'analyse
             tamis_D = get_tamis_D(edited_df)
-            char_sieves, char_passants = calculate_characteristic_data(mat_data)
+            char_sieves, char_passants = calculate_characteristic_data(mat_data, tamis_D=tamis_D)
 
-            # Mini-tableau explicatif des ouvertures et % passants calculés pour le matériau sélectionné
             col_m1, col_m2 = st.columns([1, 1.5])
             with col_m1:
                 st.markdown(f"**Tamis D (~95%)**")
@@ -493,7 +495,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
             st.plotly_chart(fig, use_container_width=True)
 
     # ------------------------------------------------------------------------------
-    # FENÊTRE 2 : PV D'IDENTIFICATION / SYNTHÈSE (CONFORME RAPPORT LPEE N° 1237)
+    # FENÊTRE 2 : PV D'IDENTIFICATION / SYNTHÈSE
     # ------------------------------------------------------------------------------
     with tabs[1]:
         st.header("PV d'Identification des Granulats pour Béton")
@@ -524,7 +526,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         sc_data  = st.session_state['data_granulats']['SC']
         sd_data  = st.session_state['data_granulats']['SD']
 
-        # Calcul dynamique des ouvertures relatives et des % passants correspondants
+        # Calcul dynamique harmonisé pour chaque matériau
         gii_sieves, gii_passants = calculate_characteristic_data(gii_data)
         gi_sieves, gi_passants   = calculate_characteristic_data(gi_data)
         sc_sieves, sc_passants   = calculate_characteristic_data(sc_data)
