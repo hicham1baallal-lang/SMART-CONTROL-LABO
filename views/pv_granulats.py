@@ -690,7 +690,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                 </tr>
             </table>
 
-            <!-- TABLEAU 1 : GRAVILLONS GII 10/20 -->
+            <!-- TABLEAU 1 : GRAVILLONS GII  -->
             <table class="lpee-table">
                 <thead>
                     <tr>
