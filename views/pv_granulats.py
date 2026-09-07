@@ -178,7 +178,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
     if 'data_granulats' not in st.session_state:
         st.session_state['data_granulats'] = {
             'GII': {
-                'nom': 'Gravillons GII - 10/20',
+                'nom': 'Gravillons GII',
                 'classe': '10/20',
                 'ref_client': '', 'date_prelevement': '', 'lieu_prelevement': '',
                 'sieves': [40, 31.5, 25, 20, 16, 14, 12.5, 10, 8, 6.3, 5, 4, 3.15, 2.5, 2, 1.6, 1.25, 1, 0.8, 0.63, 0.5, 0.4, 0.315, 0.25, 0.2, 0.16, 0.125, 0.1, 0.08, 0.063],
@@ -188,7 +188,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                 'fi': 16.0, 'la': 26.0, 'mb': None, 'mf': None, 'se': None
             },
             'GI': {
-                'nom': 'Gravillons GI - 4/10',
+                'nom': 'Gravillons GI ',
                 'classe': '4/10',
                 'ref_client': '', 'date_prelevement': '', 'lieu_prelevement': '',
                 'sieves': [20, 16, 14, 12.5, 10, 8, 6.3, 5, 4, 3.15, 2.5, 2, 1.6, 1.25, 1, 0.8, 0.63, 0.5, 0.4, 0.315, 0.25, 0.2, 0.16, 0.125, 0.1, 0.08, 0.063],
@@ -198,7 +198,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                 'fi': 14.0, 'la': 26.0, 'mb': None, 'mf': None, 'se': None
             },
             'SD': {
-                'nom': 'Sable fin 0/0,630 (Dune)',
+                'nom': 'Sable fin',
                 'classe': '0/0,63',
                 'ref_client': '', 'date_prelevement': '', 'lieu_prelevement': '',
                 'sieves': [6.3, 5, 4, 3.15, 2.5, 2, 1.6, 1.25, 1, 0.8, 0.63, 0.5, 0.4, 0.315, 0.25, 0.2, 0.16, 0.125, 0.1, 0.08, 0.063],
@@ -208,7 +208,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                 'fi': None, 'la': None, 'mb': 0.7, 'mf': None, 'se': None
             },
             'SC': {
-                'nom': 'Sable grossier 0/4 (Concassé)',
+                'nom': 'Sable grossier 0/4',
                 'classe': '0/4',
                 'ref_client': '', 'date_prelevement': '', 'lieu_prelevement': '',
                 'sieves': [6.3, 5, 4, 3.15, 2.5, 2, 1.6, 1.25, 1, 0.8, 0.63, 0.5, 0.4, 0.315, 0.25, 0.2, 0.16, 0.125, 0.1, 0.08, 0.063],
