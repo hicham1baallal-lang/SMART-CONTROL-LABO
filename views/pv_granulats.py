@@ -165,7 +165,7 @@ def generate_pv_html(pv_info, info_p, data_granulats):
     sc_data  = data_granulats.get('SC', {})
     sd_data  = data_granulats.get('SD', {})
 
-    ref_b = info_p.get('ref_base', '260/26/100')
+    ref_b = info_p.get('num_rapport', info_p.get('ref_base', '26/260/LGV/CS/1237'))
 
     gii_sieves, gii_passants = calculate_characteristic_data(gii_data) if gii_data else ({'2D':0,'1.4D':0,'D':0,'d':0,'d/2':0}, {'2D':0,'1.4D':0,'D':0,'d':0,'d/2':0})
     gi_sieves, gi_passants   = calculate_characteristic_data(gi_data) if gi_data else ({'2D':0,'1.4D':0,'D':0,'d':0,'d/2':0}, {'2D':0,'1.4D':0,'D':0,'d':0,'d/2':0})
@@ -261,11 +261,6 @@ def generate_pv_html(pv_info, info_p, data_granulats):
         background-color: #fafafa;
         font-size: 11px;
         color: #475569;
-    }}
-    .row-fuseau {{
-        background-color: #f8fafc;
-        font-size: 11px;
-        color: #334155;
     }}
     .comments-box {{
         margin-top: 15px;
@@ -500,6 +495,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
     if 'info_prelevement' not in st.session_state:
         st.session_state['info_prelevement'] = {}
 
+    default_num_rapport = '26/260/LGV/CS/1237'
     info_defaults = {
         'chantier': "TRAVAUX D'EXECUTION DE TERRASSEMENT, OUVRAGES D'ART ET RETABLISSEMENTS DE COMMUNICATION ENTRE PK 5+450 et PK 10+000-GARE CASA SUD",
         'client': 'TGCC',
@@ -507,8 +503,8 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         'date_prelevement': '23/07/2026',
         'lieu_prelevement': 'Stock sur centrale à béton',
         'provenance': 'TG PREFA OULAD SALEH',
-        'ref_base': '260/26/100',
-        'num_rapport': '26/260/LGV/CS/1237'
+        'num_rapport': default_num_rapport,
+        'ref_base': default_num_rapport
     }
     for k, v in info_defaults.items():
         st.session_state['info_prelevement'].setdefault(k, v)
@@ -575,7 +571,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
     pv_defaults = {
         'projet': st.session_state['info_prelevement'].get('chantier', ''),
         'client': st.session_state['info_prelevement'].get('client', ''),
-        'ref_pv': st.session_state['info_prelevement'].get('num_rapport', ''),
+        'ref_pv': st.session_state['info_prelevement'].get('num_rapport', default_num_rapport),
         'date': st.session_state['info_prelevement'].get('date_prelevement', ''),
         'commentaires': "Les essais d'identifications des granulats pour béton sont conformes aux exigences de la norme NF EN 12620 et NF P 18-545",
         'coord_essais': 'O.IKEN',
@@ -592,6 +588,15 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
     
     if not can_edit:
         st.info("👁️ **Mode Consultation** : Vous êtes en lecture seule.")
+
+    # --------------------------------------------------------------------------
+    # LISTE ET VERIFICATION DES NUMEROS DE RAPPORT DEJA ENREGISTRES
+    # --------------------------------------------------------------------------
+    saved_num_rapports = [
+        pv.get('ref_pv', '').strip().lower() 
+        for pv in st.session_state.get('historique_pv', []) 
+        if pv.get('ref_pv')
+    ]
 
     tabs = st.tabs([
         "1️⃣ Feuilles d'Essais Complets",
@@ -618,8 +623,22 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         new_lieu_prelev  = c5.text_input("Lieu de prélèvement", value=info_p.get('lieu_prelevement', 'Stock sur centrale à béton'), disabled=not can_edit, key="common_lieu_prelev")
         new_provenance   = c6.text_input("Provenance échantillon", value=info_p.get('provenance', 'TG PREFA OULAD SALEH'), disabled=not can_edit, key="common_provenance")
         
-        new_ref_base     = st.text_input("Référence labo (Base)", value=info_p.get('ref_base', '260/26/100'), disabled=not can_edit, key="common_ref_base")
-        new_num_rapport  = st.text_input("N° Rapport d'essai", value=info_p.get('num_rapport', '26/260/LGV/CS/1237'), disabled=not can_edit, key="common_num_rapport")
+        # N° Rapport d'essai et Référence labo Base (Synchronisés automatiquement)
+        new_num_rapport  = st.text_input("N° Rapport d'essai", value=info_p.get('num_rapport', default_num_rapport), disabled=not can_edit, key="common_num_rapport")
+        new_ref_base     = new_num_rapport.strip()
+
+        st.text_input(
+            "Référence labo (Base) - Identique au N° Rapport", 
+            value=new_ref_base, 
+            disabled=True, 
+            key="common_ref_base_disp",
+            help="La Référence labo (Base) reprend automatiquement le numéro du rapport d'essai."
+        )
+
+        # Vérification du doublon du N° de Rapport
+        is_duplicate = new_num_rapport.strip().lower() in saved_num_rapports if new_num_rapport.strip() else False
+        if is_duplicate:
+            st.error(f"⛔ **ATTENTION : DUPLICATA DÉTECTÉ !** Le N° Rapport d'essai `{new_num_rapport}` a déjà été enregistré dans l'historique. Veuillez saisir un numéro unique pour valider le PV.")
 
         if can_edit:
             st.session_state['info_prelevement']['chantier'] = new_chantier
@@ -628,8 +647,8 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
             st.session_state['info_prelevement']['date_prelevement'] = new_date_prelev
             st.session_state['info_prelevement']['lieu_prelevement'] = new_lieu_prelev
             st.session_state['info_prelevement']['provenance'] = new_provenance
-            st.session_state['info_prelevement']['ref_base'] = new_ref_base
             st.session_state['info_prelevement']['num_rapport'] = new_num_rapport
+            st.session_state['info_prelevement']['ref_base'] = new_ref_base
             
             st.session_state['pv_info']['projet'] = new_chantier
             st.session_state['pv_info']['client'] = new_client
@@ -846,6 +865,9 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         
         pv_info_dict = st.session_state['pv_info']
         
+        if is_duplicate:
+            st.error(f"⚠️ **Attention :** Le numéro de rapport `{pv_info_dict.get('ref_pv', '')}` a déjà été enregistré dans l'historique des PV.")
+
         with st.expander("⚙️ Modifier les entêtes et signataires du PV", expanded=False):
             c1, c2, c3 = st.columns(3)
             c4, c5, c6 = st.columns(3)
@@ -891,7 +913,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         fig_global_tab2 = go.Figure()
         
         colors = {'GII': '#1e40af', 'GI': '#0284c7', 'SC': '#16a34a', 'SD': '#ea580c'}
-        ref_b = st.session_state['info_prelevement'].get('ref_base', '260/26/100')
+        ref_b = st.session_state['info_prelevement'].get('num_rapport', default_num_rapport)
         
         for k, d in st.session_state['data_granulats'].items():
             s_s, p_s = zip(*sorted(zip(d['sieves'], d['passants'])))
@@ -921,26 +943,33 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
     with tabs[2]:
         st.header("Historique et Sauvegarde des PV")
         
+        current_ref_pv = st.session_state['pv_info'].get('ref_pv', '').strip()
+        is_duplicate_pv = current_ref_pv.lower() in saved_num_rapports if current_ref_pv else False
+
         if can_edit:
-            if st.button("💾 Sauvegarder le PV actuel dans l'historique", type="primary", use_container_width=True):
-                pv_snapshot = {
-                    'id': len(st.session_state['historique_pv']) + 1,
-                    'date_creation': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                    'ref_pv': st.session_state['pv_info'].get('ref_pv', ''),
-                    'projet': st.session_state['pv_info'].get('projet', ''),
-                    'client': st.session_state['pv_info'].get('client', ''),
-                    'info_prelevement': copy.deepcopy(st.session_state['info_prelevement']),
-                    'pv_info': copy.deepcopy(st.session_state['pv_info']),
-                    'data_granulats': copy.deepcopy(st.session_state['data_granulats'])
-                }
-                st.session_state['historique_pv'].append(pv_snapshot)
-                st.session_state['success_msg'] = "✅ Le PV a été sauvegardé avec succès dans l'historique !"
-                st.rerun()
+            if is_duplicate_pv:
+                st.error(f"⛔ **SAUVEGARDE BLOQUÉE :** Le numéro de rapport d'essai **'{current_ref_pv}'** existe déjà dans l'historique. Veuillez modifier le numéro de rapport dans l'onglet 1 ou 2 pour pouvoir enregistrer.")
+                st.button("💾 Sauvegarder le PV actuel dans l'historique", type="primary", use_container_width=True, disabled=True)
+            else:
+                if st.button("💾 Sauvegarder le PV actuel dans l'historique", type="primary", use_container_width=True):
+                    pv_snapshot = {
+                        'id': len(st.session_state['historique_pv']) + 1,
+                        'date_creation': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                        'ref_pv': current_ref_pv,
+                        'projet': st.session_state['pv_info'].get('projet', ''),
+                        'client': st.session_state['pv_info'].get('client', ''),
+                        'info_prelevement': copy.deepcopy(st.session_state['info_prelevement']),
+                        'pv_info': copy.deepcopy(st.session_state['pv_info']),
+                        'data_granulats': copy.deepcopy(st.session_state['data_granulats'])
+                    }
+                    st.session_state['historique_pv'].append(pv_snapshot)
+                    st.session_state['success_msg'] = f"✅ Le PV N° '{current_ref_pv}' a été sauvegardé avec succès dans l'historique !"
+                    st.rerun()
 
         if st.session_state['historique_pv']:
             st.write("### 📜 Liste des PV sauvegardés (Session Actuelle)")
             for i, pv in enumerate(reversed(st.session_state['historique_pv'])):
-                ref_pv_disp = pv.get('ref_pv', pv.get('ref_pv', '-'))
+                ref_pv_disp = pv.get('ref_pv', '-')
                 date_disp = pv.get('date_creation', '-')
                 client_disp = pv.get('client', '-')
                 
@@ -951,7 +980,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                     st.markdown(f"**Date de création :** {date_disp}")
                     st.markdown(f"**Référence Rapport :** `{ref_pv_disp}`")
 
-                    # Extraction sécurisée rétrocompatible avec les anciens PV sauvegardés dans la session
+                    # Extraction sécurisée rétrocompatible
                     pv_info_hist = pv.get('pv_info', {
                         'projet': pv.get('projet', ''),
                         'client': pv.get('client', ''),
