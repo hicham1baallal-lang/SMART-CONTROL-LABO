@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
@@ -1006,8 +1007,8 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
             st.session_state['data_granulats']
         )
 
-        # Affichage du PV complet
-        st.markdown(clean_html(current_pv_html), unsafe_allow_html=True)
+        # Affichage du PV via components.html afin d'activer l'exécution de window.print()
+        components.html(current_pv_html, height=1150, scrolling=True)
         
         st.markdown("<br>", unsafe_allow_html=True)
         
