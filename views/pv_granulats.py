@@ -50,6 +50,19 @@ def get_passant_at_sieve(sieves, passings, target_sieve):
         return float(p_arr[np.where(s_arr == target_sieve)[0][0]])
     return float(np.interp(target_sieve, s_arr, p_arr))
 
+def compute_MF(sieves, passings):
+    """
+    Calcule automatiquement le Module de Finesse (FM) selon la norme NF EN 12620 :
+    FM = Sum( Refus cumulés % sur [4, 2, 1, 0.5, 0.25, 0.125] mm ) / 100
+    """
+    target_sieves = [4.0, 2.0, 1.0, 0.5, 0.25, 0.125]
+    sum_refus_cum = 0.0
+    for ts in target_sieves:
+        passant = get_passant_at_sieve(sieves, passings, ts)
+        if not np.isnan(passant):
+            sum_refus_cum += (100.0 - passant)
+    return round(sum_refus_cum / 100.0, 2)
+
 def compute_D95(sieves, passings):
     """ Détermine D = tamis équivalent correspondant à 95% de passant """
     s_arr = np.array(sieves)
@@ -108,7 +121,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                 'refus': [45, 6.9, 2.1, 0.2, 0.1, 0.2, 0.2, 0.1, 0, 0.1, 0.2, 0.1, 0.1, 0.1, 0.1, 0, 0.2, 0.1, 0.1, 0.1, 0.1],
                 'M1': 1000.0, 'M2': 910.0, 'P': 3.0,
                 'passants': [],
-                'fi': None, 'la': None, 'mb': None, 'mf': 3.50, 'se': 65.0
+                'fi': None, 'la': None, 'mb': None, 'mf': None, 'se': 65.0
             },
             'SD': {
                 'nom': 'Sable fin 0/0,630 (Dune)',
@@ -124,6 +137,12 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
     for k in st.session_state['data_granulats'].keys():
         if not st.session_state['data_granulats'][k]['passants']:
             update_passants(st.session_state['data_granulats'][k])
+        # Calcul auto du MF pour les sables dès l'initialisation
+        if k in ['SC', 'SD']:
+            st.session_state['data_granulats'][k]['mf'] = compute_MF(
+                st.session_state['data_granulats'][k]['sieves'],
+                st.session_state['data_granulats'][k]['passants']
+            )
 
     if 'historique_pv' not in st.session_state:
         st.session_state['historique_pv'] = []
@@ -158,7 +177,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
     with tabs[0]:
         st.header("Feuilles d'Analyse Granulométrique et Caractéristiques")
         
-        # --- INFORMATIONS DE PRÉLÈVEMENT COMMUNES (SAISIE UNIQUE) ---
+        # --- INFORMATIONS DE PRÉLÈVEMENT COMMUNES ---
         st.markdown("##### 📍 Informations de prélèvement (Communes à tous les matériaux)")
         c_ref_cl, c_date_p, c_lieu_p, c_ref_b = st.columns(4)
         
@@ -169,7 +188,6 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         new_lieu_prelev = c_lieu_p.text_input("Lieu de prélèvement", value=info_p.get('lieu_prelevement', ''), disabled=not can_edit, key="common_lieu_prelev")
         new_ref_base   = c_ref_b.text_input("Référence labo (Base)", value=info_p.get('ref_base', ''), disabled=not can_edit, key="common_ref_base")
         
-        # Synchronisation immédiate dans la session
         if can_edit:
             st.session_state['info_prelevement']['ref_client'] = new_ref_client
             st.session_state['info_prelevement']['date_prelevement'] = new_date_prelev
@@ -188,7 +206,6 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         key = mat_key_map[selected_mat]
         mat_data = st.session_state['data_granulats'][key]
         
-        # Construction automatique de la sous-référence
         sub_ref = f"{new_ref_base}{SUFFIX_MAP[key]}" if new_ref_base else SUFFIX_MAP[key]
         
         col1, col2 = st.columns([1.1, 0.9])
@@ -250,12 +267,20 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
             else:
                 c_v2.error(f"**Pertes de tamisage :** {perte_fraction:.2f} %\n\n❌ Rejeter l'essai (> 1%)")
 
+            # Simulation des passants actuels pour le calcul dynamique en temps réel du MF
+            temp_mat = {
+                'M1': new_M1,
+                'sieves': mat_data['sieves'],
+                'refus': refus_array.tolist()
+            }
+            update_passants(temp_mat)
+            calculated_mf = compute_MF(temp_mat['sieves'], temp_mat['passants'])
+
             st.markdown("---")
             st.subheader(f"Caractéristiques de {mat_data['classe']}")
             
             col_a, col_b = st.columns(2)
             
-            # Séparation selon la nature du matériau
             if key in ["GII", "GI"]:
                 with col_a:
                     fi_val = st.number_input("Coeff. Aplatissement (FI)", value=float(mat_data.get('fi') or 0.0), step=0.1, disabled=not can_edit, key=f"fi_{key}")
@@ -266,7 +291,14 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                 with col_a:
                     mb_val = st.number_input("Valeur de Bleu (MB)", value=float(mat_data.get('mb') or 0.0), step=0.1, disabled=not can_edit, key=f"mb_{key}")
                 with col_b:
-                    mf_val = st.number_input("Module de Finesse (MF)", value=float(mat_data.get('mf') or 0.0), step=0.01, disabled=not can_edit, key=f"mf_{key}")
+                    # Module de finesse calculé automatiquement selon la formule NF EN 12620
+                    mf_val = st.number_input(
+                        "Module de Finesse (MF - Calculé Auto)", 
+                        value=float(calculated_mf), 
+                        disabled=True, 
+                        help="FM = Σ(Refus cumulés sur 4, 2, 1, 0.5, 0.25, 0.125 mm) / 100",
+                        key=f"mf_{key}"
+                    )
                     se_val = st.number_input("Équivalent de Sable (SE 10)", value=float(mat_data.get('se') or 0.0), step=0.1, disabled=not can_edit, key=f"se_{key}")
                 fi_val, la_val = 0.0, 0.0
                 
@@ -283,12 +315,17 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                     st.session_state['data_granulats'][key]['fi'] = fi_val if fi_val > 0 else None
                     st.session_state['data_granulats'][key]['la'] = la_val if la_val > 0 else None
                     st.session_state['data_granulats'][key]['mb'] = mb_val if mb_val > 0 else None
-                    st.session_state['data_granulats'][key]['mf'] = mf_val if mf_val > 0 else None
                     st.session_state['data_granulats'][key]['se'] = se_val if se_val > 0 else None
 
                     update_passants(st.session_state['data_granulats'][key])
                     
-                    st.session_state['success_msg'] = f"✅ Calculs enregistrés pour {mat_data['nom']} (Sous-réf: {sub_ref})."
+                    if key in ["SC", "SD"]:
+                        st.session_state['data_granulats'][key]['mf'] = compute_MF(
+                            st.session_state['data_granulats'][key]['sieves'],
+                            st.session_state['data_granulats'][key]['passants']
+                        )
+
+                    st.session_state['success_msg'] = f"✅ Calculs enregistrés pour {mat_data['nom']} (Sous-réf: {sub_ref}) - MF calculé : {st.session_state['data_granulats'][key].get('mf', '-')}"
                     st.rerun()
 
         with col2:
@@ -455,7 +492,8 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                     <td>% &lt; 1mm</td>
                     <td>% &lt; 250µm</td>
                     <td>fA (%&lt;63µm)</td>
-                    <td colspan="2">MB</td>
+                    <td>Module Finesse FF</td>
+                    <td>MB</td>
                 </tr>
                 <tr class="pv-bg-gray">
                     <td>Sable fin {sd_data['classe']} ({ref_b}/4)</td>
@@ -465,7 +503,8 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                     <td>{get_passant_at_sieve(sd_data['sieves'], sd_data['passants'], 1.0):.0f}</td>
                     <td>{get_passant_at_sieve(sd_data['sieves'], sd_data['passants'], 0.25):.0f}</td>
                     <td>{get_passant_at_sieve(sd_data['sieves'], sd_data['passants'], 0.063):.1f}</td>
-                    <td colspan="2">{sd_data['mb'] if sd_data['mb'] is not None else '-'}</td>
+                    <td>{sd_data['mf'] if sd_data['mf'] is not None else '-'}</td>
+                    <td>{sd_data['mb'] if sd_data['mb'] is not None else '-'}</td>
                 </tr>
             </table>
         </div>
