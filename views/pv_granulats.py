@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 from datetime import datetime
+import textwrap
 
 # ------------------------------------------------------------------------------
 # CONSTANTES & SUFFIXES DES MATÉRIAUX
@@ -273,7 +274,6 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
             else:
                 c_v2.error(f"**Pertes de tamisage :** {perte_fraction:.2f} %\n\n❌ Rejeter l'essai (> 1%)")
 
-            # Simulation des passants actuels pour le calcul dynamique du MF
             temp_mat = {
                 'M1': new_M1,
                 'sieves': mat_data['sieves'],
@@ -309,7 +309,6 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                 
             st.markdown("---")
             
-            # --- BOUTON ENREGISTRER ---
             if can_edit:
                 if st.button(f"💾 Enregistrer la feuille {mat_data['nom']}", use_container_width=True, type="primary"):
                     st.session_state['data_granulats'][key]['M1'] = new_M1
@@ -391,128 +390,120 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
 
         D_gii = compute_D95(gii_data['sieves'], gii_data['passants'])
         D_gi  = compute_D95(gi_data['sieves'], gi_data['passants'])
-        D_sc  = compute_D95(sc_data['sieves'], sc_data['passants'])
-        D_sd  = compute_D95(sd_data['sieves'], sd_data['passants'])
 
-        st.markdown("""
+        style_css = textwrap.dedent("""
         <style>
-        .pv-container { background-color: #f8fafc; border: 2px solid #1e3a8a; padding: 10px; border-radius: 5px; }
-        .pv-header { background-color: #3b82f6; color: white; text-align: center; font-weight: bold; font-size: 16px; padding: 6px; }
-        .pv-sub-header { background-color: #60a5fa; color: white; text-align: center; font-weight: bold; font-size: 13px; padding: 4px; }
-        .pv-table { width: 100%; border-collapse: collapse; margin-top: 5px; font-size: 12px; }
-        .pv-table th, .pv-table td { border: 1px solid #475569; padding: 4px; text-align: center; }
-        .pv-bg-gray { background-color: #e2e8f0; font-weight: bold; }
+        .pv-container { background-color: #f8fafc; border: 2px solid #2563eb; padding: 10px; border-radius: 6px; font-family: sans-serif; }
+        .pv-header { background-color: #2563eb; color: white; text-align: center; font-weight: bold; font-size: 16px; padding: 8px; border-radius: 4px; }
+        .pv-sub-header { background-color: #3b82f6; color: white; text-align: center; font-weight: bold; font-size: 13px; }
+        .pv-sub-header td { padding: 6px; }
+        .pv-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
+        .pv-table th, .pv-table td { border: 1px solid #cbd5e1; padding: 6px; text-align: center; }
+        .pv-bg-gray { background-color: #f1f5f9; font-weight: 600; color: #0f172a; }
         </style>
-        """, unsafe_allow_html=True)
+        """)
+        st.markdown(style_css, unsafe_allow_html=True)
 
         ref_b = st.session_state['info_prelevement'].get('ref_base', '')
 
-        pv_html = f"""
-        <div class="pv-container">
-            <div class="pv-header">OBJET : IDENTIFICATION DES GRANULATS POUR BETON</div>
-            <table class="pv-table">
-                <tr style="background-color: #f1f5f9;">
-                    <td colspan="4"><b>Chantier :</b> {st.session_state['pv_info']['projet']}<br><b>Client :</b> {st.session_state['pv_info']['client']}<br>
-                    <b>Normes :</b> NF EN 933-1 | NF EN 933-8 | NF EN 933-9 | NF EN 1097-2</td>
-                    <td colspan="4"><b>Classes granulaires & Réf. Labo</b><br>
-                    GII ({ref_b}/1) | GI ({ref_b}/2)<br>
-                    SC ({ref_b}/3) | SD ({ref_b}/4)</td>
-                </tr>
-                
-                <tr class="pv-sub-header">
-                    <td>Désignations</td>
-                    <td>2D ({2*D_gii:.0f})</td>
-                    <td>1.4D ({1.4*D_gii:.0f})</td>
-                    <td>D ({D_gii:.0f})</td>
-                    <td>d ({D_gii/2:.0f})</td>
-                    <td>d/2 ({D_gii/4:.0f})</td>
-                    <td>f (%<63µm)</td>
-                    <td>FI</td>
-                    <td>LA</td>
-                </tr>
-                <tr class="pv-bg-gray">
-                    <td>Gravillons GII - {gii_data['classe']} ({ref_b}/1)</td>
-                    <td>{get_passant_at_sieve(gii_data['sieves'], gii_data['passants'], 2*D_gii):.1f}</td>
-                    <td>{get_passant_at_sieve(gii_data['sieves'], gii_data['passants'], 1.4*D_gii):.0f}</td>
-                    <td>{get_passant_at_sieve(gii_data['sieves'], gii_data['passants'], D_gii):.0f}</td>
-                    <td>{get_passant_at_sieve(gii_data['sieves'], gii_data['passants'], D_gii/2):.0f}</td>
-                    <td>{get_passant_at_sieve(gii_data['sieves'], gii_data['passants'], D_gii/4):.0f}</td>
-                    <td>{get_passant_at_sieve(gii_data['sieves'], gii_data['passants'], 0.063):.1f}</td>
-                    <td>{gii_data['fi'] if gii_data['fi'] is not None else '-'}</td>
-                    <td>{gii_data['la'] if gii_data['la'] is not None else '-'}</td>
-                </tr>
-                
-                <tr class="pv-sub-header">
-                    <td>Désignations</td>
-                    <td>2D ({2*D_gi:.0f})</td>
-                    <td>1.4D ({1.4*D_gi:.0f})</td>
-                    <td>D ({D_gi:.0f})</td>
-                    <td>d ({D_gi/2.5:.0f})</td>
-                    <td>d/2 ({D_gi/5:.0f})</td>
-                    <td>f (%<63µm)</td>
-                    <td>FI</td>
-                    <td>LA</td>
-                </tr>
-                <tr class="pv-bg-gray">
-                    <td>Gravillons GI - {gi_data['classe']} ({ref_b}/2)</td>
-                    <td>{get_passant_at_sieve(gi_data['sieves'], gi_data['passants'], 2*D_gi):.1f}</td>
-                    <td>{get_passant_at_sieve(gi_data['sieves'], gi_data['passants'], 1.4*D_gi):.0f}</td>
-                    <td>{get_passant_at_sieve(gi_data['sieves'], gi_data['passants'], D_gi):.0f}</td>
-                    <td>{get_passant_at_sieve(gi_data['sieves'], gi_data['passants'], D_gi/2.5):.0f}</td>
-                    <td>{get_passant_at_sieve(gi_data['sieves'], gi_data['passants'], D_gi/5):.0f}</td>
-                    <td>{get_passant_at_sieve(gi_data['sieves'], gi_data['passants'], 0.063):.1f}</td>
-                    <td>{gi_data['fi'] if gi_data['fi'] is not None else '-'}</td>
-                    <td>{gi_data['la'] if gi_data['la'] is not None else '-'}</td>
-                </tr>
-
-                <tr class="pv-sub-header">
-                    <td>Désignations</td>
-                    <td>2D (8)</td>
-                    <td>1,4D (5,6)</td>
-                    <td>D (4)</td>
-                    <td>% &lt; 1mm</td>
-                    <td>% &lt; 250µm</td>
-                    <td>fA (%&lt;63µm)</td>
-                    <td>Module Finesse CF</td>
-                    <td>SE (10)</td>
-                </tr>
-                <tr class="pv-bg-gray">
-                    <td>Sable grossier {sc_data['classe']} ({ref_b}/3)</td>
-                    <td>{get_passant_at_sieve(sc_data['sieves'], sc_data['passants'], 8.0):.0f}</td>
-                    <td>{get_passant_at_sieve(sc_data['sieves'], sc_data['passants'], 5.6):.0f}</td>
-                    <td>{get_passant_at_sieve(sc_data['sieves'], sc_data['passants'], 4.0):.0f}</td>
-                    <td>{get_passant_at_sieve(sc_data['sieves'], sc_data['passants'], 1.0):.0f}</td>
-                    <td>{get_passant_at_sieve(sc_data['sieves'], sc_data['passants'], 0.25):.0f}</td>
-                    <td>{get_passant_at_sieve(sc_data['sieves'], sc_data['passants'], 0.063):.1f}</td>
-                    <td>{sc_data['mf'] if sc_data['mf'] is not None else '-'}</td>
-                    <td>{sc_data['se'] if sc_data['se'] is not None else '-'}</td>
-                </tr>
-
-                <tr class="pv-sub-header">
-                    <td>Désignations</td>
-                    <td>2D (1,26)</td>
-                    <td>1,4D (0,88)</td>
-                    <td>D (0,63)</td>
-                    <td>% &lt; 1mm</td>
-                    <td>% &lt; 250µm</td>
-                    <td>fA (%&lt;63µm)</td>
-                    <td>Module Finesse FF</td>
-                    <td>MB</td>
-                </tr>
-                <tr class="pv-bg-gray">
-                    <td>Sable fin {sd_data['classe']} ({ref_b}/4)</td>
-                    <td>{get_passant_at_sieve(sd_data['sieves'], sd_data['passants'], 1.26):.0f}</td>
-                    <td>{get_passant_at_sieve(sd_data['sieves'], sd_data['passants'], 0.88):.0f}</td>
-                    <td>{get_passant_at_sieve(sd_data['sieves'], sd_data['passants'], 0.63):.0f}</td>
-                    <td>{get_passant_at_sieve(sd_data['sieves'], sd_data['passants'], 1.0):.0f}</td>
-                    <td>{get_passant_at_sieve(sd_data['sieves'], sd_data['passants'], 0.25):.0f}</td>
-                    <td>{get_passant_at_sieve(sd_data['sieves'], sd_data['passants'], 0.063):.1f}</td>
-                    <td>{sd_data['mf'] if sd_data['mf'] is not None else '-'}</td>
-                    <td>{sd_data['mb'] if sd_data['mb'] is not None else '-'}</td>
-                </tr>
-            </table>
-        </div>
-        """
+        pv_html = textwrap.dedent(f"""<div class="pv-container">
+<div class="pv-header">OBJET : IDENTIFICATION DES GRANULATS POUR BETON</div>
+<table class="pv-table">
+<tr style="background-color: #ffffff;">
+<td colspan="4" style="text-align: left; padding: 8px;"><b>Chantier :</b> {st.session_state['pv_info']['projet']}<br><b>Client :</b> {st.session_state['pv_info']['client']}<br><b>Normes :</b> NF EN 933-1 | NF EN 933-8 | NF EN 933-9 | NF EN 1097-2</td>
+<td colspan="5" style="text-align: left; padding: 8px;"><b>Classes granulaires & Réf. Labo</b><br>GII ({ref_b}/1) | GI ({ref_b}/2)<br>SC ({ref_b}/3) | SD ({ref_b}/4)</td>
+</tr>
+<tr class="pv-sub-header">
+<td>Désignations</td>
+<td>2D ({2*D_gii:.0f})</td>
+<td>1.4D ({1.4*D_gii:.0f})</td>
+<td>D ({D_gii:.0f})</td>
+<td>d ({D_gii/2:.0f})</td>
+<td>d/2 ({D_gii/4:.0f})</td>
+<td>f (%&lt;63µm)</td>
+<td>FI</td>
+<td>LA</td>
+</tr>
+<tr class="pv-bg-gray">
+<td>Gravillons GII - {gii_data['classe']} ({ref_b}/1)</td>
+<td>{get_passant_at_sieve(gii_data['sieves'], gii_data['passants'], 2*D_gii):.1f}</td>
+<td>{get_passant_at_sieve(gii_data['sieves'], gii_data['passants'], 1.4*D_gii):.0f}</td>
+<td>{get_passant_at_sieve(gii_data['sieves'], gii_data['passants'], D_gii):.0f}</td>
+<td>{get_passant_at_sieve(gii_data['sieves'], gii_data['passants'], D_gii/2):.0f}</td>
+<td>{get_passant_at_sieve(gii_data['sieves'], gii_data['passants'], D_gii/4):.0f}</td>
+<td>{get_passant_at_sieve(gii_data['sieves'], gii_data['passants'], 0.063):.1f}</td>
+<td>{gii_data['fi'] if gii_data['fi'] is not None else '-'}</td>
+<td>{gii_data['la'] if gii_data['la'] is not None else '-'}</td>
+</tr>
+<tr class="pv-sub-header">
+<td>Désignations</td>
+<td>2D ({2*D_gi:.0f})</td>
+<td>1.4D ({1.4*D_gi:.0f})</td>
+<td>D ({D_gi:.0f})</td>
+<td>d ({D_gi/2.5:.0f})</td>
+<td>d/2 ({D_gi/5:.0f})</td>
+<td>f (%&lt;63µm)</td>
+<td>FI</td>
+<td>LA</td>
+</tr>
+<tr class="pv-bg-gray">
+<td>Gravillons GI - {gi_data['classe']} ({ref_b}/2)</td>
+<td>{get_passant_at_sieve(gi_data['sieves'], gi_data['passants'], 2*D_gi):.1f}</td>
+<td>{get_passant_at_sieve(gi_data['sieves'], gi_data['passants'], 1.4*D_gi):.0f}</td>
+<td>{get_passant_at_sieve(gi_data['sieves'], gi_data['passants'], D_gi):.0f}</td>
+<td>{get_passant_at_sieve(gi_data['sieves'], gi_data['passants'], D_gi/2.5):.0f}</td>
+<td>{get_passant_at_sieve(gi_data['sieves'], gi_data['passants'], D_gi/5):.0f}</td>
+<td>{get_passant_at_sieve(gi_data['sieves'], gi_data['passants'], 0.063):.1f}</td>
+<td>{gi_data['fi'] if gi_data['fi'] is not None else '-'}</td>
+<td>{gi_data['la'] if gi_data['la'] is not None else '-'}</td>
+</tr>
+<tr class="pv-sub-header">
+<td>Désignations</td>
+<td>2D (8)</td>
+<td>1,4D (5,6)</td>
+<td>D (4)</td>
+<td>% &lt; 1mm</td>
+<td>% &lt; 250µm</td>
+<td>fA (%&lt;63µm)</td>
+<td>Module Finesse CF</td>
+<td>SE (10)</td>
+</tr>
+<tr class="pv-bg-gray">
+<td>Sable grossier {sc_data['classe']} ({ref_b}/3)</td>
+<td>{get_passant_at_sieve(sc_data['sieves'], sc_data['passants'], 8.0):.0f}</td>
+<td>{get_passant_at_sieve(sc_data['sieves'], sc_data['passants'], 5.6):.0f}</td>
+<td>{get_passant_at_sieve(sc_data['sieves'], sc_data['passants'], 4.0):.0f}</td>
+<td>{get_passant_at_sieve(sc_data['sieves'], sc_data['passants'], 1.0):.0f}</td>
+<td>{get_passant_at_sieve(sc_data['sieves'], sc_data['passants'], 0.25):.0f}</td>
+<td>{get_passant_at_sieve(sc_data['sieves'], sc_data['passants'], 0.063):.1f}</td>
+<td>{sc_data['mf'] if sc_data['mf'] is not None else '-'}</td>
+<td>{sc_data['se'] if sc_data['se'] is not None else '-'}</td>
+</tr>
+<tr class="pv-sub-header">
+<td>Désignations</td>
+<td>2D (1,26)</td>
+<td>1,4D (0,88)</td>
+<td>D (0,63)</td>
+<td>% &lt; 1mm</td>
+<td>% &lt; 250µm</td>
+<td>fA (%&lt;63µm)</td>
+<td>Module Finesse FF</td>
+<td>MB</td>
+</tr>
+<tr class="pv-bg-gray">
+<td>Sable fin {sd_data['classe']} ({ref_b}/4)</td>
+<td>{get_passant_at_sieve(sd_data['sieves'], sd_data['passants'], 1.26):.0f}</td>
+<td>{get_passant_at_sieve(sd_data['sieves'], sd_data['passants'], 0.88):.0f}</td>
+<td>{get_passant_at_sieve(sd_data['sieves'], sd_data['passants'], 0.63):.0f}</td>
+<td>{get_passant_at_sieve(sd_data['sieves'], sd_data['passants'], 1.0):.0f}</td>
+<td>{get_passant_at_sieve(sd_data['sieves'], sd_data['passants'], 0.25):.0f}</td>
+<td>{get_passant_at_sieve(sd_data['sieves'], sd_data['passants'], 0.063):.1f}</td>
+<td>{sd_data['mf'] if sd_data['mf'] is not None else '-'}</td>
+<td>{sd_data['mb'] if sd_data['mb'] is not None else '-'}</td>
+</tr>
+</table>
+</div>""")
+        
         st.markdown(pv_html, unsafe_allow_html=True)
         
         st.markdown("<br>", unsafe_allow_html=True)
@@ -549,6 +540,13 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         
         if can_edit:
             if st.button("📥 Sauvegarder le PV actuel dans l'historique", type="primary", use_container_width=True):
+                st.session_state['historique_pv'].append({
+                    'date_creation': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                    'ref_pv': st.session_state['pv_info']['ref_pv'],
+                    'projet': st.session_state['pv_info']['projet'],
+                    'client': st.session_state['pv_info']['client'],
+                    'data': st.session_state['data_granulats']
+                })
                 st.success("✅ Le PV a été ajouté à l'historique de la session !")
                 
         if st.session_state['historique_pv']:
