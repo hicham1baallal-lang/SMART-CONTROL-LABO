@@ -704,7 +704,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                         <td>{gii_passants['1.4D']:.0f}</td>
                         <td>{gii_passants['D']:.0f}</td>
                         <td>{gii_passants['d']:.0f}</td>
-                        <td>{gii_passants['d/2']:.0f}</td>
+                        <td>{gii_passants['d/2']:.1f}</td>
                         <td>{get_passant_at_sieve(gii_data['sieves'], gii_data['passants'], 0.063):.1f}</td>
                         <td>{gii_data['fi'] if gii_data['fi'] is not None else '-'}</td>
                         <td>{gii_data['la'] if gii_data['la'] is not None else '-'}</td>
@@ -747,7 +747,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                         <td>{gi_passants['1.4D']:.0f}</td>
                         <td>{gi_passants['D']:.0f}</td>
                         <td>{gi_passants['d']:.0f}</td>
-                        <td>{gi_passants['d/2']:.0f}</td>
+                        <td>{gi_passants['d/2']:.1f}</td>
                         <td>{get_passant_at_sieve(gi_data['sieves'], gi_data['passants'], 0.063):.1f}</td>
                         <td>{gi_data['fi'] if gi_data['fi'] is not None else '-'}</td>
                         <td>{gi_data['la'] if gi_data['la'] is not None else '-'}</td>
