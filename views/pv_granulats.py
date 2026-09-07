@@ -129,7 +129,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
             'commentaires': "Les essais d'identifications des granulats pour béton sont conformes aux exigences de la norme NF EN 12620 et NF P 18-545"
         }
 
-    # Gestion d'un message de succès persistant après rechargement
+    # Message de succès persistant
     if 'success_msg' in st.session_state:
         st.success(st.session_state['success_msg'])
         del st.session_state['success_msg']
@@ -186,20 +186,17 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
             
             editor_key = f"editor_{key}"
             
-            # 1. Base du tableau (ne change pas pendant la frappe, évite le blocage)
             df_display = pd.DataFrame({
                 "Tamis (mm)": mat_data['sieves'],
                 "Masse de refus Ri (g)": mat_data.get('refus', [0.0]*len(mat_data['sieves']))
             })
             
-            # Calcul des indicateurs pour les afficher (issus du dernier enregistrement)
             saved_M1 = float(mat_data.get('M1', 1000.0))
             temp_pct = (df_display["Masse de refus Ri (g)"] / saved_M1) * 100 if saved_M1 > 0 else 0
             df_display["% Refus"] = temp_pct
             df_display["% Refus Cumulés"] = temp_pct.cumsum()
             df_display["% Passants"] = mat_data.get('passants', [100.0]*len(mat_data['sieves']))
 
-            # L'éditeur de données Streamlit
             edited_df = st.data_editor(
                 df_display,
                 key=editor_key,
@@ -218,7 +215,6 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
             # --- BLOC 3 : VÉRIFICATIONS TEMPS RÉEL ---
             st.markdown("##### 🔍 Vérifications et Validations (NF EN 933-1)")
             
-            # Calcul en direct basé sur ce que l'utilisateur est en train de taper
             refus_array = edited_df["Masse de refus Ri (g)"].values
             somme_Ri = sum(refus_array)
             masse_calc = somme_Ri + new_P
@@ -238,18 +234,24 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
             st.info("Laissez à 0.0 si l'essai n'est pas applicable.")
             
             col_a, col_b = st.columns(2)
-            with col_a:
-                fi_val = st.number_input("Coeff. Aplatissement (FI)", value=float(mat_data.get('fi') or 0.0), step=0.1, disabled=not can_edit, key=f"fi_{key}")
-                la_val = st.number_input("Los Angeles (LA)", value=float(mat_data.get('la') or 0.0), step=0.1, disabled=not can_edit, key=f"la_{key}")
-                mb_val = st.number_input("Valeur de Bleu (MB)", value=float(mat_data.get('mb') or 0.0), step=0.1, disabled=not can_edit, key=f"mb_{key}")
-            with col_b:
-                # MF et SE apparaissent uniquement pour les sables (SD et SC)
-                if key in ["SD", "SC"]:
+            
+            # Traitement différencié : Gravillons (GII, GI) vs Sables (SD, SC)
+            if key in ["GII", "GI"]:
+                with col_a:
+                    fi_val = st.number_input("Coeff. Aplatissement (FI)", value=float(mat_data.get('fi') or 0.0), step=0.1, disabled=not can_edit, key=f"fi_{key}")
+                with col_b:
+                    la_val = st.number_input("Los Angeles (LA)", value=float(mat_data.get('la') or 0.0), step=0.1, disabled=not can_edit, key=f"la_{key}")
+                mb_val = 0.0
+                mf_val = 0.0
+                se_val = 0.0
+            else:
+                with col_a:
+                    mb_val = st.number_input("Valeur de Bleu (MB)", value=float(mat_data.get('mb') or 0.0), step=0.1, disabled=not can_edit, key=f"mb_{key}")
+                with col_b:
                     mf_val = st.number_input("Module de Finesse (MF)", value=float(mat_data.get('mf') or 0.0), step=0.01, disabled=not can_edit, key=f"mf_{key}")
                     se_val = st.number_input("Équivalent de Sable (SE 10)", value=float(mat_data.get('se') or 0.0), step=0.1, disabled=not can_edit, key=f"se_{key}")
-                else:
-                    mf_val = 0.0
-                    se_val = 0.0
+                fi_val = 0.0
+                la_val = 0.0
                 
             st.markdown("---")
             
