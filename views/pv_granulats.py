@@ -88,9 +88,10 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
     # INITIALISATION DU SESSION STATE COMMUN
     if 'info_prelevement' not in st.session_state:
         st.session_state['info_prelevement'] = {
-            'ref_client': '',
-            'date_prelevement': '',
-            'lieu_prelevement': '',
+            'chantier': 'LGV CASA SUD',
+            'client': 'TGCC',
+            'date_prelevement': '01/08/2026',
+            'lieu_prelevement': 'CAB',
             'ref_base': '260/26/100'
         }
 
@@ -137,7 +138,6 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
     for k in st.session_state['data_granulats'].keys():
         if not st.session_state['data_granulats'][k]['passants']:
             update_passants(st.session_state['data_granulats'][k])
-        # Calcul auto du MF pour les sables dès l'initialisation
         if k in ['SC', 'SD']:
             st.session_state['data_granulats'][k]['mf'] = compute_MF(
                 st.session_state['data_granulats'][k]['sieves'],
@@ -149,8 +149,8 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
 
     if 'pv_info' not in st.session_state:
         st.session_state['pv_info'] = {
-            'projet': 'CHANTIER LGV / OUVRAGES BETON',
-            'client': 'CLIENT X',
+            'projet': st.session_state['info_prelevement']['chantier'],
+            'client': st.session_state['info_prelevement']['client'],
             'ref_pv': f"PV-GRAN-{datetime.now().strftime('%Y%m%d-%H%M')}",
             'date': datetime.now().strftime('%d/%m/%Y'),
             'commentaires': "Les essais d'identifications des granulats pour béton sont conformes aux exigences de la norme NF EN 12620 et NF P 18-545"
@@ -179,20 +179,26 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         
         # --- INFORMATIONS DE PRÉLÈVEMENT COMMUNES ---
         st.markdown("##### 📍 Informations de prélèvement (Communes à tous les matériaux)")
-        c_ref_cl, c_date_p, c_lieu_p, c_ref_b = st.columns(4)
+        c_chantier, c_client, c_date_p, c_lieu_p, c_ref_b = st.columns(5)
         
         info_p = st.session_state['info_prelevement']
         
-        new_ref_client = c_ref_cl.text_input("Référence client", value=info_p.get('ref_client', ''), disabled=not can_edit, key="common_ref_client")
-        new_date_prelev = c_date_p.text_input("Date de prélèvement", value=info_p.get('date_prelevement', ''), disabled=not can_edit, key="common_date_prelev")
-        new_lieu_prelev = c_lieu_p.text_input("Lieu de prélèvement", value=info_p.get('lieu_prelevement', ''), disabled=not can_edit, key="common_lieu_prelev")
-        new_ref_base   = c_ref_b.text_input("Référence labo (Base)", value=info_p.get('ref_base', ''), disabled=not can_edit, key="common_ref_base")
+        new_chantier   = c_chantier.text_input("Chantier", value=info_p.get('chantier', 'LGV CASA SUD'), disabled=not can_edit, key="common_chantier")
+        new_client     = c_client.text_input("Client", value=info_p.get('client', 'TGCC'), disabled=not can_edit, key="common_client")
+        new_date_prelev = c_date_p.text_input("Date de prélèvement", value=info_p.get('date_prelevement', '01/08/2026'), disabled=not can_edit, key="common_date_prelev")
+        new_lieu_prelev = c_lieu_p.text_input("Lieu de prélèvement", value=info_p.get('lieu_prelevement', 'CAB'), disabled=not can_edit, key="common_lieu_prelev")
+        new_ref_base   = c_ref_b.text_input("Référence labo (Base)", value=info_p.get('ref_base', '260/26/100'), disabled=not can_edit, key="common_ref_base")
         
         if can_edit:
-            st.session_state['info_prelevement']['ref_client'] = new_ref_client
+            st.session_state['info_prelevement']['chantier'] = new_chantier
+            st.session_state['info_prelevement']['client'] = new_client
             st.session_state['info_prelevement']['date_prelevement'] = new_date_prelev
             st.session_state['info_prelevement']['lieu_prelevement'] = new_lieu_prelev
             st.session_state['info_prelevement']['ref_base'] = new_ref_base
+            
+            # Synchronisation automatique avec le PV
+            st.session_state['pv_info']['projet'] = new_chantier
+            st.session_state['pv_info']['client'] = new_client
 
         st.markdown("---")
 
@@ -267,7 +273,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
             else:
                 c_v2.error(f"**Pertes de tamisage :** {perte_fraction:.2f} %\n\n❌ Rejeter l'essai (> 1%)")
 
-            # Simulation des passants actuels pour le calcul dynamique en temps réel du MF
+            # Simulation des passants actuels pour le calcul dynamique du MF
             temp_mat = {
                 'M1': new_M1,
                 'sieves': mat_data['sieves'],
@@ -291,7 +297,6 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                 with col_a:
                     mb_val = st.number_input("Valeur de Bleu (MB)", value=float(mat_data.get('mb') or 0.0), step=0.1, disabled=not can_edit, key=f"mb_{key}")
                 with col_b:
-                    # Module de finesse calculé automatiquement selon la formule NF EN 12620
                     mf_val = st.number_input(
                         "Module de Finesse (MF - Calculé Auto)", 
                         value=float(calculated_mf), 
@@ -368,7 +373,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         
         with st.expander("📝 Entête & Informations du Procès-Verbal", expanded=False):
             c1, c2, c3, c4 = st.columns(4)
-            projet_val = c1.text_input("Projet / Chantier", st.session_state['pv_info']['projet'], disabled=not can_edit)
+            projet_val = c1.text_input("Chantier / Projet", st.session_state['pv_info']['projet'], disabled=not can_edit)
             client_val = c2.text_input("Client", st.session_state['pv_info']['client'], disabled=not can_edit)
             ref_val = c3.text_input("Référence PV", st.session_state['pv_info']['ref_pv'], disabled=not can_edit)
             date_val = c4.text_input("Date", st.session_state['pv_info']['date'], disabled=not can_edit)
@@ -407,9 +412,8 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
             <div class="pv-header">OBJET : IDENTIFICATION DES GRANULATS POUR BETON</div>
             <table class="pv-table">
                 <tr style="background-color: #f1f5f9;">
-                    <td colspan="4"><b>Référence normative</b><br>
-                    A.G : NF EN 933-1 | Equivalent de sable : NF EN 933-8 | VB : NF EN 933-9<br>
-                    LOS ANGELES : NF EN 1097-2 | CA : NF EN 933-3</td>
+                    <td colspan="4"><b>Chantier :</b> {st.session_state['pv_info']['projet']}<br><b>Client :</b> {st.session_state['pv_info']['client']}<br>
+                    <b>Normes :</b> NF EN 933-1 | NF EN 933-8 | NF EN 933-9 | NF EN 1097-2</td>
                     <td colspan="4"><b>Classes granulaires & Réf. Labo</b><br>
                     GII ({ref_b}/1) | GI ({ref_b}/2)<br>
                     SC ({ref_b}/3) | SD ({ref_b}/4)</td>
@@ -550,7 +554,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         if st.session_state['historique_pv']:
             st.write("### 📜 Liste des PV sauvegardés (Session Actuelle)")
             for i, pv in enumerate(reversed(st.session_state['historique_pv'])):
-                with st.expander(f"📁 {pv['date_creation']} - {pv['ref_pv']} - {pv['projet']}", expanded=(i==0)):
+                with st.expander(f"📁 {pv['date_creation']} - {pv['ref_pv']} - Chantier: {pv['projet']}", expanded=(i==0)):
                     st.json(pv)
         else:
             st.info("Aucun PV n'a été sauvegardé dans cette session.")
