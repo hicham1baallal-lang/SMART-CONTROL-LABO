@@ -26,9 +26,11 @@ def clean_html(html_str):
 def get_tamis_D(df: pd.DataFrame) -> float:
     if df is None or df.empty or "% Passants" not in df.columns:
         return None
-    # Calcul de la différence absolue par rapport à 95%
-    idx_closest = (df["% Passants"] - 95).abs().idxmin()
-    return df.loc[idx_closest, "Tamis (mm)"]
+    # Calcul du tamis dont le % passant est le plus proche de 95%
+    diffs = (df["% Passants"] - 95.0).abs()
+    idx_closest = diffs.idxmin()
+    val = df.loc[idx_closest, "Tamis (mm)"]
+    return int(val) if float(val).is_integer() else float(val)
 
 def update_passants(mat_data):
     """Calcule les passants à partir des masses enregistrées (Méthode NF EN 933-1)"""
@@ -45,7 +47,7 @@ def update_passants(mat_data):
             if s == 0.063:
                 passants_fmt.append(max(0.0, round(p, 1)))
             else:
-                passants_fmt.append(max(0.0, round(p)))
+                passants_fmt.append(max(0.0, round(p, 1)))
         mat_data['passants'] = passants_fmt
     else:
         mat_data['passants'] = [100.0] * len(mat_data['sieves'])
@@ -318,11 +320,12 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                 "Masse de refus Ri (g)": mat_data.get('refus', [0.0]*len(mat_data['sieves']))
             })
             
-            saved_M1 = float(mat_data.get('M1', 1000.0))
-            temp_pct = (df_display["Masse de refus Ri (g)"] / saved_M1) * 100 if saved_M1 > 0 else 0
-            df_display["% Refus"] = temp_pct
-            df_display["% Refus Cumulés"] = temp_pct.cumsum()
-            df_display["% Passants"] = mat_data.get('passants', [100.0]*len(mat_data['sieves']))
+            saved_M1 = float(new_M1) if new_M1 > 0 else 1.0
+            pct_r = (df_display["Masse de refus Ri (g)"] / saved_M1) * 100
+            pct_r_cum = pct_r.cumsum()
+            df_display["% Refus"] = pct_r.round(1)
+            df_display["% Refus Cumulés"] = pct_r_cum.round(1)
+            df_display["% Passants"] = (100.0 - pct_r_cum).clip(lower=0.0).round(1)
 
             edited_df = st.data_editor(
                 df_display,
@@ -338,6 +341,18 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                 use_container_width=True,
                 height=350
             )
+
+            # Recalcul dynamique immédiat sur edited_df pour la prise en compte en temps réel des modifications utilisateur
+            if new_M1 > 0:
+                pct_r_edit = (edited_df["Masse de refus Ri (g)"] / new_M1) * 100
+                pct_cum_edit = pct_r_edit.cumsum()
+                edited_df["% Refus"] = pct_r_edit.round(1)
+                edited_df["% Refus Cumulés"] = pct_cum_edit.round(1)
+                edited_df["% Passants"] = (100.0 - pct_cum_edit).clip(lower=0.0).round(1)
+
+                mat_data['M1'] = new_M1
+                mat_data['refus'] = edited_df["Masse de refus Ri (g)"].tolist()
+                update_passants(mat_data)
 
             st.markdown("##### 🔍 Vérifications et Validations (NF EN 933-1)")
             
@@ -355,13 +370,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
             else:
                 c_v2.error(f"**Pertes de tamisage :** {perte_fraction:.2f} %\n\n❌ Rejeter l'essai (> 1%)")
 
-            temp_mat = {
-                'M1': new_M1,
-                'sieves': mat_data['sieves'],
-                'refus': refus_array.tolist()
-            }
-            update_passants(temp_mat)
-            calculated_mf = compute_MF(temp_mat['sieves'], temp_mat['passants'])
+            calculated_mf = compute_MF(mat_data['sieves'], mat_data['passants'])
 
             st.markdown("---")
             st.subheader(f"Caractéristiques de {mat_data['classe']}")
