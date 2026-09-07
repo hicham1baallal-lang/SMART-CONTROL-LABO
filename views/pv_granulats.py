@@ -11,6 +11,13 @@ import matplotlib
 matplotlib.use('Agg')  # Backend non-interactif pour Streamlit
 import matplotlib.pyplot as plt
 
+# Import de xhtml2pdf pour la conversion HTML -> PDF native
+try:
+    from xhtml2pdf import pisa
+    HAS_XHTML2PDF = True
+except ImportError:
+    HAS_XHTML2PDF = False
+
 # ------------------------------------------------------------------------------
 # CONSTANTES & SUFFIXES DES MATÉRIAUX
 # ------------------------------------------------------------------------------
@@ -156,7 +163,7 @@ def compute_MF(sieves, passings):
 
 def generate_curve_base64(data_granulats, ref_base):
     """Génère l'image haute définition de la courbe granulométrique au format Base64 pour impression/PDF."""
-    fig, ax = plt.subplots(figsize=(9, 4.2), dpi=250)
+    fig, ax = plt.subplots(figsize=(8.5, 3.8), dpi=250)
     colors = {'GII': '#1e3a8a', 'GI': '#0284c7', 'SC': '#16a34a', 'SD': '#ea580c'}
     
     for k, d in data_granulats.items():
@@ -168,12 +175,12 @@ def generate_curve_base64(data_granulats, ref_base):
     ax.set_xscale('log')
     ax.set_xticks([0.063, 0.125, 0.25, 0.5, 1, 2, 4, 8, 16, 31.5, 63])
     ax.get_xaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
-    ax.set_xlabel("Tamis (mm)", fontsize=9, fontweight='bold')
-    ax.set_ylabel("% Passants Cumulés", fontsize=9, fontweight='bold')
+    ax.set_xlabel("Tamis (mm)", fontsize=8, fontweight='bold')
+    ax.set_ylabel("% Passants Cumulés", fontsize=8, fontweight='bold')
     ax.set_ylim(-2, 105)
     ax.grid(True, which="both", ls="--", lw=0.5, alpha=0.6)
-    ax.legend(loc='lower right', fontsize=8, frameon=True, facecolor='#ffffff', edgecolor='#cbd5e1')
-    ax.set_title("COURBE GRANULOMÉTRIQUE GLOBALE", fontsize=10, fontweight='bold', color='#1e3a8a', pad=8)
+    ax.legend(loc='lower right', fontsize=7.5, frameon=True, facecolor='#ffffff', edgecolor='#cbd5e1')
+    ax.set_title("COURBE GRANULOMÉTRIQUE GLOBALE", fontsize=9.5, fontweight='bold', color='#1e3a8a', pad=6)
     plt.tight_layout()
 
     buf = io.BytesIO()
@@ -182,7 +189,7 @@ def generate_curve_base64(data_granulats, ref_base):
     buf.seek(0)
     return f"data:image/png;base64,{base64.b64encode(buf.read()).decode('utf-8')}"
 
-def generate_pv_html(pv_info, info_p, data_granulats):
+def generate_pv_html(pv_info, info_p, data_granulats, for_pdf=False):
     """Génère le document HTML complet du PV incluant la courbe et le bouton d'impression PDF."""
     gii_data = data_granulats.get('GII', {})
     gi_data  = data_granulats.get('GI', {})
@@ -199,29 +206,39 @@ def generate_pv_html(pv_info, info_p, data_granulats):
     # Génération de l'image de la courbe intégrée au PV
     curve_b64 = generate_curve_base64(data_granulats, ref_b)
 
+    print_action_block = "" if for_pdf else """
+    <div class="print-actions">
+        <button onclick="window.print()" class="btn-print">🖨️ Imprimer / Enregistrer en PDF via le navigateur</button>
+    </div>
+    """
+
     html = f"""<!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
 <title>PV Identification Granulats - {pv_info.get('ref_pv', '')}</title>
 <style>
+    @page {{
+        size: A4 portrait;
+        margin: 6mm;
+    }}
     body {{
-        font-family: Arial, sans-serif;
+        font-family: Arial, Helvetica, sans-serif;
         color: #1e293b;
         background-color: #ffffff;
         margin: 0;
-        padding: 10px;
+        padding: 5px;
     }}
     .print-actions {{
         text-align: right;
-        margin-bottom: 15px;
+        margin-bottom: 12px;
     }}
     .btn-print {{
         background-color: #2563eb;
         color: white;
         border: none;
-        padding: 10px 18px;
-        font-size: 14px;
+        padding: 9px 16px;
+        font-size: 13px;
         font-weight: bold;
         border-radius: 6px;
         cursor: pointer;
@@ -233,9 +250,9 @@ def generate_pv_html(pv_info, info_p, data_granulats):
     .lpee-pv-card {{
         background-color: #ffffff;
         border: 2px solid #1e3a8a;
-        border-radius: 8px;
-        padding: 18px;
-        max-width: 950px;
+        border-radius: 6px;
+        padding: 14px;
+        max-width: 900px;
         margin: 0 auto;
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
     }}
@@ -244,21 +261,21 @@ def generate_pv_html(pv_info, info_p, data_granulats):
         color: #ffffff;
         text-align: center;
         font-weight: bold;
-        font-size: 15px;
-        padding: 8px;
+        font-size: 14px;
+        padding: 7px;
         border-radius: 4px;
         letter-spacing: 0.5px;
-        margin-bottom: 10px;
+        margin-bottom: 8px;
     }}
     .lpee-info-grid {{
         width: 100%;
         border-collapse: collapse;
-        margin-bottom: 12px;
-        font-size: 11px;
+        margin-bottom: 10px;
+        font-size: 10.5px;
     }}
     .lpee-info-grid td {{
         border: 1px solid #cbd5e1;
-        padding: 5px 8px;
+        padding: 4px 7px;
         vertical-align: top;
     }}
     .lpee-info-label {{
@@ -270,31 +287,31 @@ def generate_pv_html(pv_info, info_p, data_granulats):
     .lpee-norm-table {{
         width: 100%;
         border-collapse: collapse;
-        font-size: 10px;
-        margin-bottom: 10px;
+        font-size: 9.5px;
+        margin-bottom: 8px;
     }}
     .lpee-norm-table td {{
         border: 1px solid #cbd5e1;
-        padding: 3px 6px;
+        padding: 3px 5px;
     }}
     .lpee-table {{
         width: 100%;
         border-collapse: collapse;
-        margin-top: 6px;
-        margin-bottom: 10px;
-        font-size: 11px;
+        margin-top: 4px;
+        margin-bottom: 8px;
+        font-size: 10px;
     }}
     .lpee-table th {{
         background-color: #2563eb;
         color: #ffffff;
         border: 1px solid #1d4ed8;
-        padding: 5px;
+        padding: 4px;
         text-align: center;
         font-weight: bold;
     }}
     .lpee-table td {{
         border: 1px solid #cbd5e1;
-        padding: 4px;
+        padding: 3.5px;
         text-align: center;
     }}
     .row-designation {{
@@ -304,46 +321,45 @@ def generate_pv_html(pv_info, info_p, data_granulats):
     }}
     .row-limite {{
         background-color: #fafafa;
-        font-size: 10px;
+        font-size: 9px;
         color: #475569;
     }}
     .curve-container {{
         text-align: center;
-        margin: 10px 0;
+        margin: 8px 0;
         border: 1px solid #cbd5e1;
         border-radius: 4px;
-        padding: 6px;
+        padding: 4px;
         background-color: #ffffff;
     }}
     .curve-img {{
         width: 100%;
-        max-height: 380px;
+        max-height: 320px;
         object-fit: contain;
     }}
     .comments-box {{
-        margin-top: 10px;
-        padding: 8px;
+        margin-top: 8px;
+        padding: 6px 8px;
         border: 1px solid #cbd5e1;
         border-radius: 4px;
         background-color: #f8fafc;
-        font-size: 11px;
+        font-size: 10px;
     }}
     .signature-box {{
-        margin-top: 15px;
+        margin-top: 10px;
         width: 100%;
         border-collapse: collapse;
-        font-size: 11px;
+        font-size: 10px;
     }}
     .signature-box td {{
         width: 33.33%;
         border: 1px solid #cbd5e1;
-        padding: 6px;
+        padding: 5px;
         text-align: center;
-        height: 70px;
+        height: 55px;
         vertical-align: top;
     }}
 
-    /* STYLES SPÉCIFIQUES D'IMPRESSION ET D'EXPORTATION PDF */
     @media print {{
         .print-actions {{ display: none !important; }}
         body {{ padding: 0; background-color: #ffffff; }}
@@ -354,22 +370,16 @@ def generate_pv_html(pv_info, info_p, data_granulats):
             width: 100% !important;
             max-width: 100% !important;
         }}
-        @page {{
-            size: A4 portrait;
-            margin: 8mm;
-        }}
     }}
 </style>
 </head>
 <body>
-    <div class="print-actions">
-        <button onclick="window.print()" class="btn-print">🖨️ Imprimer / Enregistrer en PDF</button>
-    </div>
+    {print_action_block}
 
     <div class="lpee-pv-card">
         <div class="lpee-header-title">
             RAPPORT D'ESSAI N° : {pv_info.get('ref_pv', '')}<br>
-            <span style="font-size:12px; font-weight:normal;">OBJET : IDENTIFICATION DES GRANULATS POUR BETON</span>
+            <span style="font-size:11px; font-weight:normal;">OBJET : IDENTIFICATION DES GRANULATS POUR BETON</span>
         </div>
 
         <table class="lpee-info-grid">
@@ -567,6 +577,17 @@ def generate_pv_html(pv_info, info_p, data_granulats):
 </body>
 </html>"""
     return html
+
+def generate_pv_pdf(pv_info, info_p, data_granulats):
+    """Génère un fichier PDF binaire du PV avec courbe incorporée via xhtml2pdf."""
+    html_content = generate_pv_html(pv_info, info_p, data_granulats, for_pdf=True)
+    pdf_buffer = io.BytesIO()
+    
+    if HAS_XHTML2PDF:
+        pisa_status = pisa.CreatePDF(io.BytesIO(html_content.encode("utf-8")), dest=pdf_buffer)
+        if not pisa_status.err:
+            return pdf_buffer.getvalue()
+    return None
 
 # ------------------------------------------------------------------------------
 # FONCTION PRINCIPALE STREAMLIT
@@ -939,7 +960,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                     st.rerun()
 
     # ------------------------------------------------------------------------------
-    # FENÊTRE 2 : PV D'IDENTIFICATION / SYNTHÈSE (AVEC COURBE ET EXPORT PDF)
+    # FENÊTRE 2 : PV D'IDENTIFICATION / SYNTHÈSE (AVEC COURBE ET TÉLÉCHARGEMENT PDF)
     # ------------------------------------------------------------------------------
     with tabs[1]:
         st.header("PV d'Identification des Granulats pour Béton")
@@ -973,27 +994,47 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         if can_edit:
             st.session_state['pv_info']['commentaires'] = comm_input
 
-        # Génération du document HTML autonome contenant la courbe en Base64
+        # Génération du document HTML & PDF autonome contenant la courbe en Base64
         current_pv_html = generate_pv_html(
             st.session_state['pv_info'],
             st.session_state['info_prelevement'],
             st.session_state['data_granulats']
         )
+        current_pv_pdf = generate_pv_pdf(
+            st.session_state['pv_info'],
+            st.session_state['info_prelevement'],
+            st.session_state['data_granulats']
+        )
 
-        # Affichage du PV complet (avec courbe et bouton d'impression en PDF)
+        # Affichage du PV complet
         st.markdown(clean_html(current_pv_html), unsafe_allow_html=True)
         
         st.markdown("<br>", unsafe_allow_html=True)
         
-        # Bouton de téléchargement du fichier HTML (avec la courbe incorporée)
-        st.download_button(
-            label="💾 Télécharger le fichier PV complet (avec courbe incorporée)",
-            data=current_pv_html,
-            file_name=f"PV_Granulats_{st.session_state['pv_info'].get('ref_pv', 'rapport').replace('/', '_')}.html",
-            mime="text/html",
-            use_container_width=True,
-            type="primary"
-        )
+        col_dl1, col_dl2 = st.columns(2)
+        ref_pv_filename = st.session_state['pv_info'].get('ref_pv', 'rapport').replace('/', '_')
+
+        with col_dl1:
+            if current_pv_pdf:
+                st.download_button(
+                    label="📄 Télécharger le PV en PDF (avec courbe)",
+                    data=current_pv_pdf,
+                    file_name=f"PV_Granulats_{ref_pv_filename}.pdf",
+                    mime="application/pdf",
+                    use_container_width=True,
+                    type="primary"
+                )
+            else:
+                st.info("💡 Pour l'export PDF direct, installez `xhtml2pdf` (`pip install xhtml2pdf`). Vous pouvez aussi utiliser le bouton 'Imprimer/Enregistrer en PDF' ci-dessus.")
+
+        with col_dl2:
+            st.download_button(
+                label="🌐 Télécharger le PV en HTML complet",
+                data=current_pv_html,
+                file_name=f"PV_Granulats_{ref_pv_filename}.html",
+                mime="text/html",
+                use_container_width=True
+            )
 
     # ------------------------------------------------------------------------------
     # FENÊTRE 3 : HISTORIQUE ET GESTION / TÉLÉCHARGEMENT
@@ -1050,18 +1091,36 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                     info_p_hist = pv.get('info_prelevement', st.session_state.get('info_prelevement', {}))
                     data_g_hist = pv.get('data_granulats', st.session_state.get('data_granulats', {}))
 
-                    pv_hist_html = generate_pv_html(
-                        pv_info_hist,
-                        info_p_hist,
-                        data_g_hist
-                    )
+                    pv_hist_html = generate_pv_html(pv_info_hist, info_p_hist, data_g_hist)
+                    pv_hist_pdf  = generate_pv_pdf(pv_info_hist, info_p_hist, data_g_hist)
 
-                    col_dl1, col_dl2 = st.columns(2)
+                    col_dl1, col_dl2, col_dl3 = st.columns(3)
+                    pv_id_str = str(pv.get('id', i))
                     
                     with col_dl1:
-                        pv_id_str = str(pv.get('id', i))
+                        if pv_hist_pdf:
+                            st.download_button(
+                                label="📄 Télécharger PDF (avec courbe)",
+                                data=pv_hist_pdf,
+                                file_name=f"PV_{str(ref_pv_disp).replace('/', '_')}_{pv_id_str}.pdf",
+                                mime="application/pdf",
+                                key=f"dl_pdf_{pv_id_str}_{i}",
+                                use_container_width=True,
+                                type="primary"
+                            )
+                        else:
+                            st.download_button(
+                                label="📄 Télécharger HTML (Print PDF)",
+                                data=pv_hist_html,
+                                file_name=f"PV_{str(ref_pv_disp).replace('/', '_')}_{pv_id_str}.html",
+                                mime="text/html",
+                                key=f"dl_html_fallback_{pv_id_str}_{i}",
+                                use_container_width=True
+                            )
+
+                    with col_dl2:
                         st.download_button(
-                            label="📄 Télécharger le PV avec Courbe (HTML/PDF)",
+                            label="🌐 Télécharger HTML",
                             data=pv_hist_html,
                             file_name=f"PV_{str(ref_pv_disp).replace('/', '_')}_{pv_id_str}.html",
                             mime="text/html",
@@ -1069,9 +1128,9 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                             use_container_width=True
                         )
                         
-                    with col_dl2:
+                    with col_dl3:
                         st.download_button(
-                            label="💾 Exporter les données (JSON)",
+                            label="💾 Exporter Données (JSON)",
                             data=json.dumps(pv, indent=2, ensure_ascii=False),
                             file_name=f"PV_Data_{str(ref_pv_disp).replace('/', '_')}_{pv_id_str}.json",
                             mime="application/json",
