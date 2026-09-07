@@ -48,22 +48,26 @@ def get_tamis_D(df: pd.DataFrame) -> float:
 def update_passants(mat_data):
     """Calcule les passants à partir des masses enregistrées (Méthode NF EN 933-1)"""
     M1 = float(mat_data.get('M1', 1000.0))
-    refus = [float(r) for r in mat_data.get('refus', [0.0]*len(mat_data['sieves']))]
+    sieves = mat_data.get('sieves', [])
+    refus = [float(r) for r in mat_data.get('refus', [0.0] * len(sieves))]
     
-    if M1 > 0:
+    if M1 > 0 and len(sieves) > 0:
         pct_refus = [(r / M1) * 100 for r in refus]
         pct_refus_cum = np.cumsum(pct_refus)
         passants = [100.0 - c for c in pct_refus_cum]
         
         passants_fmt = []
-        for s, p in zip(mat_data['sieves'], passants):
+        for s, p in zip(sieves, passants):
             passants_fmt.append(max(0.0, round(p, 1)))
         mat_data['passants'] = passants_fmt
     else:
-        mat_data['passants'] = [100.0] * len(mat_data['sieves'])
+        mat_data['passants'] = [100.0] * len(sieves)
 
 def compute_sieve_at_passant(sieves, passings, target_passant):
     """ Sélectionne le plus petit tamis normatif (mm) dont le passant atteint au moins le % cible """
+    if not sieves or not passings or len(sieves) != len(passings):
+        return 0.0
+        
     s_arr = np.array(sieves, dtype=float)
     p_arr = np.array(passings, dtype=float)
     
@@ -95,10 +99,10 @@ def get_d_D_from_material(mat_data):
             parts = classe_str.replace(',', '.').split('/')
             d_val = float(parts[0])
             D_val = float(parts[1])
-        except ValueError:
+        except (ValueError, IndexError):
             pass
 
-    if sieves and passants:
+    if sieves and passants and len(sieves) == len(passants):
         diffs = [abs(p - 95.0) for p in passants]
         min_idx = diffs.index(min(diffs))
         D_calc = sieves[min_idx]
@@ -114,6 +118,8 @@ def get_d_D_from_material(mat_data):
 def get_passant_at_sieve(sieves, passings, target_sieve):
     """ Calcule ou interpole linéairement le passant au tamis cible """
     if target_sieve is None or target_sieve <= 0:
+        return 0.0
+    if not sieves or not passings or len(sieves) != len(passings):
         return 0.0
         
     s_arr = np.array(sieves, dtype=float)
@@ -154,7 +160,7 @@ def calculate_characteristic_data(mat_data, tamis_D=None):
     
     passants_dict = {}
     for key, sieve_size in sieves_dict.items():
-        val = get_passant_at_sieve(mat_data['sieves'], mat_data['passants'], sieve_size)
+        val = get_passant_at_sieve(mat_data.get('sieves', []), mat_data.get('passants', []), sieve_size)
         passants_dict[key] = val
 
     return sieves_dict, passants_dict
@@ -164,6 +170,8 @@ def compute_MF(sieves, passings):
     Calcule le Module de Finesse (MF) selon NF EN 12620 :
     MF = Sum( Refus cumulés % sur [4, 2, 1, 0.5, 0.25, 0.125] mm ) / 100
     """
+    if not sieves or not passings:
+        return 0.0
     target_sieves = [4.0, 2.0, 1.0, 0.5, 0.25, 0.125]
     sum_refus_cum = 0.0
     for ts in target_sieves:
@@ -181,10 +189,11 @@ def generate_pv_html(pv_info, info_p, data_granulats):
 
     ref_b = info_p.get('num_rapport', info_p.get('ref_base', '26/260/LGV/CS/1237'))
 
-    gii_sieves, gii_passants = calculate_characteristic_data(gii_data) if gii_data else ({'2D':0,'1.4D':0,'D':0,'d':0,'d/2':0}, {'2D':0,'1.4D':0,'D':0,'d':0,'d/2':0})
-    gi_sieves, gi_passants   = calculate_characteristic_data(gi_data) if gi_data else ({'2D':0,'1.4D':0,'D':0,'d':0,'d/2':0}, {'2D':0,'1.4D':0,'D':0,'d':0,'d/2':0})
-    sc_sieves, sc_passants   = calculate_characteristic_data(sc_data) if sc_data else ({'2D':0,'1.4D':0,'D':0,'d':0,'d/2':0}, {'2D':0,'1.4D':0,'D':0,'d':0,'d/2':0})
-    sd_sieves, sd_passants   = calculate_characteristic_data(sd_data) if sd_data else ({'2D':0,'1.4D':0,'D':0,'d':0,'d/2':0}, {'2D':0,'1.4D':0,'D':0,'d':0,'d/2':0})
+    empty_char = ({'2D': 0, '1.4D': 0, 'D': 0, 'd': 0, 'd/2': 0}, {'2D': 0.0, '1.4D': 0.0, 'D': 0.0, 'd': 0.0, 'd/2': 0.0})
+    gii_sieves, gii_passants = calculate_characteristic_data(gii_data) if gii_data else empty_char
+    gi_sieves, gi_passants   = calculate_characteristic_data(gi_data) if gi_data else empty_char
+    sc_sieves, sc_passants   = calculate_characteristic_data(sc_data) if sc_data else empty_char
+    sd_sieves, sd_passants   = calculate_characteristic_data(sd_data) if sd_data else empty_char
 
     html = f"""<!DOCTYPE html>
 <html lang="fr">
@@ -512,7 +521,7 @@ def create_curve_image_buffer(data_granulats, ref_b):
     
     for k in ['GII', 'GI', 'SC', 'SD']:
         d = data_granulats.get(k, {})
-        if d.get('sieves') and d.get('passants'):
+        if d.get('sieves') and d.get('passants') and len(d['sieves']) == len(d['passants']):
             s_s, p_s = zip(*sorted(zip(d['sieves'], d['passants'])))
             label_str = f"{d.get('nom', k)} ({ref_b}{SUFFIX_MAP.get(k, '')})" if ref_b else d.get('nom', k)
             ax.plot(s_s, p_s, marker='o', markersize=3.5, label=label_str, color=colors_map.get(k, '#000000'), linewidth=1.5)
@@ -647,15 +656,16 @@ def generate_pv_pdf(pv_info, info_p, data_granulats):
         ]))
         return t
 
+    empty_char = ({'2D': 0, '1.4D': 0, 'D': 0, 'd': 0, 'd/2': 0}, {'2D': 0.0, '1.4D': 0.0, 'D': 0.0, 'd': 0.0, 'd/2': 0.0})
     gii_data = data_granulats.get('GII', {})
     gi_data  = data_granulats.get('GI', {})
     sc_data  = data_granulats.get('SC', {})
     sd_data  = data_granulats.get('SD', {})
 
-    gii_s, gii_p = calculate_characteristic_data(gii_data) if gii_data else ({'2D':0,'1.4D':0,'D':0,'d':0,'d/2':0}, {'2D':0,'1.4D':0,'D':0,'d':0,'d/2':0})
-    gi_s, gi_p   = calculate_characteristic_data(gi_data) if gi_data else ({'2D':0,'1.4D':0,'D':0,'d':0,'d/2':0}, {'2D':0,'1.4D':0,'D':0,'d':0,'d/2':0})
-    sc_s, sc_p   = calculate_characteristic_data(sc_data) if sc_data else ({'2D':0,'1.4D':0,'D':0,'d':0,'d/2':0}, {'2D':0,'1.4D':0,'D':0,'d':0,'d/2':0})
-    sd_s, sd_p   = calculate_characteristic_data(sd_data) if sd_data else ({'2D':0,'1.4D':0,'D':0,'d':0,'d/2':0}, {'2D':0,'1.4D':0,'D':0,'d':0,'d/2':0})
+    gii_s, gii_p = calculate_characteristic_data(gii_data) if gii_data else empty_char
+    gi_s, gi_p   = calculate_characteristic_data(gi_data) if gi_data else empty_char
+    sc_s, sc_p   = calculate_characteristic_data(sc_data) if sc_data else empty_char
+    sd_s, sd_p   = calculate_characteristic_data(sd_data) if sd_data else empty_char
 
     # Tableau GII
     t1_cols = [
@@ -1102,19 +1112,20 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
             colors = {'GII': 'navy', 'GI': '#0284c7', 'SC': '#16a34a', 'SD': '#ea580c'}
             
             for k, d in st.session_state['data_granulats'].items():
-                s_s, p_s = zip(*sorted(zip(d['sieves'], d['passants'])))
-                
-                line_width = 2.5 if k == key else 1.5
-                opacity = 1.0 if k == key else 0.4
-                
-                fig.add_trace(go.Scatter(
-                    x=s_s, y=p_s,
-                    mode="lines+markers",
-                    name=f"{d['nom']} ({new_ref_base}{SUFFIX_MAP[k]})" if new_ref_base else d['nom'],
-                    line=dict(color=colors[k], width=line_width),
-                    marker=dict(size=6),
-                    opacity=opacity
-                ))
+                if d.get('sieves') and d.get('passants') and len(d['sieves']) == len(d['passants']):
+                    s_s, p_s = zip(*sorted(zip(d['sieves'], d['passants'])))
+                    
+                    line_width = 2.5 if k == key else 1.5
+                    opacity = 1.0 if k == key else 0.4
+                    
+                    fig.add_trace(go.Scatter(
+                        x=s_s, y=p_s,
+                        mode="lines+markers",
+                        name=f"{d['nom']} ({new_ref_base}{SUFFIX_MAP[k]})" if new_ref_base else d['nom'],
+                        line=dict(color=colors[k], width=line_width),
+                        marker=dict(size=6),
+                        opacity=opacity
+                    ))
 
             fig.update_layout(
                 xaxis=dict(
@@ -1240,13 +1251,14 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         ref_b = st.session_state['info_prelevement'].get('num_rapport', default_num_rapport)
         
         for k, d in st.session_state['data_granulats'].items():
-            s_s, p_s = zip(*sorted(zip(d['sieves'], d['passants'])))
-            fig_global_tab2.add_trace(go.Scatter(
-                x=s_s, y=p_s,
-                mode='lines+markers',
-                name=f"{d['nom']} ({ref_b}{SUFFIX_MAP[k]})" if ref_b else d['nom'],
-                line=dict(color=colors[k], width=2)
-            ))
+            if d.get('sieves') and d.get('passants') and len(d['sieves']) == len(d['passants']):
+                s_s, p_s = zip(*sorted(zip(d['sieves'], d['passants'])))
+                fig_global_tab2.add_trace(go.Scatter(
+                    x=s_s, y=p_s,
+                    mode='lines+markers',
+                    name=f"{d['nom']} ({ref_b}{SUFFIX_MAP[k]})" if ref_b else d['nom'],
+                    line=dict(color=colors[k], width=2)
+                ))
             
         fig_global_tab2.update_layout(
             xaxis=dict(type="log", title="Tamis (mm)", tickvals=[0.063, 0.125, 0.25, 0.5, 1, 2, 4, 8, 16, 31.5, 63]),
