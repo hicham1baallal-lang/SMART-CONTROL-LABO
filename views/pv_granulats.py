@@ -188,7 +188,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                 'fi': 16.0, 'la': 26.0, 'mb': None, 'mf': None, 'se': None
             },
             'GI': {
-                'nom': 'Gravillons GI ',
+                'nom': 'Gravillons GI',
                 'classe': '4/10',
                 'ref_client': '', 'date_prelevement': '', 'lieu_prelevement': '',
                 'sieves': [20, 16, 14, 12.5, 10, 8, 6.3, 5, 4, 3.15, 2.5, 2, 1.6, 1.25, 1, 0.8, 0.63, 0.5, 0.4, 0.315, 0.25, 0.2, 0.16, 0.125, 0.1, 0.08, 0.063],
@@ -208,7 +208,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                 'fi': None, 'la': None, 'mb': 0.7, 'mf': None, 'se': None
             },
             'SC': {
-                'nom': 'Sable grossier 0/4',
+                'nom': 'Sable grossier',
                 'classe': '0/4',
                 'ref_client': '', 'date_prelevement': '', 'lieu_prelevement': '',
                 'sieves': [6.3, 5, 4, 3.15, 2.5, 2, 1.6, 1.25, 1, 0.8, 0.63, 0.5, 0.4, 0.315, 0.25, 0.2, 0.16, 0.125, 0.1, 0.08, 0.063],
@@ -690,7 +690,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                 </tr>
             </table>
 
-            <!-- TABLEAU 1 : GRAVILLONS GII  -->
+            <!-- TABLEAU 1 : GRAVILLONS GII -->
             <table class="lpee-table">
                 <thead>
                     <tr>
@@ -708,7 +708,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                 </thead>
                 <tbody>
                     <tr>
-                        <td class="row-designation">{gii_data['nom']} ({ref_b}/1)</td>
+                        <td class="row-designation">{gii_data['nom']} - ({ref_b}/1)</td>
                         <td>{gii_passants['2D']:.0f}</td>
                         <td>{gii_passants['1.4D']:.0f}</td>
                         <td>{gii_passants['D']:.0f}</td>
@@ -733,7 +733,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                 </tbody>
             </table>
 
-            <!-- TABLEAU 2 : GRAVILLONS GI 4/10 -->
+            <!-- TABLEAU 2 : GRAVILLONS GI -->
             <table class="lpee-table">
                 <thead>
                     <tr>
@@ -751,7 +751,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                 </thead>
                 <tbody>
                     <tr>
-                        <td class="row-designation">{gi_data['nom']} ({ref_b}/2)</td>
+                        <td class="row-designation">{gi_data['nom'].strip()} - ({ref_b}/2)</td>
                         <td>{gi_passants['2D']:.0f}</td>
                         <td>{gi_passants['1.4D']:.0f}</td>
                         <td>{gi_passants['D']:.0f}</td>
@@ -768,7 +768,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                 </tbody>
             </table>
 
-            <!-- TABLEAU 3 : SABLE GROSSIER 0/4 -->
+            <!-- TABLEAU 3 : SABLE GROSSIER -->
             <table class="lpee-table">
                 <thead>
                     <tr>
@@ -784,7 +784,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                 </thead>
                 <tbody>
                     <tr>
-                        <td class="row-designation">{sc_data['nom']} ({ref_b}/3)</td>
+                        <td class="row-designation">{sc_data['nom']} - ({ref_b}/3)</td>
                         <td>{sc_passants['2D']:.0f}</td>
                         <td>{sc_passants['1.4D']:.0f}</td>
                         <td>{sc_passants['D']:.0f}</td>
@@ -801,7 +801,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                 </tbody>
             </table>
 
-            <!-- TABLEAU 4 : SABLE FIN 0/0,630 -->
+            <!-- TABLEAU 4 : SABLE FIN -->
             <table class="lpee-table">
                 <thead>
                     <tr>
@@ -817,7 +817,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                 </thead>
                 <tbody>
                     <tr>
-                        <td class="row-designation">{sd_data['nom']} ({ref_b}/4)</td>
+                        <td class="row-designation">{sd_data['nom']} - ({ref_b}/4)</td>
                         <td>{sd_passants['2D']:.0f}</td>
                         <td>{sd_passants['1.4D']:.0f}</td>
                         <td>{sd_passants['D']:.0f}</td>
