@@ -3,12 +3,18 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 from datetime import datetime
-import io
 
 # ------------------------------------------------------------------------------
-# CONSTANTES & FONCTIONS UTILES
+# CONSTANTES & SUFFIXES DES MATÉRIAUX
 # ------------------------------------------------------------------------------
 STANDARD_SIEVES = [0.063, 0.08, 0.1, 0.125, 0.16, 0.2, 0.25, 0.315, 0.4, 0.5, 0.63, 0.8, 1.0, 1.25, 1.6, 2.0, 2.5, 3.15, 4.0, 5.0, 5.6, 6.3, 8.0, 10.0, 12.5, 14.0, 16.0, 20.0, 25.0, 28.0, 31.5, 40.0]
+
+SUFFIX_MAP = {
+    'GII': '/1',
+    'GI': '/2',
+    'SC': '/3',
+    'SD': '/4'
+}
 
 def update_passants(mat_data):
     """Calcule les passants à partir des masses enregistrées (Méthode NF EN 933-1)"""
@@ -20,7 +26,6 @@ def update_passants(mat_data):
         pct_refus_cum = np.cumsum(pct_refus)
         passants = [100.0 - c for c in pct_refus_cum]
         
-        # Application de la règle d'arrondi (Nota de la norme)
         passants_fmt = []
         for s, p in zip(mat_data['sieves'], passants):
             if s == 0.063:
@@ -67,13 +72,20 @@ def compute_D95(sieves, passings):
 # FONCTION PRINCIPALE
 # ------------------------------------------------------------------------------
 def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
-    # INITIALISATION DU SESSION STATE
+    # INITIALISATION DU SESSION STATE COMMUN
+    if 'info_prelevement' not in st.session_state:
+        st.session_state['info_prelevement'] = {
+            'ref_client': '',
+            'date_prelevement': '',
+            'lieu_prelevement': '',
+            'ref_base': '260/26/100'
+        }
+
     if 'data_granulats' not in st.session_state:
         st.session_state['data_granulats'] = {
             'GII': {
                 'nom': 'Gravillons GII - 10/20',
                 'classe': '10/20',
-                'ref_client': '', 'date_prelevement': '', 'lieu_prelevement': '', 'ref': '',
                 'sieves': [40, 31.5, 25, 20, 16, 14, 12.5, 10, 8, 6.3, 5, 4, 3.15, 2.5, 2, 1.6, 1.25, 1, 0.8, 0.63, 0.5, 0.4, 0.315, 0.25, 0.2, 0.16, 0.125, 0.1, 0.08, 0.063],
                 'refus': [0, 0, 0, 199.7, 2200.3, 732.7, 308.7, 424, 163.2, 45, 6.9, 2.1, 0.2, 0.1, 0.2, 0.2, 0.1, 0, 0.1, 0.2, 0.1, 0.1, 0.1, 0.1, 0, 0.2, 0.1, 0.1, 0.1, 0.1],
                 'M1': 4110.5, 'M2': 4095.2, 'P': 1.3,
@@ -83,36 +95,32 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
             'GI': {
                 'nom': 'Gravillons GI - 4/10',
                 'classe': '4/10',
-                'ref_client': '', 'date_prelevement': '', 'lieu_prelevement': '', 'ref': '',
                 'sieves': [20, 16, 14, 12.5, 10, 8, 6.3, 5, 4, 3.15, 2.5, 2, 1.6, 1.25, 1, 0.8, 0.63, 0.5, 0.4, 0.315, 0.25, 0.2, 0.16, 0.125, 0.1, 0.08, 0.063],
                 'refus': [199.7, 2200.3, 732.7, 308.7, 424, 163.2, 45, 6.9, 2.1, 0.2, 0.1, 0.2, 0.2, 0.1, 0, 0.1, 0.2, 0.1, 0.1, 0.1, 0.1, 0, 0.2, 0.1, 0.1, 0.1, 0.1],
                 'M1': 2000.0, 'M2': 1990.0, 'P': 0.0,
                 'passants': [], 
                 'fi': 14.0, 'la': 26.0, 'mb': None, 'mf': None, 'se': None
             },
-            'SD': {
-                'nom': 'Sable fin 0/0,630 (Dune)',
-                'classe': '0/0,63',
-                'ref_client': '', 'date_prelevement': '', 'lieu_prelevement': '', 'ref': '',
-                'sieves': [6.3, 5, 4, 3.15, 2.5, 2, 1.6, 1.25, 1, 0.8, 0.63, 0.5, 0.4, 0.315, 0.25, 0.2, 0.16, 0.125, 0.1, 0.08, 0.063],
-                'refus': [45, 6.9, 2.1, 0.2, 0.1, 0.2, 0.2, 0.1, 0, 0.1, 0.2, 0.1, 0.1, 0.1, 0.1, 0, 0.2, 0.1, 0.1, 0.1, 0.1],
-                'M1': 1000.0, 'M2': 900.0, 'P': 2.0,
-                'passants': [],
-                'fi': None, 'la': None, 'mb': 0.7, 'mf': None, 'se': None
-            },
             'SC': {
                 'nom': 'Sable grossier 0/4 (Concassé)',
                 'classe': '0/4',
-                'ref_client': '', 'date_prelevement': '', 'lieu_prelevement': '', 'ref': '',
                 'sieves': [6.3, 5, 4, 3.15, 2.5, 2, 1.6, 1.25, 1, 0.8, 0.63, 0.5, 0.4, 0.315, 0.25, 0.2, 0.16, 0.125, 0.1, 0.08, 0.063],
                 'refus': [45, 6.9, 2.1, 0.2, 0.1, 0.2, 0.2, 0.1, 0, 0.1, 0.2, 0.1, 0.1, 0.1, 0.1, 0, 0.2, 0.1, 0.1, 0.1, 0.1],
                 'M1': 1000.0, 'M2': 910.0, 'P': 3.0,
                 'passants': [],
                 'fi': None, 'la': None, 'mb': None, 'mf': 3.50, 'se': 65.0
+            },
+            'SD': {
+                'nom': 'Sable fin 0/0,630 (Dune)',
+                'classe': '0/0,63',
+                'sieves': [6.3, 5, 4, 3.15, 2.5, 2, 1.6, 1.25, 1, 0.8, 0.63, 0.5, 0.4, 0.315, 0.25, 0.2, 0.16, 0.125, 0.1, 0.08, 0.063],
+                'refus': [45, 6.9, 2.1, 0.2, 0.1, 0.2, 0.2, 0.1, 0, 0.1, 0.2, 0.1, 0.1, 0.1, 0.1, 0, 0.2, 0.1, 0.1, 0.1, 0.1],
+                'M1': 1000.0, 'M2': 900.0, 'P': 2.0,
+                'passants': [],
+                'fi': None, 'la': None, 'mb': 0.7, 'mf': None, 'se': None
             }
         }
 
-    # Mise à jour initiale des passants
     for k in st.session_state['data_granulats'].keys():
         if not st.session_state['data_granulats'][k]['passants']:
             update_passants(st.session_state['data_granulats'][k])
@@ -129,7 +137,6 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
             'commentaires': "Les essais d'identifications des granulats pour béton sont conformes aux exigences de la norme NF EN 12620 et NF P 18-545"
         }
 
-    # Message de succès persistant
     if 'success_msg' in st.session_state:
         st.success(st.session_state['success_msg'])
         del st.session_state['success_msg']
@@ -151,28 +158,44 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
     with tabs[0]:
         st.header("Feuilles d'Analyse Granulométrique et Caractéristiques")
         
+        # --- INFORMATIONS DE PRÉLÈVEMENT COMMUNES (SAISIE UNIQUE) ---
+        st.markdown("##### 📍 Informations de prélèvement (Communes à tous les matériaux)")
+        c_ref_cl, c_date_p, c_lieu_p, c_ref_b = st.columns(4)
+        
+        info_p = st.session_state['info_prelevement']
+        
+        new_ref_client = c_ref_cl.text_input("Référence client", value=info_p.get('ref_client', ''), disabled=not can_edit, key="common_ref_client")
+        new_date_prelev = c_date_p.text_input("Date de prélèvement", value=info_p.get('date_prelevement', ''), disabled=not can_edit, key="common_date_prelev")
+        new_lieu_prelev = c_lieu_p.text_input("Lieu de prélèvement", value=info_p.get('lieu_prelevement', ''), disabled=not can_edit, key="common_lieu_prelev")
+        new_ref_base   = c_ref_b.text_input("Référence labo (Base)", value=info_p.get('ref_base', ''), disabled=not can_edit, key="common_ref_base")
+        
+        # Synchronisation immédiate dans la session
+        if can_edit:
+            st.session_state['info_prelevement']['ref_client'] = new_ref_client
+            st.session_state['info_prelevement']['date_prelevement'] = new_date_prelev
+            st.session_state['info_prelevement']['lieu_prelevement'] = new_lieu_prelev
+            st.session_state['info_prelevement']['ref_base'] = new_ref_base
+
+        st.markdown("---")
+
         selected_mat = st.radio(
             "Sélectionner la fraction d'échantillon à modifier :",
-            ["GII (10/20)", "GI (4/10)", "SD (0/0,63)", "SC (0/4)"],
+            ["GII (10/20)", "GI (4/10)", "SC (0/4)", "SD (0/0,63)"],
             horizontal=True
         )
         
-        mat_key_map = {"GII (10/20)": "GII", "GI (4/10)": "GI", "SD (0/0,63)": "SD", "SC (0/4)": "SC"}
+        mat_key_map = {"GII (10/20)": "GII", "GI (4/10)": "GI", "SC (0/4)": "SC", "SD (0/0,63)": "SD"}
         key = mat_key_map[selected_mat]
         mat_data = st.session_state['data_granulats'][key]
+        
+        # Construction automatique de la sous-référence
+        sub_ref = f"{new_ref_base}{SUFFIX_MAP[key]}" if new_ref_base else SUFFIX_MAP[key]
         
         col1, col2 = st.columns([1.1, 0.9])
         
         with col1:
             st.subheader(f"Saisie des données : {mat_data['nom']}")
-            
-            # --- BLOC 0 : INFORMATIONS DE PRÉLÈVEMENT ---
-            st.markdown("##### 📍 Informations de prélèvement")
-            c_ref, c_date, c_lieu = st.columns(3)
-            new_ref_client = c_ref.text_input("Référence client", value=mat_data.get('ref_client', ''), disabled=not can_edit, key=f"ref_client_{key}")
-            new_ref = c_ref.text_input("Référence labo", value=mat_data.get('ref', ''), disabled=not can_edit, key=f"ref_{key}")
-            new_date_prelev = c_date.text_input("Date de prélèvement", value=mat_data.get('date_prelevement', ''), disabled=not can_edit, key=f"date_prelev_{key}")
-            new_lieu_prelev = c_lieu.text_input("Lieu de prélèvement", value=mat_data.get('lieu_prelevement', ''), disabled=not can_edit, key=f"lieu_prelev_{key}")
+            st.info(f"🏷️ **Sous-référence Labo générée :** `{sub_ref}`")
 
             # --- BLOC 1 : PESÉES ---
             st.markdown("##### ⚖️ Pesées (Procédé : Lavage et tamisage)")
@@ -183,8 +206,6 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
             
             # --- BLOC 2 : TABLEAU D'ANALYSE ---
             st.markdown("##### 📊 Analyse par tamisage (Saisie des refus en g)")
-            
-            editor_key = f"editor_{key}"
             
             df_display = pd.DataFrame({
                 "Tamis (mm)": mat_data['sieves'],
@@ -199,7 +220,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
 
             edited_df = st.data_editor(
                 df_display,
-                key=editor_key,
+                key=f"editor_{key}",
                 column_config={
                     "Tamis (mm)": st.column_config.NumberColumn(disabled=True),
                     "Masse de refus Ri (g)": st.column_config.NumberColumn(disabled=not can_edit, min_value=0.0, format="%.1f"),
@@ -209,10 +230,10 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                 },
                 hide_index=True,
                 use_container_width=True,
-                height=450
+                height=400
             )
 
-            # --- BLOC 3 : VÉRIFICATIONS TEMPS RÉEL ---
+            # --- BLOC 3 : VÉRIFICATIONS ---
             st.markdown("##### 🔍 Vérifications et Validations (NF EN 933-1)")
             
             refus_array = edited_df["Masse de refus Ri (g)"].values
@@ -231,37 +252,29 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
 
             st.markdown("---")
             st.subheader(f"Caractéristiques de {mat_data['classe']}")
-            st.info("Laissez à 0.0 si l'essai n'est pas applicable.")
             
             col_a, col_b = st.columns(2)
             
-            # Traitement différencié : Gravillons (GII, GI) vs Sables (SD, SC)
+            # Séparation selon la nature du matériau
             if key in ["GII", "GI"]:
                 with col_a:
                     fi_val = st.number_input("Coeff. Aplatissement (FI)", value=float(mat_data.get('fi') or 0.0), step=0.1, disabled=not can_edit, key=f"fi_{key}")
                 with col_b:
                     la_val = st.number_input("Los Angeles (LA)", value=float(mat_data.get('la') or 0.0), step=0.1, disabled=not can_edit, key=f"la_{key}")
-                mb_val = 0.0
-                mf_val = 0.0
-                se_val = 0.0
+                mb_val, mf_val, se_val = 0.0, 0.0, 0.0
             else:
                 with col_a:
                     mb_val = st.number_input("Valeur de Bleu (MB)", value=float(mat_data.get('mb') or 0.0), step=0.1, disabled=not can_edit, key=f"mb_{key}")
                 with col_b:
                     mf_val = st.number_input("Module de Finesse (MF)", value=float(mat_data.get('mf') or 0.0), step=0.01, disabled=not can_edit, key=f"mf_{key}")
                     se_val = st.number_input("Équivalent de Sable (SE 10)", value=float(mat_data.get('se') or 0.0), step=0.1, disabled=not can_edit, key=f"se_{key}")
-                fi_val = 0.0
-                la_val = 0.0
+                fi_val, la_val = 0.0, 0.0
                 
             st.markdown("---")
             
             # --- BOUTON ENREGISTRER ---
             if can_edit:
                 if st.button(f"💾 Enregistrer la feuille {mat_data['nom']}", use_container_width=True, type="primary"):
-                    st.session_state['data_granulats'][key]['ref_client'] = new_ref_client
-                    st.session_state['data_granulats'][key]['ref'] = new_ref
-                    st.session_state['data_granulats'][key]['date_prelevement'] = new_date_prelev
-                    st.session_state['data_granulats'][key]['lieu_prelevement'] = new_lieu_prelev
                     st.session_state['data_granulats'][key]['M1'] = new_M1
                     st.session_state['data_granulats'][key]['M2'] = new_M2
                     st.session_state['data_granulats'][key]['P'] = new_P
@@ -275,7 +288,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
 
                     update_passants(st.session_state['data_granulats'][key])
                     
-                    st.session_state['success_msg'] = f"✅ Calculs terminés ! La feuille de {mat_data['nom']} a bien été mise à jour."
+                    st.session_state['success_msg'] = f"✅ Calculs enregistrés pour {mat_data['nom']} (Sous-réf: {sub_ref})."
                     st.rerun()
 
         with col2:
@@ -296,7 +309,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                 fig_global_tab1.add_trace(go.Scatter(
                     x=s_s, y=p_s,
                     mode='lines+markers',
-                    name=d['nom'],
+                    name=f"{d['nom']} ({new_ref_base}{SUFFIX_MAP[k]})" if new_ref_base else d['nom'],
                     line=dict(color=colors[k], width=line_width),
                     opacity=opacity
                 ))
@@ -331,13 +344,13 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
 
         gii_data = st.session_state['data_granulats']['GII']
         gi_data  = st.session_state['data_granulats']['GI']
-        sd_data  = st.session_state['data_granulats']['SD']
         sc_data  = st.session_state['data_granulats']['SC']
+        sd_data  = st.session_state['data_granulats']['SD']
 
         D_gii = compute_D95(gii_data['sieves'], gii_data['passants'])
         D_gi  = compute_D95(gi_data['sieves'], gi_data['passants'])
-        D_sd  = compute_D95(sd_data['sieves'], sd_data['passants'])
         D_sc  = compute_D95(sc_data['sieves'], sc_data['passants'])
+        D_sd  = compute_D95(sd_data['sieves'], sd_data['passants'])
 
         st.markdown("""
         <style>
@@ -350,6 +363,8 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         </style>
         """, unsafe_allow_html=True)
 
+        ref_b = st.session_state['info_prelevement'].get('ref_base', '')
+
         pv_html = f"""
         <div class="pv-container">
             <div class="pv-header">OBJET : IDENTIFICATION DES GRANULATS POUR BETON</div>
@@ -358,9 +373,9 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                     <td colspan="4"><b>Référence normative</b><br>
                     A.G : NF EN 933-1 | Equivalent de sable : NF EN 933-8 | VB : NF EN 933-9<br>
                     LOS ANGELES : NF EN 1097-2 | CA : NF EN 933-3</td>
-                    <td colspan="4"><b>Classe granulaire</b><br>
-                    Gravillon {gii_data['classe']} | Gravillon {gi_data['classe']}<br>
-                    Sable SC {sc_data['classe']} | Sable de dune {sd_data['classe']}</td>
+                    <td colspan="4"><b>Classes granulaires & Réf. Labo</b><br>
+                    GII ({ref_b}/1) | GI ({ref_b}/2)<br>
+                    SC ({ref_b}/3) | SD ({ref_b}/4)</td>
                 </tr>
                 
                 <tr class="pv-sub-header">
@@ -375,7 +390,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                     <td>LA</td>
                 </tr>
                 <tr class="pv-bg-gray">
-                    <td>Gravillons GII - {gii_data['classe']}</td>
+                    <td>Gravillons GII - {gii_data['classe']} ({ref_b}/1)</td>
                     <td>{get_passant_at_sieve(gii_data['sieves'], gii_data['passants'], 2*D_gii):.1f}</td>
                     <td>{get_passant_at_sieve(gii_data['sieves'], gii_data['passants'], 1.4*D_gii):.0f}</td>
                     <td>{get_passant_at_sieve(gii_data['sieves'], gii_data['passants'], D_gii):.0f}</td>
@@ -398,7 +413,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                     <td>LA</td>
                 </tr>
                 <tr class="pv-bg-gray">
-                    <td>Gravillons GI - {gi_data['classe']}</td>
+                    <td>Gravillons GI - {gi_data['classe']} ({ref_b}/2)</td>
                     <td>{get_passant_at_sieve(gi_data['sieves'], gi_data['passants'], 2*D_gi):.1f}</td>
                     <td>{get_passant_at_sieve(gi_data['sieves'], gi_data['passants'], 1.4*D_gi):.0f}</td>
                     <td>{get_passant_at_sieve(gi_data['sieves'], gi_data['passants'], D_gi):.0f}</td>
@@ -407,27 +422,6 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                     <td>{get_passant_at_sieve(gi_data['sieves'], gi_data['passants'], 0.063):.1f}</td>
                     <td>{gi_data['fi'] if gi_data['fi'] is not None else '-'}</td>
                     <td>{gi_data['la'] if gi_data['la'] is not None else '-'}</td>
-                </tr>
-
-                <tr class="pv-sub-header">
-                    <td>Désignations</td>
-                    <td>2D (1,26)</td>
-                    <td>1,4D (0,88)</td>
-                    <td>D (0,63)</td>
-                    <td>% &lt; 1mm</td>
-                    <td>% &lt; 250µm</td>
-                    <td>fA (%&lt;63µm)</td>
-                    <td colspan="2">MB</td>
-                </tr>
-                <tr class="pv-bg-gray">
-                    <td>Sable fin {sd_data['classe']}</td>
-                    <td>{get_passant_at_sieve(sd_data['sieves'], sd_data['passants'], 1.26):.0f}</td>
-                    <td>{get_passant_at_sieve(sd_data['sieves'], sd_data['passants'], 0.88):.0f}</td>
-                    <td>{get_passant_at_sieve(sd_data['sieves'], sd_data['passants'], 0.63):.0f}</td>
-                    <td>{get_passant_at_sieve(sd_data['sieves'], sd_data['passants'], 1.0):.0f}</td>
-                    <td>{get_passant_at_sieve(sd_data['sieves'], sd_data['passants'], 0.25):.0f}</td>
-                    <td>{get_passant_at_sieve(sd_data['sieves'], sd_data['passants'], 0.063):.1f}</td>
-                    <td colspan="2">{sd_data['mb'] if sd_data['mb'] is not None else '-'}</td>
                 </tr>
 
                 <tr class="pv-sub-header">
@@ -442,7 +436,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                     <td>SE (10)</td>
                 </tr>
                 <tr class="pv-bg-gray">
-                    <td>Sable grossier {sc_data['classe']}</td>
+                    <td>Sable grossier {sc_data['classe']} ({ref_b}/3)</td>
                     <td>{get_passant_at_sieve(sc_data['sieves'], sc_data['passants'], 8.0):.0f}</td>
                     <td>{get_passant_at_sieve(sc_data['sieves'], sc_data['passants'], 5.6):.0f}</td>
                     <td>{get_passant_at_sieve(sc_data['sieves'], sc_data['passants'], 4.0):.0f}</td>
@@ -451,6 +445,27 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                     <td>{get_passant_at_sieve(sc_data['sieves'], sc_data['passants'], 0.063):.1f}</td>
                     <td>{sc_data['mf'] if sc_data['mf'] is not None else '-'}</td>
                     <td>{sc_data['se'] if sc_data['se'] is not None else '-'}</td>
+                </tr>
+
+                <tr class="pv-sub-header">
+                    <td>Désignations</td>
+                    <td>2D (1,26)</td>
+                    <td>1,4D (0,88)</td>
+                    <td>D (0,63)</td>
+                    <td>% &lt; 1mm</td>
+                    <td>% &lt; 250µm</td>
+                    <td>fA (%&lt;63µm)</td>
+                    <td colspan="2">MB</td>
+                </tr>
+                <tr class="pv-bg-gray">
+                    <td>Sable fin {sd_data['classe']} ({ref_b}/4)</td>
+                    <td>{get_passant_at_sieve(sd_data['sieves'], sd_data['passants'], 1.26):.0f}</td>
+                    <td>{get_passant_at_sieve(sd_data['sieves'], sd_data['passants'], 0.88):.0f}</td>
+                    <td>{get_passant_at_sieve(sd_data['sieves'], sd_data['passants'], 0.63):.0f}</td>
+                    <td>{get_passant_at_sieve(sd_data['sieves'], sd_data['passants'], 1.0):.0f}</td>
+                    <td>{get_passant_at_sieve(sd_data['sieves'], sd_data['passants'], 0.25):.0f}</td>
+                    <td>{get_passant_at_sieve(sd_data['sieves'], sd_data['passants'], 0.063):.1f}</td>
+                    <td colspan="2">{sd_data['mb'] if sd_data['mb'] is not None else '-'}</td>
                 </tr>
             </table>
         </div>
@@ -462,12 +477,13 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         st.subheader("COURBE GRANULOMETRIQUE GLOBALE")
         fig_global_tab2 = go.Figure()
         
+        colors = {'GII': 'blue', 'GI': 'black', 'SC': 'green', 'SD': 'orange'}
         for k, d in st.session_state['data_granulats'].items():
             s_s, p_s = zip(*sorted(zip(d['sieves'], d['passants'])))
             fig_global_tab2.add_trace(go.Scatter(
                 x=s_s, y=p_s,
                 mode='lines+markers',
-                name=d['nom'],
+                name=f"{d['nom']} ({ref_b}{SUFFIX_MAP[k]})" if ref_b else d['nom'],
                 line=dict(color=colors[k], width=2)
             ))
             
