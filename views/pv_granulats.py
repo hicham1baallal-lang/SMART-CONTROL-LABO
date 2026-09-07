@@ -3,7 +3,6 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 from datetime import datetime
-import textwrap
 
 # ------------------------------------------------------------------------------
 # CONSTANTES & SUFFIXES DES MATÉRIAUX
@@ -16,6 +15,10 @@ SUFFIX_MAP = {
     'SC': '/3',
     'SD': '/4'
 }
+
+def clean_html(html_str):
+    """Supprime les espaces en début de ligne pour éviter le rendu en bloc de code Markdown dans Streamlit."""
+    return "\n".join([line.strip() for line in html_str.splitlines() if line.strip()])
 
 def update_passants(mat_data):
     """Calcule les passants à partir des masses enregistrées (Méthode NF EN 933-1)"""
@@ -89,11 +92,14 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
     # INITIALISATION DU SESSION STATE COMMUN
     if 'info_prelevement' not in st.session_state:
         st.session_state['info_prelevement'] = {
-            'chantier': 'LGV CASA SUD',
+            'chantier': "TRAVAUX D'EXECUTION DE TERRASSEMENT, OUVRAGES D'ART ET RETABLISSEMENTS DE COMMUNICATION ENTRE PK 5+450 et PK 10+000-GARE CASA SUD",
             'client': 'TGCC',
-            'date_prelevement': '01/08/2026',
-            'lieu_prelevement': 'CAB',
-            'ref_base': '260/26/100'
+            'dossier_no': '2025-260-05985-2025 0247',
+            'date_prelevement': '23/07/2026',
+            'lieu_prelevement': 'Stock sur centrale à béton',
+            'provenance': 'TG PREFA OULAD SALEH',
+            'ref_base': '260/26/100',
+            'num_rapport': '26/260/LGV/CS/1237'
         }
 
     if 'data_granulats' not in st.session_state:
@@ -101,8 +107,8 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
             'GII': {
                 'nom': 'Gravillons GII - 10/20',
                 'classe': '10/20',
-                'sieves': [40, 31.5, 25, 20, 16, 14, 12.5, 10, 8, 6.3, 5, 4, 3.15, 2.5, 2, 1.6, 1.25, 1, 0.8, 0.63, 0.5, 0.4, 0.315, 0.25, 0.2, 0.16, 0.125, 0.1, 0.08, 0.063],
-                'refus': [0, 0, 0, 199.7, 2200.3, 732.7, 308.7, 424, 163.2, 45, 6.9, 2.1, 0.2, 0.1, 0.2, 0.2, 0.1, 0, 0.1, 0.2, 0.1, 0.1, 0.1, 0.1, 0, 0.2, 0.1, 0.1, 0.1, 0.1],
+                'sieves': [40, 31.5, 28, 25, 20, 16, 14, 12.5, 10, 8, 6.3, 5, 4, 3.15, 2.5, 2, 1.6, 1.25, 1, 0.8, 0.63, 0.5, 0.4, 0.315, 0.25, 0.2, 0.16, 0.125, 0.1, 0.08, 0.063],
+                'refus': [0, 0, 0, 0, 199.7, 2200.3, 732.7, 308.7, 424, 163.2, 45, 6.9, 2.1, 0.2, 0.1, 0.2, 0.2, 0.1, 0, 0.1, 0.2, 0.1, 0.1, 0.1, 0.1, 0, 0.2, 0.1, 0.1, 0.1, 0.1],
                 'M1': 4110.5, 'M2': 4095.2, 'P': 1.3,
                 'passants': [], 
                 'fi': 16.0, 'la': 26.0, 'mb': None, 'mf': None, 'se': None
@@ -111,25 +117,25 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                 'nom': 'Gravillons GI - 4/10',
                 'classe': '4/10',
                 'sieves': [20, 16, 14, 12.5, 10, 8, 6.3, 5, 4, 3.15, 2.5, 2, 1.6, 1.25, 1, 0.8, 0.63, 0.5, 0.4, 0.315, 0.25, 0.2, 0.16, 0.125, 0.1, 0.08, 0.063],
-                'refus': [199.7, 2200.3, 732.7, 308.7, 424, 163.2, 45, 6.9, 2.1, 0.2, 0.1, 0.2, 0.2, 0.1, 0, 0.1, 0.2, 0.1, 0.1, 0.1, 0.1, 0, 0.2, 0.1, 0.1, 0.1, 0.1],
+                'refus': [0, 0, 100, 100, 200, 300, 200, 100, 50, 10, 5, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
                 'M1': 2000.0, 'M2': 1990.0, 'P': 0.0,
                 'passants': [], 
                 'fi': 14.0, 'la': 26.0, 'mb': None, 'mf': None, 'se': None
             },
             'SC': {
-                'nom': 'Sable grossier 0/4 (Concassé)',
+                'nom': 'Sable grossier 0/4',
                 'classe': '0/4',
-                'sieves': [6.3, 5, 4, 3.15, 2.5, 2, 1.6, 1.25, 1, 0.8, 0.63, 0.5, 0.4, 0.315, 0.25, 0.2, 0.16, 0.125, 0.1, 0.08, 0.063],
-                'refus': [45, 6.9, 2.1, 0.2, 0.1, 0.2, 0.2, 0.1, 0, 0.1, 0.2, 0.1, 0.1, 0.1, 0.1, 0, 0.2, 0.1, 0.1, 0.1, 0.1],
+                'sieves': [8, 5.6, 4, 3.15, 2.5, 2, 1.6, 1.25, 1, 0.8, 0.63, 0.5, 0.4, 0.315, 0.25, 0.2, 0.16, 0.125, 0.1, 0.08, 0.063],
+                'refus': [0, 40, 40, 50, 60, 70, 80, 90, 100, 80, 70, 60, 50, 40, 30, 20, 10, 10, 10, 10, 9],
                 'M1': 1000.0, 'M2': 910.0, 'P': 3.0,
                 'passants': [],
-                'fi': None, 'la': None, 'mb': None, 'mf': None, 'se': 65.0
+                'fi': None, 'la': None, 'mb': None, 'mf': 3.50, 'se': 65.0
             },
             'SD': {
-                'nom': 'Sable fin 0/0,630 (Dune)',
-                'classe': '0/0,63',
-                'sieves': [6.3, 5, 4, 3.15, 2.5, 2, 1.6, 1.25, 1, 0.8, 0.63, 0.5, 0.4, 0.315, 0.25, 0.2, 0.16, 0.125, 0.1, 0.08, 0.063],
-                'refus': [45, 6.9, 2.1, 0.2, 0.1, 0.2, 0.2, 0.1, 0, 0.1, 0.2, 0.1, 0.1, 0.1, 0.1, 0, 0.2, 0.1, 0.1, 0.1, 0.1],
+                'nom': 'Sable fin 0/0,630',
+                'classe': '0/0,630',
+                'sieves': [1.26, 0.88, 0.63, 0.5, 0.4, 0.315, 0.25, 0.2, 0.16, 0.125, 0.1, 0.08, 0.063],
+                'refus': [0, 10, 10, 20, 30, 40, 80, 100, 150, 200, 150, 100, 102],
                 'M1': 1000.0, 'M2': 900.0, 'P': 2.0,
                 'passants': [],
                 'fi': None, 'la': None, 'mb': 0.7, 'mf': None, 'se': None
@@ -152,9 +158,11 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         st.session_state['pv_info'] = {
             'projet': st.session_state['info_prelevement']['chantier'],
             'client': st.session_state['info_prelevement']['client'],
-            'ref_pv': f"PV-GRAN-{datetime.now().strftime('%Y%m%d-%H%M')}",
-            'date': datetime.now().strftime('%d/%m/%Y'),
-            'commentaires': "Les essais d'identifications des granulats pour béton sont conformes aux exigences de la norme NF EN 12620 et NF P 18-545"
+            'ref_pv': st.session_state['info_prelevement']['num_rapport'],
+            'date': st.session_state['info_prelevement']['date_prelevement'],
+            'commentaires': "Les essais d'identifications des granulats pour béton sont conformes aux exigences de la norme NF EN 12620 et NF P 18-545",
+            'coord_essais': 'O.IKEN',
+            'chef_labo': 'H.BAALLAL'
         }
 
     if 'success_msg' in st.session_state:
@@ -178,28 +186,35 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
     with tabs[0]:
         st.header("Feuilles d'Analyse Granulométrique et Caractéristiques")
         
-        # --- INFORMATIONS DE PRÉLÈVEMENT COMMUNES ---
         st.markdown("##### 📍 Informations de prélèvement (Communes à tous les matériaux)")
-        c_chantier, c_client, c_date_p, c_lieu_p, c_ref_b = st.columns(5)
+        c1, c2, c3 = st.columns(3)
+        c4, c5, c6 = st.columns(3)
         
         info_p = st.session_state['info_prelevement']
         
-        new_chantier   = c_chantier.text_input("Chantier", value=info_p.get('chantier', 'LGV CASA SUD'), disabled=not can_edit, key="common_chantier")
-        new_client     = c_client.text_input("Client", value=info_p.get('client', 'TGCC'), disabled=not can_edit, key="common_client")
-        new_date_prelev = c_date_p.text_input("Date de prélèvement", value=info_p.get('date_prelevement', '01/08/2026'), disabled=not can_edit, key="common_date_prelev")
-        new_lieu_prelev = c_lieu_p.text_input("Lieu de prélèvement", value=info_p.get('lieu_prelevement', 'CAB'), disabled=not can_edit, key="common_lieu_prelev")
-        new_ref_base   = c_ref_b.text_input("Référence labo (Base)", value=info_p.get('ref_base', '260/26/100'), disabled=not can_edit, key="common_ref_base")
+        new_client       = c1.text_input("Client", value=info_p.get('client', 'TGCC'), disabled=not can_edit, key="common_client")
+        new_chantier     = c2.text_input("Chantier", value=info_p.get('chantier', ''), disabled=not can_edit, key="common_chantier")
+        new_dossier      = c3.text_input("N° Dossier", value=info_p.get('dossier_no', ''), disabled=not can_edit, key="common_dossier")
+        new_date_prelev  = c4.text_input("Date de prélèvement", value=info_p.get('date_prelevement', '23/07/2026'), disabled=not can_edit, key="common_date_prelev")
+        new_lieu_prelev  = c5.text_input("Lieu de prélèvement", value=info_p.get('lieu_prelevement', 'Stock sur centrale à béton'), disabled=not can_edit, key="common_lieu_prelev")
+        new_provenance   = c6.text_input("Provenance échantillon", value=info_p.get('provenance', 'TG PREFA OULAD SALEH'), disabled=not can_edit, key="common_provenance")
         
+        new_ref_base     = st.text_input("Référence labo (Base)", value=info_p.get('ref_base', '260/26/100'), disabled=not can_edit, key="common_ref_base")
+        new_num_rapport  = st.text_input("N° Rapport d'essai", value=info_p.get('num_rapport', '26/260/LGV/CS/1237'), disabled=not can_edit, key="common_num_rapport")
+
         if can_edit:
             st.session_state['info_prelevement']['chantier'] = new_chantier
             st.session_state['info_prelevement']['client'] = new_client
+            st.session_state['info_prelevement']['dossier_no'] = new_dossier
             st.session_state['info_prelevement']['date_prelevement'] = new_date_prelev
             st.session_state['info_prelevement']['lieu_prelevement'] = new_lieu_prelev
+            st.session_state['info_prelevement']['provenance'] = new_provenance
             st.session_state['info_prelevement']['ref_base'] = new_ref_base
+            st.session_state['info_prelevement']['num_rapport'] = new_num_rapport
             
-            # Synchronisation automatique avec le PV
             st.session_state['pv_info']['projet'] = new_chantier
             st.session_state['pv_info']['client'] = new_client
+            st.session_state['pv_info']['ref_pv'] = new_num_rapport
 
         st.markdown("---")
 
@@ -221,14 +236,12 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
             st.subheader(f"Saisie des données : {mat_data['nom']}")
             st.info(f"🏷️ **Sous-référence Labo générée :** `{sub_ref}`")
 
-            # --- BLOC 1 : PESÉES ---
             st.markdown("##### ⚖️ Pesées (Procédé : Lavage et tamisage)")
             c_m1, c_m2, c_p = st.columns(3)
             new_M1 = c_m1.number_input("Masse totale M1 (g)", value=float(mat_data.get('M1', 1000.0)), step=10.0, disabled=not can_edit, key=f"m1_{key}")
             new_M2 = c_m2.number_input("Masse après lavage M2 (g)", value=float(mat_data.get('M2', 1000.0)), step=10.0, disabled=not can_edit, key=f"m2_{key}")
             new_P  = c_p.number_input("Matériau au fond P (g)", value=float(mat_data.get('P', 0.0)), step=0.1, disabled=not can_edit, key=f"p_{key}")
             
-            # --- BLOC 2 : TABLEAU D'ANALYSE ---
             st.markdown("##### 📊 Analyse par tamisage (Saisie des refus en g)")
             
             df_display = pd.DataFrame({
@@ -254,10 +267,9 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                 },
                 hide_index=True,
                 use_container_width=True,
-                height=400
+                height=350
             )
 
-            # --- BLOC 3 : VÉRIFICATIONS ---
             st.markdown("##### 🔍 Vérifications et Validations (NF EN 933-1)")
             
             refus_array = edited_df["Masse de refus Ri (g)"].values
@@ -329,7 +341,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                             st.session_state['data_granulats'][key]['passants']
                         )
 
-                    st.session_state['success_msg'] = f"✅ Calculs enregistrés pour {mat_data['nom']} (Sous-réf: {sub_ref}) - MF calculé : {st.session_state['data_granulats'][key].get('mf', '-')}"
+                    st.session_state['success_msg'] = f"✅ Calculs enregistrés pour {mat_data['nom']} (Sous-réf: {sub_ref})"
                     st.rerun()
 
         with col2:
@@ -339,7 +351,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
             st.metric(label=f"Tamis D (95% de passant) pour {mat_data['nom']}", value=f"{d95} mm")
             
             fig_global_tab1 = go.Figure()
-            colors = {'GII': 'blue', 'GI': 'black', 'SC': 'green', 'SD': 'orange'}
+            colors = {'GII': '#1e40af', 'GI': '#0284c7', 'SC': '#16a34a', 'SD': '#ea580c'}
             
             for k, d in st.session_state['data_granulats'].items():
                 s_s, p_s = zip(*sorted(zip(d['sieves'], d['passants'])))
@@ -365,153 +377,333 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
             st.plotly_chart(fig_global_tab1, use_container_width=True)
 
     # ------------------------------------------------------------------------------
-    # FENÊTRE 2 : PV D'IDENTIFICATION / SYNTHÈSE
+    # FENÊTRE 2 : PV D'IDENTIFICATION / SYNTHÈSE (CONFORME RAPPORT LPEE N° 1237)
     # ------------------------------------------------------------------------------
     with tabs[1]:
         st.header("PV d'Identification des Granulats pour Béton")
         
-        with st.expander("📝 Entête & Informations du Procès-Verbal", expanded=False):
-            c1, c2, c3, c4 = st.columns(4)
-            projet_val = c1.text_input("Chantier / Projet", st.session_state['pv_info']['projet'], disabled=not can_edit)
-            client_val = c2.text_input("Client", st.session_state['pv_info']['client'], disabled=not can_edit)
-            ref_val = c3.text_input("Référence PV", st.session_state['pv_info']['ref_pv'], disabled=not can_edit)
-            date_val = c4.text_input("Date", st.session_state['pv_info']['date'], disabled=not can_edit)
+        with st.expander("⚙️ Modifier les entêtes et signataires du PV", expanded=False):
+            c1, c2, c3 = st.columns(3)
+            c4, c5, c6 = st.columns(3)
+            
+            projet_val   = c1.text_input("Chantier / Projet", st.session_state['pv_info']['projet'], disabled=not can_edit, key="pv_proj")
+            client_val   = c2.text_input("Client", st.session_state['pv_info']['client'], disabled=not can_edit, key="pv_cli")
+            ref_val      = c3.text_input("N° Rapport d'Essai", st.session_state['pv_info']['ref_pv'], disabled=not can_edit, key="pv_ref")
+            date_val     = c4.text_input("Date du prélèvement", st.session_state['pv_info']['date'], disabled=not can_edit, key="pv_dt")
+            coord_val    = c5.text_input("Coordinateur des essais", st.session_state['pv_info']['coord_essais'], disabled=not can_edit, key="pv_coo")
+            chef_val     = c6.text_input("Chef du laboratoire", st.session_state['pv_info']['chef_labo'], disabled=not can_edit, key="pv_che")
 
             if can_edit:
                 st.session_state['pv_info']['projet'] = projet_val
                 st.session_state['pv_info']['client'] = client_val
                 st.session_state['pv_info']['ref_pv'] = ref_val
                 st.session_state['pv_info']['date'] = date_val
+                st.session_state['pv_info']['coord_essais'] = coord_val
+                st.session_state['pv_info']['chef_labo'] = chef_val
 
         gii_data = st.session_state['data_granulats']['GII']
         gi_data  = st.session_state['data_granulats']['GI']
         sc_data  = st.session_state['data_granulats']['SC']
         sd_data  = st.session_state['data_granulats']['SD']
 
-        D_gii = compute_D95(gii_data['sieves'], gii_data['passants'])
-        D_gi  = compute_D95(gi_data['sieves'], gi_data['passants'])
+        info_p = st.session_state['info_prelevement']
+        ref_b = info_p.get('ref_base', '260/26/100')
 
-        style_css = textwrap.dedent("""
+        # CSS ÉPURÉ CONFORME AU FORMAT MODERNE LPEE
+        style_css = """
         <style>
-        .pv-container { background-color: #f8fafc; border: 2px solid #2563eb; padding: 10px; border-radius: 6px; font-family: sans-serif; }
-        .pv-header { background-color: #2563eb; color: white; text-align: center; font-weight: bold; font-size: 16px; padding: 8px; border-radius: 4px; }
-        .pv-sub-header { background-color: #3b82f6; color: white; text-align: center; font-weight: bold; font-size: 13px; }
-        .pv-sub-header td { padding: 6px; }
-        .pv-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
-        .pv-table th, .pv-table td { border: 1px solid #cbd5e1; padding: 6px; text-align: center; }
-        .pv-bg-gray { background-color: #f1f5f9; font-weight: 600; color: #0f172a; }
+        .lpee-pv-card {
+            background-color: #ffffff;
+            border: 2px solid #1e3a8a;
+            border-radius: 8px;
+            padding: 15px;
+            font-family: Arial, sans-serif;
+            color: #1e293b;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        .lpee-header-title {
+            background-color: #1e3a8a;
+            color: #ffffff;
+            text-align: center;
+            font-weight: bold;
+            font-size: 16px;
+            padding: 10px;
+            border-radius: 4px;
+            letter-spacing: 0.5px;
+            margin-bottom: 12px;
+        }
+        .lpee-info-grid {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 15px;
+            font-size: 12px;
+        }
+        .lpee-info-grid td {
+            border: 1px solid #cbd5e1;
+            padding: 6px 10px;
+            vertical-align: top;
+        }
+        .lpee-info-label {
+            font-weight: bold;
+            color: #0f172a;
+            width: 18%;
+            background-color: #f8fafc;
+        }
+        .lpee-norm-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11px;
+            margin-bottom: 15px;
+        }
+        .lpee-norm-table td {
+            border: 1px solid #cbd5e1;
+            padding: 4px 8px;
+        }
+        .lpee-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 8px;
+            margin-bottom: 15px;
+            font-size: 12px;
+        }
+        .lpee-table th {
+            background-color: #2563eb;
+            color: #ffffff;
+            border: 1px solid #1d4ed8;
+            padding: 6px;
+            text-align: center;
+            font-weight: bold;
+        }
+        .lpee-table td {
+            border: 1px solid #cbd5e1;
+            padding: 5px;
+            text-align: center;
+        }
+        .row-designation {
+            background-color: #f1f5f9;
+            font-weight: bold;
+            text-align: left !important;
+        }
+        .row-limite {
+            background-color: #fafafa;
+            font-size: 11px;
+            color: #475569;
+        }
+        .row-fuseau {
+            background-color: #f8fafc;
+            font-size: 11px;
+            color: #334155;
+        }
+        .signature-box {
+            margin-top: 20px;
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+        .signature-box td {
+            width: 33.33%;
+            border: 1px solid #cbd5e1;
+            padding: 8px;
+            text-align: center;
+            height: 80px;
+            vertical-align: top;
+        }
         </style>
-        """)
-        st.markdown(style_css, unsafe_allow_html=True)
+        """
 
-        ref_b = st.session_state['info_prelevement'].get('ref_base', '')
+        pv_html = f"""
+        <div class="lpee-pv-card">
+            <div class="lpee-header-title">
+                RAPPORT D'ESSAI N° : {st.session_state['pv_info']['ref_pv']}<br>
+                <span style="font-size:13px; font-weight:normal;">OBJET : IDENTIFICATION DES GRANULATS POUR BETON</span>
+            </div>
 
-        pv_html = textwrap.dedent(f"""<div class="pv-container">
-<div class="pv-header">OBJET : IDENTIFICATION DES GRANULATS POUR BETON</div>
-<table class="pv-table">
-<tr style="background-color: #ffffff;">
-<td colspan="4" style="text-align: left; padding: 8px;"><b>Chantier :</b> {st.session_state['pv_info']['projet']}<br><b>Client :</b> {st.session_state['pv_info']['client']}<br><b>Normes :</b> NF EN 933-1 | NF EN 933-8 | NF EN 933-9 | NF EN 1097-2</td>
-<td colspan="5" style="text-align: left; padding: 8px;"><b>Classes granulaires & Réf. Labo</b><br>GII ({ref_b}/1) | GI ({ref_b}/2)<br>SC ({ref_b}/3) | SD ({ref_b}/4)</td>
-</tr>
-<tr class="pv-sub-header">
-<td>Désignations</td>
-<td>2D ({2*D_gii:.0f})</td>
-<td>1.4D ({1.4*D_gii:.0f})</td>
-<td>D ({D_gii:.0f})</td>
-<td>d ({D_gii/2:.0f})</td>
-<td>d/2 ({D_gii/4:.0f})</td>
-<td>f (%&lt;63µm)</td>
-<td>FI</td>
-<td>LA</td>
-</tr>
-<tr class="pv-bg-gray">
-<td>Gravillons GII - {gii_data['classe']} ({ref_b}/1)</td>
-<td>{get_passant_at_sieve(gii_data['sieves'], gii_data['passants'], 2*D_gii):.1f}</td>
-<td>{get_passant_at_sieve(gii_data['sieves'], gii_data['passants'], 1.4*D_gii):.0f}</td>
-<td>{get_passant_at_sieve(gii_data['sieves'], gii_data['passants'], D_gii):.0f}</td>
-<td>{get_passant_at_sieve(gii_data['sieves'], gii_data['passants'], D_gii/2):.0f}</td>
-<td>{get_passant_at_sieve(gii_data['sieves'], gii_data['passants'], D_gii/4):.0f}</td>
-<td>{get_passant_at_sieve(gii_data['sieves'], gii_data['passants'], 0.063):.1f}</td>
-<td>{gii_data['fi'] if gii_data['fi'] is not None else '-'}</td>
-<td>{gii_data['la'] if gii_data['la'] is not None else '-'}</td>
-</tr>
-<tr class="pv-sub-header">
-<td>Désignations</td>
-<td>2D ({2*D_gi:.0f})</td>
-<td>1.4D ({1.4*D_gi:.0f})</td>
-<td>D ({D_gi:.0f})</td>
-<td>d ({D_gi/2.5:.0f})</td>
-<td>d/2 ({D_gi/5:.0f})</td>
-<td>f (%&lt;63µm)</td>
-<td>FI</td>
-<td>LA</td>
-</tr>
-<tr class="pv-bg-gray">
-<td>Gravillons GI - {gi_data['classe']} ({ref_b}/2)</td>
-<td>{get_passant_at_sieve(gi_data['sieves'], gi_data['passants'], 2*D_gi):.1f}</td>
-<td>{get_passant_at_sieve(gi_data['sieves'], gi_data['passants'], 1.4*D_gi):.0f}</td>
-<td>{get_passant_at_sieve(gi_data['sieves'], gi_data['passants'], D_gi):.0f}</td>
-<td>{get_passant_at_sieve(gi_data['sieves'], gi_data['passants'], D_gi/2.5):.0f}</td>
-<td>{get_passant_at_sieve(gi_data['sieves'], gi_data['passants'], D_gi/5):.0f}</td>
-<td>{get_passant_at_sieve(gi_data['sieves'], gi_data['passants'], 0.063):.1f}</td>
-<td>{gi_data['fi'] if gi_data['fi'] is not None else '-'}</td>
-<td>{gi_data['la'] if gi_data['la'] is not None else '-'}</td>
-</tr>
-<tr class="pv-sub-header">
-<td>Désignations</td>
-<td>2D (8)</td>
-<td>1,4D (5,6)</td>
-<td>D (4)</td>
-<td>% &lt; 1mm</td>
-<td>% &lt; 250µm</td>
-<td>fA (%&lt;63µm)</td>
-<td>Module Finesse CF</td>
-<td>SE (10)</td>
-</tr>
-<tr class="pv-bg-gray">
-<td>Sable grossier {sc_data['classe']} ({ref_b}/3)</td>
-<td>{get_passant_at_sieve(sc_data['sieves'], sc_data['passants'], 8.0):.0f}</td>
-<td>{get_passant_at_sieve(sc_data['sieves'], sc_data['passants'], 5.6):.0f}</td>
-<td>{get_passant_at_sieve(sc_data['sieves'], sc_data['passants'], 4.0):.0f}</td>
-<td>{get_passant_at_sieve(sc_data['sieves'], sc_data['passants'], 1.0):.0f}</td>
-<td>{get_passant_at_sieve(sc_data['sieves'], sc_data['passants'], 0.25):.0f}</td>
-<td>{get_passant_at_sieve(sc_data['sieves'], sc_data['passants'], 0.063):.1f}</td>
-<td>{sc_data['mf'] if sc_data['mf'] is not None else '-'}</td>
-<td>{sc_data['se'] if sc_data['se'] is not None else '-'}</td>
-</tr>
-<tr class="pv-sub-header">
-<td>Désignations</td>
-<td>2D (1,26)</td>
-<td>1,4D (0,88)</td>
-<td>D (0,63)</td>
-<td>% &lt; 1mm</td>
-<td>% &lt; 250µm</td>
-<td>fA (%&lt;63µm)</td>
-<td>Module Finesse FF</td>
-<td>MB</td>
-</tr>
-<tr class="pv-bg-gray">
-<td>Sable fin {sd_data['classe']} ({ref_b}/4)</td>
-<td>{get_passant_at_sieve(sd_data['sieves'], sd_data['passants'], 1.26):.0f}</td>
-<td>{get_passant_at_sieve(sd_data['sieves'], sd_data['passants'], 0.88):.0f}</td>
-<td>{get_passant_at_sieve(sd_data['sieves'], sd_data['passants'], 0.63):.0f}</td>
-<td>{get_passant_at_sieve(sd_data['sieves'], sd_data['passants'], 1.0):.0f}</td>
-<td>{get_passant_at_sieve(sd_data['sieves'], sd_data['passants'], 0.25):.0f}</td>
-<td>{get_passant_at_sieve(sd_data['sieves'], sd_data['passants'], 0.063):.1f}</td>
-<td>{sd_data['mf'] if sd_data['mf'] is not None else '-'}</td>
-<td>{sd_data['mb'] if sd_data['mb'] is not None else '-'}</td>
-</tr>
-</table>
-</div>""")
+            <table class="lpee-info-grid">
+                <tr>
+                    <td class="lpee-info-label">Client :</td>
+                    <td><b>{st.session_state['pv_info']['client']}</b></td>
+                    <td class="lpee-info-label">N° Dossier :</td>
+                    <td>{info_p.get('dossier_no', '-')}</td>
+                </tr>
+                <tr>
+                    <td class="lpee-info-label">Chantier :</td>
+                    <td colspan="3">{st.session_state['pv_info']['projet']}</td>
+                </tr>
+                <tr>
+                    <td class="lpee-info-label">Date du prélèvement :</td>
+                    <td>{st.session_state['pv_info']['date']}</td>
+                    <td class="lpee-info-label">Provenance :</td>
+                    <td>{info_p.get('provenance', '-')}</td>
+                </tr>
+                <tr>
+                    <td class="lpee-info-label">Lieu de prélèvement :</td>
+                    <td>{info_p.get('lieu_prelevement', '-')}</td>
+                    <td class="lpee-info-label">Réf. Échantillon :</td>
+                    <td><b>{ref_b}</b></td>
+                </tr>
+            </table>
+
+            <table class="lpee-norm-table">
+                <tr style="background-color:#f1f5f9; font-weight:bold; text-align:center;">
+                    <td colspan="5">Référence Normative</td>
+                </tr>
+                <tr>
+                    <td><b>A.G :</b> NF EN 933-1</td>
+                    <td><b>Équivalent de sable :</b> NF EN 933-8</td>
+                    <td><b>VB :</b> NF EN 933-9</td>
+                    <td><b>LOS ANGELES :</b> NF EN 1097-2</td>
+                    <td><b>CA :</b> NF EN 933-3</td>
+                </tr>
+            </table>
+
+            <!-- TABLEAU 1 : GRAVILLONS GII 10/20 -->
+            <table class="lpee-table">
+                <thead>
+                    <tr>
+                        <th rowspan="2" style="vertical-align:middle;">Désignations</th>
+                        <th>2D</th><th>1,4D</th><th>D</th><th>d</th><th>d/2</th><th>f</th><th>FI</th><th>LA</th>
+                    </tr>
+                    <tr>
+                        <th>40</th><th>28</th><th>20</th><th>10</th><th>5</th><th>% &lt; 63µm</th><th>-</th><th>-</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="row-designation">Gravillons GII-10/20 ({ref_b}/1)</td>
+                        <td>{get_passant_at_sieve(gii_data['sieves'], gii_data['passants'], 40):.1f}</td>
+                        <td>{get_passant_at_sieve(gii_data['sieves'], gii_data['passants'], 28):.0f}</td>
+                        <td>{get_passant_at_sieve(gii_data['sieves'], gii_data['passants'], 20):.0f}</td>
+                        <td>{get_passant_at_sieve(gii_data['sieves'], gii_data['passants'], 10):.0f}</td>
+                        <td>{get_passant_at_sieve(gii_data['sieves'], gii_data['passants'], 5):.0f}</td>
+                        <td>{get_passant_at_sieve(gii_data['sieves'], gii_data['passants'], 0.063):.1f}</td>
+                        <td>{gii_data['fi'] if gii_data['fi'] is not None else '-'}</td>
+                        <td>{gii_data['la'] if gii_data['la'] is not None else '-'}</td>
+                    </tr>
+                    <tr class="row-limite">
+                        <td class="row-designation">Caractéristique générale de granularité</td>
+                        <td>100</td><td>98 - 100</td><td>85 - 99</td><td>0 - 20</td><td>0 - 5</td><td>&lt; 1,5</td><td>FI 20</td><td>&lt; 30</td>
+                    </tr>
+                    <tr class="row-fuseau">
+                        <td class="row-designation">Fuseau de production (Min)</td>
+                        <td>100</td><td>100</td><td>94</td><td>11,5</td><td>1.4</td><td>0.6</td><td>4</td><td>23</td>
+                    </tr>
+                    <tr class="row-fuseau">
+                        <td class="row-designation">Fuseau de production (Max)</td>
+                        <td>100</td><td>100</td><td>99</td><td>1.4</td><td>0.7</td><td>1.3</td><td>16</td><td>28</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <!-- TABLEAU 2 : GRAVILLONS GI 4/10 -->
+            <table class="lpee-table">
+                <thead>
+                    <tr>
+                        <th rowspan="2" style="vertical-align:middle;">Désignations</th>
+                        <th>2D</th><th>1,4D</th><th>D</th><th>d</th><th>d/2</th><th>f</th><th>FI</th><th>LA</th>
+                    </tr>
+                    <tr>
+                        <th>20</th><th>14</th><th>10</th><th>4</th><th>2</th><th>% &lt; 63µm</th><th>-</th><th>-</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="row-designation">Gravillons GI-4/10 ({ref_b}/2)</td>
+                        <td>{get_passant_at_sieve(gi_data['sieves'], gi_data['passants'], 20):.0f}</td>
+                        <td>{get_passant_at_sieve(gi_data['sieves'], gi_data['passants'], 14):.0f}</td>
+                        <td>{get_passant_at_sieve(gi_data['sieves'], gi_data['passants'], 10):.0f}</td>
+                        <td>{get_passant_at_sieve(gi_data['sieves'], gi_data['passants'], 4):.0f}</td>
+                        <td>{get_passant_at_sieve(gi_data['sieves'], gi_data['passants'], 2):.0f}</td>
+                        <td>{get_passant_at_sieve(gi_data['sieves'], gi_data['passants'], 0.063):.1f}</td>
+                        <td>{gi_data['fi'] if gi_data['fi'] is not None else '-'}</td>
+                        <td>{gi_data['la'] if gi_data['la'] is not None else '-'}</td>
+                    </tr>
+                    <tr class="row-limite">
+                        <td class="row-designation">Caractéristique générale de granularité</td>
+                        <td>100</td><td>98 - 100</td><td>80 - 99</td><td>0 - 20</td><td>0 - 5</td><td>&lt; 1,5</td><td>FI 20</td><td>&lt; 30</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <!-- TABLEAU 3 : SABLE GROSSIER 0/4 -->
+            <table class="lpee-table">
+                <thead>
+                    <tr>
+                        <th rowspan="2" style="vertical-align:middle;">Désignations</th>
+                        <th>2D</th><th>1,4D</th><th>D</th><th>% &lt; 1mm</th><th>% &lt; 250µm</th><th>% &lt; 63µm</th><th>MF</th><th>SE (10)</th>
+                    </tr>
+                    <tr>
+                        <th>8</th><th>5,6</th><th>4</th><th>-</th><th>-</th><th>-</th><th>CF</th><th>-</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="row-designation">Sable grossier 0/4 ({ref_b}/3)</td>
+                        <td>{get_passant_at_sieve(sc_data['sieves'], sc_data['passants'], 8.0):.0f}</td>
+                        <td>{get_passant_at_sieve(sc_data['sieves'], sc_data['passants'], 5.6):.0f}</td>
+                        <td>{get_passant_at_sieve(sc_data['sieves'], sc_data['passants'], 4.0):.0f}</td>
+                        <td>{get_passant_at_sieve(sc_data['sieves'], sc_data['passants'], 1.0):.0f}</td>
+                        <td>{get_passant_at_sieve(sc_data['sieves'], sc_data['passants'], 0.25):.0f}</td>
+                        <td>{get_passant_at_sieve(sc_data['sieves'], sc_data['passants'], 0.063):.1f}</td>
+                        <td>{sc_data['mf'] if sc_data['mf'] is not None else '-'}</td>
+                        <td>{sc_data['se'] if sc_data['se'] is not None else '-'}</td>
+                    </tr>
+                    <tr class="row-limite">
+                        <td class="row-designation">Caractéristique générale de granularité</td>
+                        <td>100</td><td>95 - 100</td><td>85 - 99</td><td>40 (±20)</td><td>50 (±20)</td><td>&le; 16</td><td>2,4 - 4,0</td><td>&ge; 60</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <!-- TABLEAU 4 : SABLE FIN 0/0,630 -->
+            <table class="lpee-table">
+                <thead>
+                    <tr>
+                        <th rowspan="2" style="vertical-align:middle;">Désignations</th>
+                        <th>2D</th><th>1,4D</th><th>D</th><th>% &lt; 1mm</th><th>% &lt; 250µm</th><th>% &lt; 63µm</th><th>MB</th>
+                    </tr>
+                    <tr>
+                        <th>1,26</th><th>0,88</th><th>0,63</th><th>-</th><th>-</th><th>-</th><th>-</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="row-designation">Sable fin 0/0,630 ({ref_b}/4)</td>
+                        <td>{get_passant_at_sieve(sd_data['sieves'], sd_data['passants'], 1.26):.0f}</td>
+                        <td>{get_passant_at_sieve(sd_data['sieves'], sd_data['passants'], 0.88):.0f}</td>
+                        <td>{get_passant_at_sieve(sd_data['sieves'], sd_data['passants'], 0.63):.0f}</td>
+                        <td>{get_passant_at_sieve(sd_data['sieves'], sd_data['passants'], 1.0):.0f}</td>
+                        <td>{get_passant_at_sieve(sd_data['sieves'], sd_data['passants'], 0.25):.0f}</td>
+                        <td>{get_passant_at_sieve(sd_data['sieves'], sd_data['passants'], 0.063):.1f}</td>
+                        <td>{sd_data['mb'] if sd_data['mb'] is not None else '-'}</td>
+                    </tr>
+                    <tr class="row-limite">
+                        <td class="row-designation">Caractéristique générale de granularité</td>
+                        <td>100</td><td>95 - 100</td><td>85 - 99</td><td>40 (±20)</td><td>50 (±25)</td><td>&le; 10</td><td>VSS 2</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <!-- SIGNATURES -->
+            <table class="signature-box">
+                <tr>
+                    <td><b>LE COORDINATEUR DES ESSAIS</b><br><br><span style="color:#64748b;">Nom: {st.session_state['pv_info']['coord_essais']}</span><br>Visa:</td>
+                    <td><b>LE CHEF DU LABORATOIRE</b><br><br><span style="color:#64748b;">Nom: {st.session_state['pv_info']['chef_labo']}</span><br>Visa:</td>
+                    <td><b>REÇU PAR LE CLIENT</b><br><br><span style="color:#64748b;">Nom:</span><br>Visa:</td>
+                </tr>
+            </table>
+        </div>
+        """
         
-        st.markdown(pv_html, unsafe_allow_html=True)
+        # NETTOYAGE ET AFFICHAGE DU HTML RECTIFIÉ
+        st.markdown(style_css, unsafe_allow_html=True)
+        st.markdown(clean_html(pv_html), unsafe_allow_html=True)
         
         st.markdown("<br>", unsafe_allow_html=True)
         
         st.subheader("COURBE GRANULOMETRIQUE GLOBALE")
         fig_global_tab2 = go.Figure()
         
-        colors = {'GII': 'blue', 'GI': 'black', 'SC': 'green', 'SD': 'orange'}
+        colors = {'GII': '#1e40af', 'GI': '#0284c7', 'SC': '#16a34a', 'SD': '#ea580c'}
         for k, d in st.session_state['data_granulats'].items():
             s_s, p_s = zip(*sorted(zip(d['sieves'], d['passants'])))
             fig_global_tab2.add_trace(go.Scatter(
@@ -524,13 +716,13 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         fig_global_tab2.update_layout(
             xaxis=dict(type="log", title="Tamis (mm)", tickvals=[0.063, 0.125, 0.25, 0.5, 1, 2, 4, 8, 16, 31.5, 63]),
             yaxis=dict(title="% Passants Cumulés", range=[0, 105]),
-            height=500,
-            margin=dict(l=40, r=40, t=40, b=40),
+            height=480,
+            margin=dict(l=30, r=30, t=30, b=30),
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
         )
         st.plotly_chart(fig_global_tab2, use_container_width=True)
 
-        st.text_area("Commentaires", value=st.session_state['pv_info']['commentaires'], disabled=not can_edit, height=100)
+        st.text_area("COMMENTAIRES :", value=st.session_state['pv_info']['commentaires'], disabled=not can_edit, height=80)
 
     # ------------------------------------------------------------------------------
     # FENÊTRE 3 : HISTORIQUE ET GESTION
