@@ -7,7 +7,11 @@ from datetime import datetime
 # ------------------------------------------------------------------------------
 # CONSTANTES & SUFFIXES DES MATÉRIAUX
 # ------------------------------------------------------------------------------
-STANDARD_SIEVES = [0.063, 0.08, 0.1, 0.125, 0.16, 0.2, 0.25, 0.315, 0.4, 0.5, 0.63, 0.8, 1.0, 1.25, 1.6, 2.0, 2.5, 3.15, 4.0, 5.0, 5.6, 6.3, 8.0, 10.0, 12.5, 14.0, 16.0, 20.0, 25.0, 28.0, 31.5, 40.0]
+STANDARD_SIEVES = [
+    0.063, 0.08, 0.1, 0.125, 0.16, 0.2, 0.25, 0.315, 0.4, 0.5, 0.63, 0.8, 
+    1.0, 1.25, 1.6, 2.0, 2.5, 3.15, 4.0, 5.0, 5.6, 6.3, 8.0, 10.0, 12.5, 
+    14.0, 16.0, 20.0, 25.0, 28.0, 31.5, 40.0
+]
 
 SUFFIX_MAP = {
     'GII': '/1',
@@ -16,44 +20,34 @@ SUFFIX_MAP = {
     'SD': '/4'
 }
 
-def clean_html(html_str):
+def clean_html(html_str: str) -> str:
     """Supprime les espaces en début de ligne pour éviter le rendu en bloc de code Markdown dans Streamlit."""
     return "\n".join([line.strip() for line in html_str.splitlines() if line.strip()])
 
-# -----------------------------------------------------------------------------
-# Fonction de calcul du Tamis D (tamis dont le % passant est le plus proche de 95%)
-# -----------------------------------------------------------------------------
 def get_tamis_D(df: pd.DataFrame) -> float:
-    if df is None or df.empty or "% Passants" not in df.columns:
-        return None
-    # Calcul du tamis dont le % passant est le plus proche de 95%
+    """Détermine le tamis D dont le % passant est le plus proche de 95%."""
+    if df is None or df.empty or "% Passants" not in df.columns or "Tamis (mm)" not in df.columns:
+        return 20.0
     diffs = (df["% Passants"] - 95.0).abs()
     idx_closest = diffs.idxmin()
     val = df.loc[idx_closest, "Tamis (mm)"]
     return int(val) if float(val).is_integer() else float(val)
 
-def update_passants(mat_data):
-    """Calcule les passants à partir des masses enregistrées (Méthode NF EN 933-1)"""
+def update_passants(mat_data: dict):
+    """Calcule les passants à partir des masses enregistrées (Méthode NF EN 933-1)."""
     M1 = float(mat_data.get('M1', 1000.0))
-    refus = mat_data.get('refus', [0.0]*len(mat_data['sieves']))
+    refus = mat_data.get('refus', [0.0] * len(mat_data['sieves']))
     
     if M1 > 0:
-        pct_refus = [(r / M1) * 100 for r in refus]
+        pct_refus = [(r / M1) * 100.0 for r in refus]
         pct_refus_cum = np.cumsum(pct_refus)
         passants = [100.0 - c for c in pct_refus_cum]
-        
-        passants_fmt = []
-        for s, p in zip(mat_data['sieves'], passants):
-            if s == 0.063:
-                passants_fmt.append(max(0.0, round(p, 1)))
-            else:
-                passants_fmt.append(max(0.0, round(p, 1)))
-        mat_data['passants'] = passants_fmt
+        mat_data['passants'] = [max(0.0, round(p, 1)) for p in passants]
     else:
         mat_data['passants'] = [100.0] * len(mat_data['sieves'])
 
-def compute_sieve_at_passant(sieves, passings, target_passant):
-    """ Sélectionne le plus petit tamis normatif (mm) dont le passant atteint au moins le % cible """
+def compute_sieve_at_passant(sieves: list, passings: list, target_passant: float) -> float:
+    """Sélectionne le plus petit tamis normatif (mm) dont le passant atteint au moins le % cible."""
     s_arr = np.array(sieves, dtype=float)
     p_arr = np.array(passings, dtype=float)
     
@@ -69,10 +63,10 @@ def compute_sieve_at_passant(sieves, passings, target_passant):
     val = s_arr[-1]
     return int(val) if float(val).is_integer() else float(val)
 
-def get_d_D_from_material(mat_data):
+def get_d_D_from_material(mat_data: dict) -> tuple:
     """
     Extrait d et D depuis la classe (ex: '10/20' -> d=10, D=20)
-    ou détermine D (tamis normatif à >= 95% passant) et d (tamis normatif à <= 5% passant).
+    ou détermine D (passant >= 95%) et d (passant <= 5%).
     """
     classe_str = mat_data.get('classe', '')
     if '/' in classe_str:
@@ -94,8 +88,8 @@ def get_d_D_from_material(mat_data):
     d_val = compute_sieve_at_passant(sieves, passants, 5.0)
     return d_val, D_val
 
-def get_passant_at_sieve(sieves, passings, target_sieve):
-    """ Calcule ou interpole le passant au tamis cible """
+def get_passant_at_sieve(sieves: list, passings: list, target_sieve: float) -> float:
+    """Calcule ou interpole le passant au tamis cible avec précision."""
     if target_sieve is None or target_sieve <= 0:
         return 0.0
         
@@ -106,14 +100,18 @@ def get_passant_at_sieve(sieves, passings, target_sieve):
     s_arr = s_arr[idx_sort]
     p_arr = p_arr[idx_sort]
     
+    if target_sieve in s_arr:
+        idx = np.where(s_arr == target_sieve)[0][0]
+        return float(p_arr[idx])
+
     if target_sieve >= s_arr[-1]:
         return 100.0
     if target_sieve <= s_arr[0]:
         return float(p_arr[0])
         
-    return float(np.interp(target_sieve, s_arr, p_arr))
+    return round(float(np.interp(target_sieve, s_arr, p_arr)), 1)
 
-def calculate_characteristic_data(mat_data):
+def calculate_characteristic_data(mat_data: dict) -> tuple:
     """
     Génère automatiquement la liste des tamis (2D, 1.4D, D, d, d/2) 
     et leurs passants respectifs (%).
@@ -121,11 +119,11 @@ def calculate_characteristic_data(mat_data):
     d, D = get_d_D_from_material(mat_data)
     
     sieves_dict = {
-        '2D': round(2 * D, 2) if (2 * D) % 1 != 0 else round(2 * D, 1),
-        '1.4D': round(1.4 * D, 2) if (1.4 * D) % 1 != 0 else round(1.4 * D, 1),
-        'D': round(D, 2) if D % 1 != 0 else round(D, 1),
-        'd': round(d, 2) if d % 1 != 0 else round(d, 1),
-        'd/2': round(d / 2, 2) if (d / 2) % 1 != 0 else round(d / 2, 1)
+        '2D': round(2.0 * D, 1) if (2.0 * D) % 1 != 0 else round(2.0 * D, 0),
+        '1.4D': round(1.4 * D, 1) if (1.4 * D) % 1 != 0 else round(1.4 * D, 0),
+        'D': round(D, 1) if D % 1 != 0 else round(D, 0),
+        'd': round(d, 1) if d % 1 != 0 else round(d, 0),
+        'd/2': round(d / 2.0, 1) if (d / 2.0) % 1 != 0 else round(d / 2.0, 0)
     }
     
     passants_dict = {}
@@ -135,9 +133,9 @@ def calculate_characteristic_data(mat_data):
 
     return sieves_dict, passants_dict
 
-def compute_MF(sieves, passings):
+def compute_MF(sieves: list, passings: list) -> float:
     """
-    Calcule automatiquement le Module de Finesse (FM) selon la norme NF EN 12620 :
+    Calcule le Module de Finesse (FM) selon la norme NF EN 12620 :
     FM = Sum( Refus cumulés % sur [4, 2, 1, 0.5, 0.25, 0.125] mm ) / 100
     """
     target_sieves = [4.0, 2.0, 1.0, 0.5, 0.25, 0.125]
@@ -149,10 +147,9 @@ def compute_MF(sieves, passings):
     return round(sum_refus_cum / 100.0, 2)
 
 # ------------------------------------------------------------------------------
-# FONCTION PRINCIPALE
+# FONCTION PRINCIPALE STREAMLIT
 # ------------------------------------------------------------------------------
 def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
-    # INITIALISATION DU SESSION STATE SÉCURISÉE AVEC SETDEFAULT
     if 'info_prelevement' not in st.session_state:
         st.session_state['info_prelevement'] = {}
 
@@ -317,11 +314,11 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
             
             df_display = pd.DataFrame({
                 "Tamis (mm)": mat_data['sieves'],
-                "Masse de refus Ri (g)": mat_data.get('refus', [0.0]*len(mat_data['sieves']))
+                "Masse de refus Ri (g)": mat_data.get('refus', [0.0] * len(mat_data['sieves']))
             })
             
             saved_M1 = float(new_M1) if new_M1 > 0 else 1.0
-            pct_r = (df_display["Masse de refus Ri (g)"] / saved_M1) * 100
+            pct_r = (df_display["Masse de refus Ri (g)"] / saved_M1) * 100.0
             pct_r_cum = pct_r.cumsum()
             df_display["% Refus"] = pct_r.round(1)
             df_display["% Refus Cumulés"] = pct_r_cum.round(1)
@@ -342,9 +339,9 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                 height=350
             )
 
-            # Recalcul dynamique immédiat sur edited_df pour la prise en compte en temps réel des modifications utilisateur
+            # Recalcul dynamique immédiat sur edited_df pour prise en compte en temps réel
             if new_M1 > 0:
-                pct_r_edit = (edited_df["Masse de refus Ri (g)"] / new_M1) * 100
+                pct_r_edit = (edited_df["Masse de refus Ri (g)"] / new_M1) * 100.0
                 pct_cum_edit = pct_r_edit.cumsum()
                 edited_df["% Refus"] = pct_r_edit.round(1)
                 edited_df["% Refus Cumulés"] = pct_cum_edit.round(1)
@@ -359,8 +356,8 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
             refus_array = edited_df["Masse de refus Ri (g)"].values
             somme_Ri = sum(refus_array)
             masse_calc = somme_Ri + new_P
-            perte_fraction = 100 * (new_M2 - masse_calc) / new_M2 if new_M2 > 0 else 0
-            fines_f = 100 * ((new_M1 - new_M2) + new_P) / new_M1 if new_M1 > 0 else 0
+            perte_fraction = 100.0 * (new_M2 - masse_calc) / new_M2 if new_M2 > 0 else 0.0
+            fines_f = 100.0 * ((new_M1 - new_M2) + new_P) / new_M1 if new_M1 > 0 else 0.0
             
             c_v1, c_v2 = st.columns(2)
             c_v1.info(f"**ΣRi + P :** {masse_calc:.1f} g\n\n**% Tamisat fines (f) :** {fines_f:.2f} %")
@@ -439,7 +436,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
             for k, d in st.session_state['data_granulats'].items():
                 s_s, p_s = zip(*sorted(zip(d['sieves'], d['passants'])))
                 
-                line_width = 2 if k == key else 1.5
+                line_width = 2.5 if k == key else 1.5
                 opacity = 1.0 if k == key else 0.4
                 
                 fig.add_trace(go.Scatter(
@@ -674,10 +671,10 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                     <tr>
                         <td class="row-designation">{gii_data['nom']} ({ref_b}/1)</td>
                         <td>{gii_passants['2D']:.1f}</td>
-                        <td>{gii_passants['1.4D']:.0f}</td>
-                        <td>{gii_passants['D']:.0f}</td>
-                        <td>{gii_passants['d']:.0f}</td>
-                        <td>{gii_passants['d/2']:.0f}</td>
+                        <td>{gii_passants['1.4D']:.1f}</td>
+                        <td>{gii_passants['D']:.1f}</td>
+                        <td>{gii_passants['d']:.1f}</td>
+                        <td>{gii_passants['d/2']:.1f}</td>
                         <td>{get_passant_at_sieve(gii_data['sieves'], gii_data['passants'], 0.063):.1f}</td>
                         <td>{gii_data['fi'] if gii_data['fi'] is not None else '-'}</td>
                         <td>{gii_data['la'] if gii_data['la'] is not None else '-'}</td>
@@ -716,11 +713,11 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                 <tbody>
                     <tr>
                         <td class="row-designation">{gi_data['nom']} ({ref_b}/2)</td>
-                        <td>{gi_passants['2D']:.0f}</td>
-                        <td>{gi_passants['1.4D']:.0f}</td>
-                        <td>{gi_passants['D']:.0f}</td>
-                        <td>{gi_passants['d']:.0f}</td>
-                        <td>{gi_passants['d/2']:.0f}</td>
+                        <td>{gi_passants['2D']:.1f}</td>
+                        <td>{gi_passants['1.4D']:.1f}</td>
+                        <td>{gi_passants['D']:.1f}</td>
+                        <td>{gi_passants['d']:.1f}</td>
+                        <td>{gi_passants['d/2']:.1f}</td>
                         <td>{get_passant_at_sieve(gi_data['sieves'], gi_data['passants'], 0.063):.1f}</td>
                         <td>{gi_data['fi'] if gi_data['fi'] is not None else '-'}</td>
                         <td>{gi_data['la'] if gi_data['la'] is not None else '-'}</td>
@@ -749,11 +746,11 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                 <tbody>
                     <tr>
                         <td class="row-designation">{sc_data['nom']} ({ref_b}/3)</td>
-                        <td>{sc_passants['2D']:.0f}</td>
-                        <td>{sc_passants['1.4D']:.0f}</td>
-                        <td>{sc_passants['D']:.0f}</td>
-                        <td>{get_passant_at_sieve(sc_data['sieves'], sc_data['passants'], 1.0):.0f}</td>
-                        <td>{get_passant_at_sieve(sc_data['sieves'], sc_data['passants'], 0.25):.0f}</td>
+                        <td>{sc_passants['2D']:.1f}</td>
+                        <td>{sc_passants['1.4D']:.1f}</td>
+                        <td>{sc_passants['D']:.1f}</td>
+                        <td>{get_passant_at_sieve(sc_data['sieves'], sc_data['passants'], 1.0):.1f}</td>
+                        <td>{get_passant_at_sieve(sc_data['sieves'], sc_data['passants'], 0.25):.1f}</td>
                         <td>{get_passant_at_sieve(sc_data['sieves'], sc_data['passants'], 0.063):.1f}</td>
                         <td>{sc_data['mf'] if sc_data['mf'] is not None else '-'}</td>
                         <td>{sc_data['se'] if sc_data['se'] is not None else '-'}</td>
@@ -782,11 +779,11 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                 <tbody>
                     <tr>
                         <td class="row-designation">{sd_data['nom']} ({ref_b}/4)</td>
-                        <td>{sd_passants['2D']:.0f}</td>
-                        <td>{sd_passants['1.4D']:.0f}</td>
-                        <td>{sd_passants['D']:.0f}</td>
-                        <td>{get_passant_at_sieve(sd_data['sieves'], sd_data['passants'], 1.0):.0f}</td>
-                        <td>{get_passant_at_sieve(sd_data['sieves'], sd_data['passants'], 0.25):.0f}</td>
+                        <td>{sd_passants['2D']:.1f}</td>
+                        <td>{sd_passants['1.4D']:.1f}</td>
+                        <td>{sd_passants['D']:.1f}</td>
+                        <td>{get_passant_at_sieve(sd_data['sieves'], sd_data['passants'], 1.0):.1f}</td>
+                        <td>{get_passant_at_sieve(sd_data['sieves'], sd_data['passants'], 0.25):.1f}</td>
                         <td>{get_passant_at_sieve(sd_data['sieves'], sd_data['passants'], 0.063):.1f}</td>
                         <td>{sd_data['mb'] if sd_data['mb'] is not None else '-'}</td>
                     </tr>
@@ -861,3 +858,6 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                     st.json(pv)
         else:
             st.info("Aucun PV n'a été sauvegardé dans cette session.")
+
+if __name__ == "__main__":
+    show()
