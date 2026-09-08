@@ -965,7 +965,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         del st.session_state['success_msg']
 
     # --------------------------------------------------------------------------
-    # IDENTIFICATION DE L'UTILISATEUR
+    # IDENTIFICATION DE L'UTILISATEUR (Détection flexible pour baallal)
     # --------------------------------------------------------------------------
     user_tokens = []
     for _uk in ('username', 'user', 'user_name', 'current_user', 'user_email', 'email', 'nom_utilisateur', 'role'):
@@ -1396,171 +1396,150 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
     # FENÊTRE 3 : HISTORIQUE, CONSULTATION ET GESTION DES PV
     # ------------------------------------------------------------------------------
     with tabs[2]:
-        st.subheader("📥 Re-télécharger un Procès-Verbal")
+        st.header("Historique et Sauvegarde des PV")
+        
+        current_ref_pv = st.session_state['pv_info'].get('ref_pv', '').strip()
+        is_duplicate_pv = current_ref_pv.lower() in saved_num_rapports if current_ref_pv else False
 
-        historique = st.session_state.get('historique_pv', [])
+        if can_edit:
+            if is_duplicate_pv:
+                st.error(f"⛔ **SAUVEGARDE BLOQUÉE :** Le N° RAPPORT D'ESSAI **'{current_ref_pv}'** existe déjà dans l'historique.")
+                st.button("💾 Sauvegarder le PV actuel dans l'historique", type="primary", use_container_width=True, disabled=True)
+            else:
+                if st.button("💾 Sauvegarder le PV actuel dans l'historique", type="primary", use_container_width=True):
+                    snapshot = _build_pv_snapshot()
+                    st.session_state['historique_pv'].append(snapshot)
+                    save_pv_to_supabase(supabase_client, snapshot)
+                    st.session_state['success_msg'] = f"✅ Le PV N° '{current_ref_pv}' a été sauvegardé avec succès !"
+                    st.rerun()
 
-        col_search1, col_search2 = st.columns(2)
-        with col_search1:
-            search_query = st.text_input(
-                "🔍 Rechercher (réf, ouvrage, classe...)",
-                placeholder="Ex: gare casa sud, B/394...",
-                key="hist_search_query"
-            )
-        with col_search2:
-            search_date = st.text_input(
-                "📅 Rechercher par Date d'écrasement",
-                placeholder="Ex: 2026-08-08",
-                key="hist_search_date"
-            )
+        if st.session_state['historique_pv']:
+            st.markdown("---")
+            st.subheader("🔎 Sélectionnez le PV à consulter dans l'historique")
 
-        filtered_pvs = []
-        for item in historique:
-            pv_ref = str(item.get('ref_pv', '')).lower()
-            pv_inf = item.get('pv_info', {})
-            inf_p = item.get('info_prelevement', {})
-            projet = str(pv_inf.get('projet', '') or inf_p.get('chantier', '')).lower()
-            client = str(pv_inf.get('client', '') or inf_p.get('client', '')).lower()
-            date_val = str(pv_inf.get('date', '') or inf_p.get('date_prelevement', '') or item.get('date_creation', '')).lower()
+            # Construction des options du menu déroulant de sélection
+            pv_options = {}
+            for idx, pv_item in enumerate(reversed(st.session_state['historique_pv'])):
+                ref_pv_item = pv_item.get('ref_pv', f"PV-{idx+1}")
+                client_item = pv_item.get('client', 'Client Inconnu')
+                date_item   = pv_item.get('date_creation', '')
+                projet_item = pv_item.get('projet', '')
+                option_label = f"📁 N° {ref_pv_item} | Client: {client_item} | Chantier: {projet_item[:30]}... ({date_item})"
+                pv_options[option_label] = pv_item
 
-            match_q = True
-            if search_query.strip():
-                q = search_query.strip().lower()
-                match_q = (q in pv_ref) or (q in projet) or (q in client)
-
-            match_d = True
-            if search_date.strip():
-                d = search_date.strip().lower()
-                match_d = (d in date_val)
-
-            if match_q and match_d:
-                filtered_pvs.append(item)
-
-        st.markdown("<br><b>Sélectionnez le PV à consulter :</b>", unsafe_allow_html=True)
-
-        if not filtered_pvs:
-            st.warning("⚠️ Aucun PV trouvé selon vos critères de recherche.")
-        else:
-            def format_pv_label(item):
-                p_ref = item.get('ref_pv', 'Sans Réf')
-                p_inf = item.get('pv_info', {})
-                inf_p = item.get('info_prelevement', {})
-                proj = p_inf.get('projet', inf_p.get('chantier', '-'))
-                client = p_inf.get('client', inf_p.get('client', '-'))
-                date_str = p_inf.get('date', inf_p.get('date_prelevement', item.get('date_creation', '-')))
-                pv_id = item.get('id', '-')
-                return f"Référence : {p_ref} | Client : {client} | Ouvrage : {proj} | Échéance / Date : {date_str} | Lot ID #{pv_id}"
-
-            selected_pv = st.selectbox(
-                "Sélectionnez le PV à consulter :",
-                options=filtered_pvs,
-                format_func=format_pv_label,
-                label_visibility="collapsed",
-                key="hist_selected_pv_dropdown"
+            selected_pv_label = st.selectbox(
+                "Sélectionnez un PV enregistrer ci-dessous pour afficher sa synthèse ou le charger :",
+                options=list(pv_options.keys()),
+                key="select_pv_consultation"
             )
 
-            if selected_pv:
-                sel_pv_info = selected_pv.get('pv_info', {})
-                sel_info_p = selected_pv.get('info_prelevement', {})
-                sel_data_granulats = selected_pv.get('data_granulats', {})
-                ref_pv_clean = selected_pv.get('ref_pv', 'rapport').replace('/', '_')
+            selected_pv = pv_options[selected_pv_label]
+            pv_ref_selected = selected_pv.get('ref_pv', '-')
 
+            # Fiche de consultation rapide du PV Sélectionné
+            st.markdown(f"#### 📄 Fiche du PV N° `{pv_ref_selected}`")
+            col_sel1, col_sel2, col_sel3 = st.columns(3)
+            col_sel1.markdown(f"**Client :** {selected_pv.get('client', '-')}")
+            col_sel2.markdown(f"**Chantier :** {selected_pv.get('projet', '-')}")
+            col_sel3.markdown(f"**Date d'enregistrement :** {selected_pv.get('date_creation', '-')}")
+
+            # Bouton de rechargement du PV dans l'application principale
+            if can_edit:
+                if st.button(f"📥 Charger le PV N° '{pv_ref_selected}' dans l'application", type="primary", use_container_width=True, key="btn_load_pv_active"):
+                    st.session_state['info_prelevement'] = copy.deepcopy(selected_pv.get('info_prelevement', {}))
+                    st.session_state['pv_info'] = copy.deepcopy(selected_pv.get('pv_info', {}))
+                    st.session_state['data_granulats'] = copy.deepcopy(selected_pv.get('data_granulats', {}))
+                    st.session_state['success_msg'] = f"✅ Le PV N° '{pv_ref_selected}' a été chargé avec succès dans les onglets de saisie et consultation !"
+                    st.rerun()
+
+            pv_info_hist = selected_pv.get('pv_info', {})
+            info_p_hist = selected_pv.get('info_prelevement', {})
+            data_g_hist = selected_pv.get('data_granulats', {})
+
+            pv_hist_html = generate_pv_html(pv_info_hist, info_p_hist, data_g_hist)
+
+            col_dl1, col_dl2, col_dl3 = st.columns(3)
+            
+            with col_dl1:
+                st.download_button(
+                    label="📄 Télécharger PV (HTML)",
+                    data=pv_hist_html,
+                    file_name=f"PV_{str(pv_ref_selected).replace('/', '_')}.html",
+                    mime="text/html",
+                    key="dl_html_sel_pv",
+                    use_container_width=True
+                )
+
+            with col_dl2:
                 if REPORTLAB_AVAILABLE:
                     try:
-                        pdf_data = generate_pv_pdf(sel_pv_info, sel_info_p, sel_data_granulats)
+                        pdf_hist_bytes = generate_pv_pdf(pv_info_hist, info_p_hist, data_g_hist)
                         st.download_button(
-                            label=f"📄 Télécharger le PV (PV_{ref_pv_clean}.pdf)",
-                            data=pdf_data,
-                            file_name=f"PV_{ref_pv_clean}.pdf",
+                            label="🔴 Télécharger PV (PDF)",
+                            data=pdf_hist_bytes,
+                            file_name=f"PV_{str(pv_ref_selected).replace('/', '_')}.pdf",
                             mime="application/pdf",
-                            use_container_width=True,
-                            type="primary"
+                            key="dl_pdf_sel_pv",
+                            use_container_width=True
                         )
                     except Exception as e:
-                        st.error(f"Erreur de génération PDF : {e}")
-                else:
-                    html_data = generate_pv_html(sel_pv_info, sel_info_p, sel_data_granulats)
-                    st.download_button(
-                        label=f"📄 Télécharger le PV (PV_{ref_pv_clean}.html)",
-                        data=html_data,
-                        file_name=f"PV_{ref_pv_clean}.html",
-                        mime="text/html",
-                        use_container_width=True,
-                        type="primary"
+                        st.error(f"Erreur PDF : {e}")
+
+            with col_dl3:
+                st.download_button(
+                    label="💾 Exporter Données (JSON)",
+                    data=json.dumps(selected_pv, indent=2, ensure_ascii=False),
+                    file_name=f"PV_Data_{str(pv_ref_selected).replace('/', '_')}.json",
+                    mime="application/json",
+                    key="dl_json_sel_pv",
+                    use_container_width=True
+                )
+
+            # ------------------------------------------------------------------
+            # SECTION SUPPRESSION — Débloquée pour la session baallal / admin
+            # ------------------------------------------------------------------
+            if is_baallal_admin:
+                st.markdown("---")
+                st.markdown("##### 🔐 Suppression sécurisée (Compte Administrateur / Session Baallal)")
+                del_col1, del_col2 = st.columns([3, 1])
+                
+                with del_col1:
+                    confirm_delete = st.checkbox(
+                        f"Je confirme vouloir supprimer définitivement le PV N° '{pv_ref_selected}'",
+                        key=f"confirm_del_selected_{selected_pv.get('id', 'sel')}"
                     )
-
-        st.markdown("<br><hr>", unsafe_allow_html=True)
-        st.subheader("📊 Base de données globale")
-
-        col_db1, col_db2 = st.columns(2)
-        with col_db1:
-            db_ref_query = st.text_input(
-                "🔍 Recherche par Réf. Contrôle",
-                placeholder="Ex: REF-123-GARE CASA SUD",
-                key="db_ref_query"
-            )
-        with col_db2:
-            db_date_query = st.text_input(
-                "📅 Recherche par Date de coulée",
-                placeholder="Ex: 2026-08-24",
-                key="db_date_query"
-            )
-
-        rows_data = []
-        for item in historique:
-            pv_ref = item.get('ref_pv', '')
-            p_inf = item.get('pv_info', {})
-            inf_p = item.get('info_prelevement', {})
-            dt_create = item.get('date_creation', '')
-            dt_prelev = p_inf.get('date', inf_p.get('date_prelevement', dt_create))
-
-            match_ref = True
-            if db_ref_query.strip():
-                match_ref = (db_ref_query.strip().lower() in str(pv_ref).lower()) or (db_ref_query.strip().lower() in str(inf_p.get('chantier', '')).lower())
-
-            match_dt = True
-            if db_date_query.strip():
-                match_dt = db_date_query.strip().lower() in str(dt_prelev).lower()
-
-            if match_ref and match_dt:
-                rows_data.append({
-                    "id": item.get('id', '-'),
-                    "betonnage_id": item.get('id', '-'),
-                    "ref_controle": pv_ref,
-                    "repere_eprouvette": f"/{item.get('id', 1)}",
-                    "num_bl": inf_p.get('dossier_no', '-'),
-                    "ouvrage": p_inf.get('projet', inf_p.get('chantier', '-')),
-                    "classe_beton": "C25/30",
-                    "statut_validation": "Validé",
-                    "date_coulee": dt_prelev,
-                    "affaissement_mm": 150,
-                    "temp_beton_C": 20,
-                    "echeance": "28 jours",
-                    "date_ecrasement": dt_prelev
-                })
-
-        if rows_data:
-            df_global = pd.DataFrame(rows_data)
-            st.dataframe(df_global, use_container_width=True, hide_index=True)
-
-            if is_baallal_admin or is_admin or can_edit:
-                with st.expander("🗑️ Supprimer un PV de la base de données", expanded=False):
-                    pv_to_del_ref = st.selectbox("Choisir le PV à supprimer :", options=[r['ref_controle'] for r in rows_data if r['ref_controle']])
-                    if st.button("❌ Supprimer définitivement ce PV", type="secondary"):
-                        st.session_state['historique_pv'] = [p for p in st.session_state['historique_pv'] if p.get('ref_pv') != pv_to_del_ref]
-                        delete_pv_from_supabase(supabase_client, pv_to_del_ref)
-                        st.success(f"PV '{pv_to_del_ref}' supprimé avec succès !")
+                with del_col2:
+                    if st.button(
+                        "🗑️ Supprimer ce PV",
+                        type="secondary",
+                        use_container_width=True,
+                        disabled=not confirm_delete,
+                        key=f"btn_del_selected_{selected_pv.get('id', 'sel')}"
+                    ):
+                        pv_id_to_delete = selected_pv.get('id')
+                        st.session_state['historique_pv'] = [
+                            p for p in st.session_state['historique_pv']
+                            if p.get('id') != pv_id_to_delete and p.get('ref_pv') != pv_ref_selected
+                        ]
+                        delete_pv_from_supabase(supabase_client, pv_ref_selected)
+                        st.session_state['success_msg'] = f"🗑️ Le PV N° '{pv_ref_selected}' a été définitivement supprimé de la base de données."
                         st.rerun()
-        else:
-            st.info("Aucune donnée disponible dans la base de données globale.")
 
-# ------------------------------------------------------------------------------
-# POINT D'ENTRÉE AUTONOME
-# ------------------------------------------------------------------------------
-if __name__ == "__main__":
-    st.set_page_config(
-        page_title="Identification des Granulats pour Béton",
-        page_icon="🏗️",
-        layout="wide"
-    )
-    show()
+            st.markdown("---")
+            st.write("### 📜 Vue détaillée de tous les PV sauvegardés")
+            for i, pv in enumerate(reversed(st.session_state['historique_pv'])):
+                ref_pv_disp = pv.get('ref_pv', '-')
+                date_disp = pv.get('date_creation', '-')
+                client_disp = pv.get('client', '-')
+                
+                item_title = f"📁 PV N° {ref_pv_disp} | {date_disp} | Client: {client_disp}"
+                
+                with st.expander(item_title, expanded=False):
+                    st.markdown(f"**Chantier / Projet :** {pv.get('projet', '-')}")
+                    st.markdown(f"**Date de création :** {date_disp}")
+                    st.markdown(f"**Référence Rapport :** `{ref_pv_disp}`")
+
+                    with st.popover("👁️ Voir la structure JSON brute"):
+                        st.json(pv)
+        else:
+            st.info("Aucun PV n'est enregistré dans l'historique pour le moment.")
