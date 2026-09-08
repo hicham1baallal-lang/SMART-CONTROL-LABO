@@ -1260,15 +1260,24 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
             
             projet_val   = c1.text_input("Chantier / Projet", pv_info_dict.get('projet', ''), disabled=not can_edit, key="pv_proj")
             client_val   = c2.text_input("Client", pv_info_dict.get('client', ''), disabled=not can_edit, key="pv_cli")
-            ref_val      = c3.text_input("N° RAPPORT D'ESSAI N°", pv_info_dict.get('ref_pv', ''), disabled=not can_edit, key="pv_ref")
+            ref_val      = c3.text_input(
+                "N° RAPPORT D'ESSAI N°",
+                st.session_state['info_prelevement'].get('num_rapport', default_num_rapport),
+                disabled=True,
+                key="pv_ref",
+                help="Identique au N° Rapport d'essai saisi dans l'onglet 'Feuilles d'Essais Complets' (champ fermé, non modifiable ici)."
+            )
             date_val     = c4.text_input("Date du prélèvement", pv_info_dict.get('date', ''), disabled=not can_edit, key="pv_dt")
             coord_val    = c5.text_input("Coordinateur des essais", pv_info_dict.get('coord_essais', 'O.IKEN'), disabled=not can_edit, key="pv_coo")
             chef_val     = c6.text_input("Chef du laboratoire", pv_info_dict.get('chef_labo', 'H.BAALLAL'), disabled=not can_edit, key="pv_che")
 
+            # Le N° RAPPORT D'ESSAI N° du PV reste toujours synchronisé avec la
+            # Feuille d'Essais, que l'on soit en mode édition ou lecture seule.
+            st.session_state['pv_info']['ref_pv'] = st.session_state['info_prelevement'].get('num_rapport', default_num_rapport)
+
             if can_edit:
                 st.session_state['pv_info']['projet'] = projet_val
                 st.session_state['pv_info']['client'] = client_val
-                st.session_state['pv_info']['ref_pv'] = ref_val
                 st.session_state['pv_info']['date'] = date_val
                 st.session_state['pv_info']['coord_essais'] = coord_val
                 st.session_state['pv_info']['chef_labo'] = chef_val
