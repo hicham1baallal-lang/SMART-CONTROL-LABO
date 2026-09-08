@@ -33,7 +33,6 @@ SUFFIX_MAP = {
     'SD': '/4'
 }
 
-# Graduation normative des tamis pour l'axe des abscisses (échelle log)
 SIEVE_TICKVALS = [0.063, 0.125, 0.25, 0.5, 1, 2, 4, 8, 16, 31.5, 63]
 SIEVE_TICKTEXT = ["0,063", "0,125", "0,25", "0,5", "1", "2", "4", "8", "16", "31,5", "63"]
 
@@ -89,10 +88,7 @@ def compute_sieve_at_passant(sieves, passings, target_passant):
     return int(val) if float(val).is_integer() else float(val)
 
 def get_d_D_from_material(mat_data):
-    """
-    Détermine d et D à partir de la classe granulaire (ex: '10/20' -> d=10, D=20).
-    En secours, calcule D à partir du passant ~95%.
-    """
+    """Détermine d et D à partir de la classe granulaire ou par calcul."""
     sieves = mat_data.get('sieves', [])
     passants = mat_data.get('passants', [])
 
@@ -142,10 +138,7 @@ def get_passant_at_sieve(sieves, passings, target_sieve):
     return float(np.interp(target_sieve, s_arr, p_arr))
 
 def calculate_characteristic_data(mat_data, tamis_D=None):
-    """
-    Déduit la liste des tamis caractéristiques (2D, 1.4D, D, d, d/2)
-    et calcule leur pourcentage de passant correspondant.
-    """
+    """Déduit la liste des tamis caractéristiques (2D, 1.4D, D, d, d/2)"""
     d, D_calc = get_d_D_from_material(mat_data)
     D = float(tamis_D) if (tamis_D is not None and tamis_D > 0) else D_calc
     
@@ -171,10 +164,7 @@ def calculate_characteristic_data(mat_data, tamis_D=None):
     return sieves_dict, passants_dict
 
 def compute_MF(sieves, passings):
-    """
-    Calcule le Module de Finesse (MF) selon NF EN 12620 :
-    MF = Sum( Refus cumulés % sur [4, 2, 1, 0.5, 0.25, 0.125] mm ) / 100
-    """
+    """Calcule le Module de Finesse (MF) selon NF EN 12620"""
     if not sieves or not passings:
         return 0.0
     target_sieves = [4.0, 2.0, 1.0, 0.5, 0.25, 0.125]
@@ -516,9 +506,6 @@ def generate_pv_html(pv_info, info_p, data_granulats):
 </html>"""
     return html
 
-# ------------------------------------------------------------------------------
-# FONCTION DE GÉNÉRATION DU GRAPHIQUE COMPATIBLE PDF
-# ------------------------------------------------------------------------------
 def create_curve_image_buffer(data_granulats, ref_b, fig_width=8, fig_height=3.2):
     """Génère un buffer image PNG haute définition de la courbe granulométrique pour le PDF."""
     fig, ax = plt.subplots(figsize=(fig_width, fig_height), dpi=200)
@@ -532,10 +519,10 @@ def create_curve_image_buffer(data_granulats, ref_b, fig_width=8, fig_height=3.2
             ax.plot(s_s, p_s, marker='o', markersize=3.5, label=label_str, color=colors_map.get(k, '#000000'), linewidth=1.5)
 
     ax.set_xscale('log')
-    ax.set_xlim(0.063, 63)  # Ordre croissant : petit tamis (gauche) -> grand tamis (droite)
+    ax.set_xlim(0.063, 63)
     ax.xaxis.set_major_locator(FixedLocator(SIEVE_TICKVALS))
     ax.xaxis.set_major_formatter(FixedFormatter(SIEVE_TICKTEXT))
-    ax.xaxis.set_minor_locator(NullLocator())  # masque les graduations intermédiaires (10^-1, 10^0...)
+    ax.xaxis.set_minor_locator(NullLocator())
     ax.set_xlabel("Tamis (mm)", fontsize=8, fontweight='bold')
     ax.set_ylabel("% Passants Cumulés", fontsize=8, fontweight='bold')
     ax.set_ylim(-2, 105)
@@ -551,11 +538,8 @@ def create_curve_image_buffer(data_granulats, ref_b, fig_width=8, fig_height=3.2
     buf.seek(0)
     return buf
 
-# ------------------------------------------------------------------------------
-# FONCTION DE GÉNÉRATION DU DOCUMENT PDF COMPLET
-# ------------------------------------------------------------------------------
 def generate_pv_pdf(pv_info, info_p, data_granulats):
-    """Génère le fichier PDF structuré du PV d'identification avec les tableaux et la courbe incorporée."""
+    """Génère le fichier PDF structuré du PV d'identification."""
     if not REPORTLAB_AVAILABLE:
         raise ImportError("La bibliothèque ReportLab n'est pas installée. Veuillez lancer 'pip install reportlab'.")
 
@@ -571,7 +555,6 @@ def generate_pv_pdf(pv_info, info_p, data_granulats):
     story = []
     styles = getSampleStyleSheet()
 
-    # Styles personnalisés
     title_style = ParagraphStyle(
         'PDFTitle', parent=styles['Normal'],
         fontName='Helvetica-Bold', fontSize=10, leading=13,
@@ -584,7 +567,6 @@ def generate_pv_pdf(pv_info, info_p, data_granulats):
     
     ref_b = info_p.get('num_rapport', info_p.get('ref_base', '26/260/LGV/CS/1237'))
 
-    # 1. Entête du PV
     header_text = f"RAPPORT D'ESSAI N° : {pv_info.get('ref_pv', '')}<br/><font size=7.5>OBJET : IDENTIFICATION DES GRANULATS POUR BETON</font>"
     header_table = Table([[Paragraph(header_text, title_style)]], colWidths=[565])
     header_table.setStyle(TableStyle([
@@ -597,13 +579,9 @@ def generate_pv_pdf(pv_info, info_p, data_granulats):
     story.append(header_table)
     story.append(Spacer(1, 4))
 
-    # Compute des tables "ajustables" (infos, normes, GII/GI/SC/SD) : leur
-    # padding (haut/bas) est paramétrable pour absorber l'espace restant sur
-    # la page une fois la hauteur de la courbe fixée (voir plus bas).
     def build_adjustable_tables(pad_extra):
         flowables = []
 
-        # 2. Grille d'Informations Chantier
         info_data = [
             [Paragraph("Client :", cell_left_bold), Paragraph(str(pv_info.get('client', '')), cell_left_bold),
              Paragraph("N° Dossier :", cell_left_bold), Paragraph(str(info_p.get('dossier_no', '-')), cell_left)],
@@ -626,7 +604,6 @@ def generate_pv_pdf(pv_info, info_p, data_granulats):
         flowables.append(info_table)
         flowables.append(Spacer(1, 4))
 
-        # 3. Références Normatives
         norm_data = [
             [Paragraph("Référence Normative", cell_bold), "", "", "", ""],
             [Paragraph("<b>A.G :</b> NF EN 933-1", cell_norm),
@@ -647,7 +624,6 @@ def generate_pv_pdf(pv_info, info_p, data_granulats):
         flowables.append(norm_table)
         flowables.append(Spacer(1, 4))
 
-        # Helper pour la création des sous-tableaux de matériaux
         def build_mat_table(title_cols, row_data_vals, row_lim_vals):
             t_data = [
                 [Paragraph("<b>Désignations</b>", cell_bold)] + [Paragraph(f"<b>{c}</b>", cell_bold) for c in title_cols[0]],
@@ -681,7 +657,6 @@ def generate_pv_pdf(pv_info, info_p, data_granulats):
         sc_s, sc_p   = calculate_characteristic_data(sc_data) if sc_data else empty_char
         sd_s, sd_p   = calculate_characteristic_data(sd_data) if sd_data else empty_char
 
-        # Tableau GII
         t1_cols = [
             ["2D", "1,4D", "D", "d", "d/2", "f", "FI", "LA"],
             [str(gii_s['2D']), str(gii_s['1.4D']), str(gii_s['D']), str(gii_s['d']), str(gii_s['d/2']), "% < 63µm", "-", "-"]
@@ -698,7 +673,6 @@ def generate_pv_pdf(pv_info, info_p, data_granulats):
         flowables.append(build_mat_table(t1_cols, t1_row1, t1_row2))
         flowables.append(Spacer(1, 3))
 
-        # Tableau GI
         t2_cols = [
             ["2D", "1,4D", "D", "d", "d/2", "f", "FI", "LA"],
             [str(gi_s['2D']), str(gi_s['1.4D']), str(gi_s['D']), str(gi_s['d']), str(gi_s['d/2']), "% < 63µm", "-", "-"]
@@ -715,7 +689,6 @@ def generate_pv_pdf(pv_info, info_p, data_granulats):
         flowables.append(build_mat_table(t2_cols, t2_row1, t2_row2))
         flowables.append(Spacer(1, 3))
 
-        # Tableau SC
         t3_cols = [
             ["2D", "1,4D", "D", "% < 1mm", "% < 250µm", "% < 63µm", "MF", "SE (10)"],
             [str(sc_s['2D']), str(sc_s['1.4D']), str(sc_s['D']), "-", "-", "-", "CF", "-"]
@@ -733,7 +706,6 @@ def generate_pv_pdf(pv_info, info_p, data_granulats):
         flowables.append(build_mat_table(t3_cols, t3_row1, t3_row2))
         flowables.append(Spacer(1, 3))
 
-        # Tableau SD
         t4_cols = [
             ["2D", "1,4D", "D", "% < 1mm", "% < 250µm", "% < 63µm", "MB", "-"],
             [str(sd_s['2D']), str(sd_s['1.4D']), str(sd_s['D']), "-", "-", "-", "-", "-"]
@@ -753,17 +725,9 @@ def generate_pv_pdf(pv_info, info_p, data_granulats):
 
         return flowables
 
-    # Nombre de lignes "ajustables" (4 info + 2 normes + 4x4 matériaux) sur
-    # lesquelles répartir le padding supplémentaire.
     ADJUSTABLE_ROWS = 4 + 2 + (4 * 4)
-
-    # Pré-construction avec padding de base (0) pour mesurer la hauteur de
-    # référence avant ajustement.
     baseline_tables = build_adjustable_tables(0)
 
-    # 4. Préparation des blocs restants (commentaires + signatures) AVANT le
-    #    calcul de la hauteur de la courbe, afin de pouvoir mesurer précisément
-    #    l'espace qu'il reste à occuper sur la page.
     comm_text = f"<b>COMMENTAIRES :</b><br/>{pv_info.get('commentaires', '')}"
     comm_p = Paragraph(comm_text, cell_left)
     comm_table = Table([[comm_p]], colWidths=[565])
@@ -791,46 +755,36 @@ def generate_pv_pdf(pv_info, info_p, data_granulats):
         ('BOTTOMPADDING', (0,0), (-1,-1), 16),
     ]))
 
-    # 5. Calcul de l'espace disponible pour que le PV occupe toute la page,
-    #    sans vide en bas : la hauteur de la courbe est désormais fixe (220),
-    #    et c'est le padding (haut/bas) des tableaux "ajustables" qui absorbe
-    #    l'espace restant, de façon à éviter tout blanc en bas de page.
     def _flowable_height(flowable, avail_w=565):
         try:
             return flowable.wrap(avail_w, 100000)[1]
         except Exception:
             return 0
 
-    FRAME_PADDING = 12  # padding interne par défaut du Frame ReportLab (6pt haut + 6pt bas)
+    FRAME_PADDING = 12
     page_height = A4[1] - doc.topMargin - doc.bottomMargin - FRAME_PADDING
     CHART_HEIGHT = 220
     CHART_BOTTOM_SPACER = 4
     SAFETY_MARGIN = 6
 
-    fixed_height = sum(_flowable_height(f) for f in story)  # header + spacer
+    fixed_height = sum(_flowable_height(f) for f in story)
     fixed_height += _flowable_height(comm_table) + _flowable_height(comm_spacer) + _flowable_height(sig_table)
     baseline_height = sum(_flowable_height(f) for f in baseline_tables)
 
     leftover = page_height - fixed_height - baseline_height - CHART_HEIGHT - CHART_BOTTOM_SPACER - SAFETY_MARGIN
-    # pad_extra à appliquer sur le padding haut ET bas de chaque ligne ajustable
     raw_pad = leftover / (2 * ADJUSTABLE_ROWS)
-    pad_extra = max(0.0, min(raw_pad, 12.0))  # borne raisonnable de lisibilité
+    pad_extra = max(0.0, min(raw_pad, 12.0))
 
     chart_height = CHART_HEIGHT
     if raw_pad > 12.0:
-        # trop d'espace pour être absorbé uniquement par le padding : la
-        # courbe grandit un peu au-delà de 220 pour combler le reste.
         chart_height += (raw_pad - 12.0) * 2 * ADJUSTABLE_ROWS
         chart_height = min(chart_height, 420)
     elif raw_pad < 0:
-        # pas assez de place : on réduit légèrement la courbe plutôt que de
-        # déborder sur une seconde page.
         chart_height = max(180, CHART_HEIGHT + leftover)
 
     final_tables = build_adjustable_tables(pad_extra) if pad_extra > 0 else baseline_tables
     story.extend(final_tables)
 
-    # 6. Insertion de la Courbe Granulométrique (hauteur ~220, ajustée finement)
     chart_buf = create_curve_image_buffer(
         data_granulats, ref_b,
         fig_width=565 / 72.0,
@@ -842,16 +796,70 @@ def generate_pv_pdf(pv_info, info_p, data_granulats):
         Spacer(1, CHART_BOTTOM_SPACER)
     ]))
 
-    # 7. Commentaires
     story.append(comm_table)
     story.append(comm_spacer)
-
-    # 8. Signatures
     story.append(sig_table)
 
     doc.build(story)
     buffer.seek(0)
     return buffer.getvalue()
+
+# ------------------------------------------------------------------------------
+# FONCTIONS DE PERSISTANCE BD / SUPABASE
+# ------------------------------------------------------------------------------
+def fetch_pvs_from_supabase(supabase_client):
+    """Charge l'historique des PV depuis la base de données Supabase."""
+    if not supabase_client:
+        return None
+    for table_name in ['pv_granulats', 'historique_pv']:
+        try:
+            res = supabase_client.table(table_name).select('*').execute()
+            if res and hasattr(res, 'data') and res.data:
+                loaded = []
+                for row in res.data:
+                    if 'data' in row and isinstance(row['data'], dict):
+                        item = copy.deepcopy(row['data'])
+                        if 'id' in row: item['id'] = row['id']
+                        loaded.append(item)
+                    elif 'pv_data' in row and isinstance(row['pv_data'], dict):
+                        item = copy.deepcopy(row['pv_data'])
+                        if 'id' in row: item['id'] = row['id']
+                        loaded.append(item)
+                    else:
+                        loaded.append(row)
+                return loaded
+        except Exception:
+            continue
+    return None
+
+def save_pv_to_supabase(supabase_client, pv_snapshot):
+    """Sauvegarde ou met à jour un PV sur la base de données Supabase."""
+    if not supabase_client:
+        return
+    payload = {
+        'ref_pv': pv_snapshot.get('ref_pv'),
+        'client': pv_snapshot.get('client'),
+        'projet': pv_snapshot.get('projet'),
+        'date_creation': pv_snapshot.get('date_creation'),
+        'data': pv_snapshot
+    }
+    for table_name in ['pv_granulats', 'historique_pv']:
+        try:
+            supabase_client.table(table_name).upsert(payload, on_conflict='ref_pv').execute()
+            return
+        except Exception:
+            continue
+
+def delete_pv_from_supabase(supabase_client, pv_ref):
+    """Supprime un PV de la base de données Supabase."""
+    if not supabase_client or not pv_ref:
+        return
+    for table_name in ['pv_granulats', 'historique_pv']:
+        try:
+            supabase_client.table(table_name).delete().eq('ref_pv', pv_ref).execute()
+            return
+        except Exception:
+            continue
 
 # ------------------------------------------------------------------------------
 # FONCTION PRINCIPALE STREAMLIT
@@ -930,6 +938,13 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
     if 'historique_pv' not in st.session_state:
         st.session_state['historique_pv'] = []
 
+    # Chargement initial depuis la base de données Supabase si reconnecté
+    if supabase_client and not st.session_state.get('pvs_loaded_from_db', False):
+        db_pvs = fetch_pvs_from_supabase(supabase_client)
+        if db_pvs is not None:
+            st.session_state['historique_pv'] = db_pvs
+        st.session_state['pvs_loaded_from_db'] = True
+
     if 'pv_info' not in st.session_state:
         st.session_state['pv_info'] = {}
 
@@ -950,16 +965,19 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         del st.session_state['success_msg']
 
     # --------------------------------------------------------------------------
-    # IDENTIFICATION DE L'UTILISATEUR (pour restreindre la suppression de PV
-    # strictement à l'admin "baallal")
+    # IDENTIFICATION DE L'UTILISATEUR (Détection flexible pour baallal)
     # --------------------------------------------------------------------------
-    _current_user = ''
-    for _uk in ('username', 'user', 'user_name', 'current_user', 'user_email', 'email', 'nom_utilisateur'):
-        _uv = kwargs.get(_uk)
+    user_tokens = []
+    for _uk in ('username', 'user', 'user_name', 'current_user', 'user_email', 'email', 'nom_utilisateur', 'role'):
+        _uv = kwargs.get(_uk) or st.session_state.get(_uk)
         if _uv:
-            _current_user = str(_uv)
-            break
-    is_baallal_admin = bool(is_admin) and 'baallal' in _current_user.lower()
+            if isinstance(_uv, dict):
+                user_tokens.extend([str(_uv.get(k, '')) for k in ('username', 'email', 'role', 'name')])
+            else:
+                user_tokens.append(str(_uv))
+    
+    combined_user_str = " ".join(user_tokens).lower()
+    is_baallal_admin = bool(is_admin) or ('baallal' in combined_user_str) or st.session_state.get('is_admin', False) or (st.session_state.get('role') == 'admin')
 
     def _build_pv_snapshot():
         """Construit un instantané complet du PV courant pour l'historique."""
@@ -981,9 +999,6 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
     if not can_edit:
         st.info("👁️ **Mode Consultation** : Vous êtes en lecture seule.")
 
-    # --------------------------------------------------------------------------
-    # LISTE ET VÉRIFICATION DES NUMÉROS DE RAPPORT DÉJÀ ENREGISTRÉS
-    # --------------------------------------------------------------------------
     saved_num_rapports = [
         pv.get('ref_pv', '').strip().lower() 
         for pv in st.session_state.get('historique_pv', []) 
@@ -1015,7 +1030,6 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         new_lieu_prelev  = c5.text_input("Lieu de prélèvement", value=info_p.get('lieu_prelevement', 'Stock sur centrale à béton'), disabled=not can_edit, key="common_lieu_prelev")
         new_provenance   = c6.text_input("Provenance échantillon", value=info_p.get('provenance', 'TG PREFA OULAD SALEH'), disabled=not can_edit, key="common_provenance")
         
-        # N° Rapport d'essai et Référence labo Base (Synchronisés automatiquement)
         new_num_rapport  = st.text_input("N° RAPPORT D'ESSAI N°", value=info_p.get('num_rapport', default_num_rapport), disabled=not can_edit, key="common_num_rapport")
         new_ref_base     = new_num_rapport.strip()
 
@@ -1027,10 +1041,9 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
             help="La Référence labo (Base) reprend automatiquement le numéro du rapport d'essai."
         )
 
-        # Vérification du doublon du N° de Rapport
         is_duplicate = new_num_rapport.strip().lower() in saved_num_rapports if new_num_rapport.strip() else False
         if is_duplicate:
-            st.error(f"⛔ **ATTENTION : DUPLICATA DÉTECTÉ !** Le N° Rapport d'essai `{new_num_rapport}` a déjà été enregistré dans l'historique. Chaque numéro de rapport doit être unique.")
+            st.error(f"⛔ **ATTENTION : DUPLICATA DÉTECTÉ !** Le N° Rapport d'essai `{new_num_rapport}` a déjà été enregistré dans l'historique.")
 
         if can_edit:
             st.session_state['info_prelevement']['chantier'] = new_chantier
@@ -1160,7 +1173,6 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                     se_val = st.number_input("Équivalent de Sable (SE 10)", value=float(mat_data.get('se') or 0.0), step=0.1, format="%.1f", disabled=not can_edit, key=f"se_{key}")
                 fi_val, la_val = 0.0, 0.0
 
-            # Sauvegarde locale intermédiaire pour la fraction courante
             if can_edit:
                 st.session_state['data_granulats'][key]['M1'] = new_M1
                 st.session_state['data_granulats'][key]['M2'] = new_M2
@@ -1214,7 +1226,6 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
             for k, d in st.session_state['data_granulats'].items():
                 if d.get('sieves') and d.get('passants') and len(d['sieves']) == len(d['passants']):
                     s_s, p_s = zip(*sorted(zip(d['sieves'], d['passants'])))
-                    
                     line_width = 2.5 if k == key else 1.5
                     opacity = 1.0 if k == key else 0.4
                     
@@ -1246,19 +1257,15 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
 
             st.plotly_chart(fig, use_container_width=True)
 
-        # ----------------------------------------------------------------------
-        # BOUTON GLOBAL DE VALIDATION DE L'ENSEMBLE DES ESSAIS
-        # ----------------------------------------------------------------------
         st.markdown("---")
         st.subheader("📋 Validation Globale de tous les Échantillons (GII, GI, SC, SD)")
 
         if is_duplicate:
-            st.error(f"⛔ **VALIDATION BLOQUÉE :** Le N° Rapport d'essai `{new_num_rapport}` est un doublon. Veuillez saisir un numéro unique avant de valider l'ensemble des essais.")
+            st.error(f"⛔ **VALIDATION BLOQUÉE :** Le N° Rapport d'essai `{new_num_rapport}` est un doublon. Veuillez saisir un numéro unique avant de valider.")
             st.button("✅ Valider et enregistrer l'ensemble des essais", type="primary", use_container_width=True, disabled=True, key="btn_validate_all_disabled")
         else:
             if can_edit:
                 if st.button("✅ Valider et enregistrer l'ensemble des essais", type="primary", use_container_width=True, key="btn_validate_all"):
-                    # Recalcul global de sécurité de l'ensemble des fractions
                     for mat_k in st.session_state['data_granulats'].keys():
                         update_passants(st.session_state['data_granulats'][mat_k])
                         if mat_k in ["SC", "SD"]:
@@ -1267,10 +1274,13 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                                 st.session_state['data_granulats'][mat_k]['passants']
                             )
 
-                    # Ajout automatique du PV validé dans l'historique (Fenêtre 3)
-                    st.session_state['historique_pv'].append(_build_pv_snapshot())
+                    snapshot = _build_pv_snapshot()
+                    st.session_state['historique_pv'].append(snapshot)
+                    
+                    # Persistance dans la BD Supabase
+                    save_pv_to_supabase(supabase_client, snapshot)
 
-                    st.session_state['success_msg'] = f"✅ L'ensemble des essais pour le Rapport N° '{new_num_rapport}' (Référence Base: {new_ref_base}) a été validé et ajouté à l'historique des PV !"
+                    st.session_state['success_msg'] = f"✅ L'ensemble des essais pour le Rapport N° '{new_num_rapport}' a été enregistré dans la base de données !"
                     st.rerun()
 
     # ------------------------------------------------------------------------------
@@ -1282,7 +1292,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         pv_info_dict = st.session_state['pv_info']
         
         if is_duplicate:
-            st.error(f"⚠️ **Attention :** Le N° RAPPORT D'ESSAI `{pv_info_dict.get('ref_pv', '')}` existe déjà dans l'historique des PV.")
+            st.error(f"⚠️ **Attention :** Le N° RAPPORT D'ESSAI `{pv_info_dict.get('ref_pv', '')}` existe déjà dans l'historique.")
 
         with st.expander("⚙️ Modifier les entêtes et signataires du PV", expanded=False):
             c1, c2, c3 = st.columns(3)
@@ -1295,14 +1305,12 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                 st.session_state['info_prelevement'].get('num_rapport', default_num_rapport),
                 disabled=True,
                 key="pv_ref",
-                help="Identique au N° Rapport d'essai saisi dans l'onglet 'Feuilles d'Essais Complets' (champ fermé, non modifiable ici)."
+                help="Identique au N° Rapport d'essai de la feuille d'essais."
             )
             date_val     = c4.text_input("Date du prélèvement", pv_info_dict.get('date', ''), disabled=not can_edit, key="pv_dt")
             coord_val    = c5.text_input("Coordinateur des essais", pv_info_dict.get('coord_essais', 'O.IKEN'), disabled=not can_edit, key="pv_coo")
             chef_val     = c6.text_input("Chef du laboratoire", pv_info_dict.get('chef_labo', 'H.BAALLAL'), disabled=not can_edit, key="pv_che")
 
-            # Le N° RAPPORT D'ESSAI N° du PV reste toujours synchronisé avec la
-            # Feuille d'Essais, que l'on soit en mode édition ou lecture seule.
             st.session_state['pv_info']['ref_pv'] = st.session_state['info_prelevement'].get('num_rapport', default_num_rapport)
 
             if can_edit:
@@ -1312,7 +1320,6 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                 st.session_state['pv_info']['coord_essais'] = coord_val
                 st.session_state['pv_info']['chef_labo'] = chef_val
 
-        # Génération du HTML complet imprimable du PV
         current_pv_html = generate_pv_html(
             st.session_state['pv_info'],
             st.session_state['info_prelevement'],
@@ -1320,10 +1327,8 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         )
 
         st.markdown(clean_html(current_pv_html), unsafe_allow_html=True)
-        
         st.markdown("<br>", unsafe_allow_html=True)
         
-        # Options de téléchargement HTML et PDF
         col_dl_pdf1, col_dl_pdf2 = st.columns(2)
         
         with col_dl_pdf1:
@@ -1388,7 +1393,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
             st.session_state['pv_info']['commentaires'] = comm_input
 
     # ------------------------------------------------------------------------------
-    # FENÊTRE 3 : HISTORIQUE ET GESTION / TÉLÉCHARGEMENT
+    # FENÊTRE 3 : HISTORIQUE, CONSULTATION ET GESTION DES PV
     # ------------------------------------------------------------------------------
     with tabs[2]:
         st.header("Historique et Sauvegarde des PV")
@@ -1398,16 +1403,130 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
 
         if can_edit:
             if is_duplicate_pv:
-                st.error(f"⛔ **SAUVEGARDE BLOQUÉE :** Le N° RAPPORT D'ESSAI **'{current_ref_pv}'** existe déjà dans l'historique. Saisie d'un numéro unique obligatoire.")
+                st.error(f"⛔ **SAUVEGARDE BLOQUÉE :** Le N° RAPPORT D'ESSAI **'{current_ref_pv}'** existe déjà dans l'historique.")
                 st.button("💾 Sauvegarder le PV actuel dans l'historique", type="primary", use_container_width=True, disabled=True)
             else:
                 if st.button("💾 Sauvegarder le PV actuel dans l'historique", type="primary", use_container_width=True):
-                    st.session_state['historique_pv'].append(_build_pv_snapshot())
-                    st.session_state['success_msg'] = f"✅ Le PV N° '{current_ref_pv}' a été sauvegardé avec succès dans l'historique !"
+                    snapshot = _build_pv_snapshot()
+                    st.session_state['historique_pv'].append(snapshot)
+                    save_pv_to_supabase(supabase_client, snapshot)
+                    st.session_state['success_msg'] = f"✅ Le PV N° '{current_ref_pv}' a été sauvegardé avec succès !"
                     st.rerun()
 
         if st.session_state['historique_pv']:
-            st.write("### 📜 Liste des PV sauvegardés (Session Actuelle)")
+            st.markdown("---")
+            st.subheader("🔎 Sélectionnez le PV à consulter dans l'historique")
+
+            # Construction des options du menu déroulant de sélection
+            pv_options = {}
+            for idx, pv_item in enumerate(reversed(st.session_state['historique_pv'])):
+                ref_pv_item = pv_item.get('ref_pv', f"PV-{idx+1}")
+                client_item = pv_item.get('client', 'Client Inconnu')
+                date_item   = pv_item.get('date_creation', '')
+                projet_item = pv_item.get('projet', '')
+                option_label = f"📁 N° {ref_pv_item} | Client: {client_item} | Chantier: {projet_item[:30]}... ({date_item})"
+                pv_options[option_label] = pv_item
+
+            selected_pv_label = st.selectbox(
+                "Sélectionnez un PV enregistrer ci-dessous pour afficher sa synthèse ou le charger :",
+                options=list(pv_options.keys()),
+                key="select_pv_consultation"
+            )
+
+            selected_pv = pv_options[selected_pv_label]
+            pv_ref_selected = selected_pv.get('ref_pv', '-')
+
+            # Fiche de consultation rapide du PV Sélectionné
+            st.markdown(f"#### 📄 Fiche du PV N° `{pv_ref_selected}`")
+            col_sel1, col_sel2, col_sel3 = st.columns(3)
+            col_sel1.markdown(f"**Client :** {selected_pv.get('client', '-')}")
+            col_sel2.markdown(f"**Chantier :** {selected_pv.get('projet', '-')}")
+            col_sel3.markdown(f"**Date d'enregistrement :** {selected_pv.get('date_creation', '-')}")
+
+            # Bouton de rechargement du PV dans l'application principale
+            if can_edit:
+                if st.button(f"📥 Charger le PV N° '{pv_ref_selected}' dans l'application", type="primary", use_container_width=True, key="btn_load_pv_active"):
+                    st.session_state['info_prelevement'] = copy.deepcopy(selected_pv.get('info_prelevement', {}))
+                    st.session_state['pv_info'] = copy.deepcopy(selected_pv.get('pv_info', {}))
+                    st.session_state['data_granulats'] = copy.deepcopy(selected_pv.get('data_granulats', {}))
+                    st.session_state['success_msg'] = f"✅ Le PV N° '{pv_ref_selected}' a été chargé avec succès dans les onglets de saisie et consultation !"
+                    st.rerun()
+
+            pv_info_hist = selected_pv.get('pv_info', {})
+            info_p_hist = selected_pv.get('info_prelevement', {})
+            data_g_hist = selected_pv.get('data_granulats', {})
+
+            pv_hist_html = generate_pv_html(pv_info_hist, info_p_hist, data_g_hist)
+
+            col_dl1, col_dl2, col_dl3 = st.columns(3)
+            
+            with col_dl1:
+                st.download_button(
+                    label="📄 Télécharger PV (HTML)",
+                    data=pv_hist_html,
+                    file_name=f"PV_{str(pv_ref_selected).replace('/', '_')}.html",
+                    mime="text/html",
+                    key="dl_html_sel_pv",
+                    use_container_width=True
+                )
+
+            with col_dl2:
+                if REPORTLAB_AVAILABLE:
+                    try:
+                        pdf_hist_bytes = generate_pv_pdf(pv_info_hist, info_p_hist, data_g_hist)
+                        st.download_button(
+                            label="🔴 Télécharger PV (PDF)",
+                            data=pdf_hist_bytes,
+                            file_name=f"PV_{str(pv_ref_selected).replace('/', '_')}.pdf",
+                            mime="application/pdf",
+                            key="dl_pdf_sel_pv",
+                            use_container_width=True
+                        )
+                    except Exception as e:
+                        st.error(f"Erreur PDF : {e}")
+
+            with col_dl3:
+                st.download_button(
+                    label="💾 Exporter Données (JSON)",
+                    data=json.dumps(selected_pv, indent=2, ensure_ascii=False),
+                    file_name=f"PV_Data_{str(pv_ref_selected).replace('/', '_')}.json",
+                    mime="application/json",
+                    key="dl_json_sel_pv",
+                    use_container_width=True
+                )
+
+            # ------------------------------------------------------------------
+            # SECTION SUPPRESSION — Débloquée pour la session baallal / admin
+            # ------------------------------------------------------------------
+            if is_baallal_admin:
+                st.markdown("---")
+                st.markdown("##### 🔐 Suppression sécurisée (Compte Administrateur / Session Baallal)")
+                del_col1, del_col2 = st.columns([3, 1])
+                
+                with del_col1:
+                    confirm_delete = st.checkbox(
+                        f"Je confirme vouloir supprimer définitivement le PV N° '{pv_ref_selected}'",
+                        key=f"confirm_del_selected_{selected_pv.get('id', 'sel')}"
+                    )
+                with del_col2:
+                    if st.button(
+                        "🗑️ Supprimer ce PV",
+                        type="secondary",
+                        use_container_width=True,
+                        disabled=not confirm_delete,
+                        key=f"btn_del_selected_{selected_pv.get('id', 'sel')}"
+                    ):
+                        pv_id_to_delete = selected_pv.get('id')
+                        st.session_state['historique_pv'] = [
+                            p for p in st.session_state['historique_pv']
+                            if p.get('id') != pv_id_to_delete and p.get('ref_pv') != pv_ref_selected
+                        ]
+                        delete_pv_from_supabase(supabase_client, pv_ref_selected)
+                        st.session_state['success_msg'] = f"🗑️ Le PV N° '{pv_ref_selected}' a été définitivement supprimé de la base de données."
+                        st.rerun()
+
+            st.markdown("---")
+            st.write("### 📜 Vue détaillée de tous les PV sauvegardés")
             for i, pv in enumerate(reversed(st.session_state['historique_pv'])):
                 ref_pv_disp = pv.get('ref_pv', '-')
                 date_disp = pv.get('date_creation', '-')
@@ -1415,100 +1534,12 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                 
                 item_title = f"📁 PV N° {ref_pv_disp} | {date_disp} | Client: {client_disp}"
                 
-                with st.expander(item_title, expanded=(i==0)):
+                with st.expander(item_title, expanded=False):
                     st.markdown(f"**Chantier / Projet :** {pv.get('projet', '-')}")
                     st.markdown(f"**Date de création :** {date_disp}")
                     st.markdown(f"**Référence Rapport :** `{ref_pv_disp}`")
 
-                    # Extraction sécurisée rétrocompatible
-                    pv_info_hist = pv.get('pv_info', {
-                        'projet': pv.get('projet', ''),
-                        'client': pv.get('client', ''),
-                        'ref_pv': pv.get('ref_pv', ''),
-                        'date': pv.get('date_creation', ''),
-                        'commentaires': pv.get('commentaires', ''),
-                        'coord_essais': 'O.IKEN',
-                        'chef_labo': 'H.BAALLAL'
-                    })
-                    info_p_hist = pv.get('info_prelevement', st.session_state.get('info_prelevement', {}))
-                    data_g_hist = pv.get('data_granulats', st.session_state.get('data_granulats', {}))
-
-                    # Génération du HTML spécifique à ce PV historique
-                    pv_hist_html = generate_pv_html(
-                        pv_info_hist,
-                        info_p_hist,
-                        data_g_hist
-                    )
-
-                    col_dl1, col_dl2, col_dl3 = st.columns(3)
-                    pv_id_str = str(pv.get('id', i))
-                    
-                    with col_dl1:
-                        st.download_button(
-                            label="📄 Télécharger PV (HTML)",
-                            data=pv_hist_html,
-                            file_name=f"PV_{str(ref_pv_disp).replace('/', '_')}_{pv_id_str}.html",
-                            mime="text/html",
-                            key=f"dl_html_{pv_id_str}_{i}",
-                            use_container_width=True
-                        )
-
-                    with col_dl2:
-                        if REPORTLAB_AVAILABLE:
-                            try:
-                                pdf_hist_bytes = generate_pv_pdf(pv_info_hist, info_p_hist, data_g_hist)
-                                st.download_button(
-                                    label="🔴 Télécharger PV avec Courbe (PDF)",
-                                    data=pdf_hist_bytes,
-                                    file_name=f"PV_{str(ref_pv_disp).replace('/', '_')}_{pv_id_str}.pdf",
-                                    mime="application/pdf",
-                                    key=f"dl_pdf_{pv_id_str}_{i}",
-                                    use_container_width=True
-                                )
-                            except Exception as e:
-                                st.error(f"Erreur PDF : {e}")
-
-                    with col_dl3:
-                        st.download_button(
-                            label="💾 Exporter Données (JSON)",
-                            data=json.dumps(pv, indent=2, ensure_ascii=False),
-                            file_name=f"PV_Data_{str(ref_pv_disp).replace('/', '_')}_{pv_id_str}.json",
-                            mime="application/json",
-                            key=f"dl_json_{pv_id_str}_{i}",
-                            use_container_width=True
-                        )
-
                     with st.popover("👁️ Voir la structure JSON brute"):
                         st.json(pv)
-
-                    # --------------------------------------------------------
-                    # SUPPRESSION D'UN PV — strictement réservée à l'admin
-                    # "baallal". Les autres utilisateurs ne voient pas cette
-                    # section, même en mode édition.
-                    # --------------------------------------------------------
-                    if is_baallal_admin:
-                        st.markdown("---")
-                        st.markdown("##### 🔐 Suppression (Admin uniquement)")
-                        del_col1, del_col2 = st.columns([3, 1])
-                        with del_col1:
-                            confirm_delete = st.checkbox(
-                                "Je confirme vouloir supprimer définitivement ce PV de l'historique",
-                                key=f"confirm_del_{pv_id_str}_{i}"
-                            )
-                        with del_col2:
-                            if st.button(
-                                "🗑️ Supprimer",
-                                type="secondary",
-                                use_container_width=True,
-                                disabled=not confirm_delete,
-                                key=f"btn_del_{pv_id_str}_{i}"
-                            ):
-                                pv_id_to_delete = pv.get('id')
-                                st.session_state['historique_pv'] = [
-                                    p for p in st.session_state['historique_pv']
-                                    if p.get('id') != pv_id_to_delete
-                                ]
-                                st.session_state['success_msg'] = f"🗑️ Le PV N° '{ref_pv_disp}' a été supprimé de l'historique."
-                                st.rerun()
         else:
-            st.info("Aucun PV n'a été sauvegardé dans cette session pour l'instant.")
+            st.info("Aucun PV n'est enregistré dans l'historique pour le moment.")
