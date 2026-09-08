@@ -1553,3 +1553,14 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                         st.rerun()
         else:
             st.info("Aucune donnée disponible dans la base de données globale.")
+
+# ------------------------------------------------------------------------------
+# POINT D'ENTRÉE AUTONOME
+# ------------------------------------------------------------------------------
+if __name__ == "__main__":
+    st.set_page_config(
+        page_title="Identification des Granulats pour Béton",
+        page_icon="🏗️",
+        layout="wide"
+    )
+    show()
