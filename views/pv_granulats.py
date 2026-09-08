@@ -814,7 +814,7 @@ def fetch_pvs_from_supabase(supabase_client):
     for table_name in ['pv_granulats', 'historique_pv']:
         try:
             res = supabase_client.table(table_name).select('*').execute()
-            if res and hasattr(res, 'data') and res.data is not None:
+            if res and hasattr(res, 'data') and res.data:
                 loaded = []
                 for row in res.data:
                     if 'data' in row and isinstance(row['data'], dict):
@@ -865,6 +865,8 @@ def delete_pv_from_supabase(supabase_client, pv_ref):
 # FONCTION PRINCIPALE STREAMLIT
 # ------------------------------------------------------------------------------
 def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
+    prefix = kwargs.get('key_prefix', 'pvg')
+
     if 'info_prelevement' not in st.session_state:
         st.session_state['info_prelevement'] = {}
 
@@ -1023,21 +1025,21 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         
         info_p = st.session_state['info_prelevement']
         
-        new_client       = c1.text_input("Client", value=info_p.get('client', 'TGCC'), disabled=not can_edit, key="common_client")
-        new_chantier     = c2.text_input("Chantier", value=info_p.get('chantier', ''), disabled=not can_edit, key="common_chantier")
-        new_dossier      = c3.text_input("N° Dossier", value=info_p.get('dossier_no', ''), disabled=not can_edit, key="common_dossier")
-        new_date_prelev  = c4.text_input("Date de prélèvement", value=info_p.get('date_prelevement', '23/07/2026'), disabled=not can_edit, key="common_date_prelev")
-        new_lieu_prelev  = c5.text_input("Lieu de prélèvement", value=info_p.get('lieu_prelevement', 'Stock sur centrale à béton'), disabled=not can_edit, key="common_lieu_prelev")
-        new_provenance   = c6.text_input("Provenance échantillon", value=info_p.get('provenance', 'TG PREFA OULAD SALEH'), disabled=not can_edit, key="common_provenance")
+        new_client       = c1.text_input("Client", value=info_p.get('client', 'TGCC'), disabled=not can_edit, key=f"{prefix}_common_client")
+        new_chantier     = c2.text_input("Chantier", value=info_p.get('chantier', ''), disabled=not can_edit, key=f"{prefix}_common_chantier")
+        new_dossier      = c3.text_input("N° Dossier", value=info_p.get('dossier_no', ''), disabled=not can_edit, key=f"{prefix}_common_dossier")
+        new_date_prelev  = c4.text_input("Date de prélèvement", value=info_p.get('date_prelevement', '23/07/2026'), disabled=not can_edit, key=f"{prefix}_common_date_prelev")
+        new_lieu_prelev  = c5.text_input("Lieu de prélèvement", value=info_p.get('lieu_prelevement', 'Stock sur centrale à béton'), disabled=not can_edit, key=f"{prefix}_common_lieu_prelev")
+        new_provenance   = c6.text_input("Provenance échantillon", value=info_p.get('provenance', 'TG PREFA OULAD SALEH'), disabled=not can_edit, key=f"{prefix}_common_provenance")
         
-        new_num_rapport  = st.text_input("N° RAPPORT D'ESSAI N°", value=info_p.get('num_rapport', default_num_rapport), disabled=not can_edit, key="common_num_rapport")
+        new_num_rapport  = st.text_input("N° RAPPORT D'ESSAI N°", value=info_p.get('num_rapport', default_num_rapport), disabled=not can_edit, key=f"{prefix}_common_num_rapport")
         new_ref_base     = new_num_rapport.strip()
 
         st.text_input(
             "Référence labo (Base) - Identique au N° Rapport", 
             value=new_ref_base, 
             disabled=True, 
-            key="common_ref_base_disp",
+            key=f"{prefix}_common_ref_base_disp",
             help="La Référence labo (Base) reprend automatiquement le numéro du rapport d'essai."
         )
 
@@ -1064,7 +1066,8 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         selected_mat = st.radio(
             "Sélectionner la fraction d'échantillon à saisir / modifier :",
             ["GII (10/20)", "GI (4/10)", "SC (0/4)", "SD (0/0,63)"],
-            horizontal=True
+            horizontal=True,
+            key=f"{prefix}_radio_selected_mat"
         )
         
         mat_key_map = {"GII (10/20)": "GII", "GI (4/10)": "GI", "SC (0/4)": "SC", "SD (0/0,63)": "SD"}
@@ -1081,9 +1084,9 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
 
             st.markdown("##### ⚖️ Pesées (Procédé : Lavage et tamisage)")
             c_m1, c_m2, c_p = st.columns(3)
-            new_M1 = c_m1.number_input("Masse totale M1 (g)", value=float(mat_data.get('M1', 1000.0)), step=0.1, format="%.1f", disabled=not can_edit, key=f"m1_{key}")
-            new_M2 = c_m2.number_input("Masse après lavage M2 (g)", value=float(mat_data.get('M2', 1000.0)), step=0.1, format="%.1f", disabled=not can_edit, key=f"m2_{key}")
-            new_P  = c_p.number_input("Matériau au fond P (g)", value=float(mat_data.get('P', 0.0)), step=0.1, format="%.1f", disabled=not can_edit, key=f"p_{key}")
+            new_M1 = c_m1.number_input("Masse totale M1 (g)", value=float(mat_data.get('M1', 1000.0)), step=0.1, format="%.1f", disabled=not can_edit, key=f"{prefix}_m1_{key}")
+            new_M2 = c_m2.number_input("Masse après lavage M2 (g)", value=float(mat_data.get('M2', 1000.0)), step=0.1, format="%.1f", disabled=not can_edit, key=f"{prefix}_m2_{key}")
+            new_P  = c_p.number_input("Matériau au fond P (g)", value=float(mat_data.get('P', 0.0)), step=0.1, format="%.1f", disabled=not can_edit, key=f"{prefix}_p_{key}")
             
             st.subheader("Analyse par tamisage (Saisie des refus en g)")
             
@@ -1101,7 +1104,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
 
             edited_df = st.data_editor(
                 df_display,
-                key=f"editor_{key}",
+                key=f"{prefix}_editor_{key}",
                 column_config={
                     "Tamis (mm)": st.column_config.NumberColumn(disabled=True),
                     "Masse de refus Ri (g)": st.column_config.NumberColumn(
@@ -1155,22 +1158,22 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
             
             if key in ["GII", "GI"]:
                 with col_a:
-                    fi_val = st.number_input("Coeff. Aplatissement (FI)", value=float(mat_data.get('fi') or 0.0), step=0.1, format="%.1f", disabled=not can_edit, key=f"fi_{key}")
+                    fi_val = st.number_input("Coeff. Aplatissement (FI)", value=float(mat_data.get('fi') or 0.0), step=0.1, format="%.1f", disabled=not can_edit, key=f"{prefix}_fi_{key}")
                 with col_b:
-                    la_val = st.number_input("Los Angeles (LA)", value=float(mat_data.get('la') or 0.0), step=0.1, format="%.1f", disabled=not can_edit, key=f"la_{key}")
+                    la_val = st.number_input("Los Angeles (LA)", value=float(mat_data.get('la') or 0.0), step=0.1, format="%.1f", disabled=not can_edit, key=f"{prefix}_la_{key}")
                 mb_val, mf_val, se_val = 0.0, 0.0, 0.0
             else:
                 with col_a:
-                    mb_val = st.number_input("Valeur de Bleu (MB)", value=float(mat_data.get('mb') or 0.0), step=0.1, format="%.1f", disabled=not can_edit, key=f"mb_{key}")
+                    mb_val = st.number_input("Valeur de Bleu (MB)", value=float(mat_data.get('mb') or 0.0), step=0.1, format="%.1f", disabled=not can_edit, key=f"{prefix}_mb_{key}")
                 with col_b:
                     mf_val = st.number_input(
                         "Module de Finesse (MF - Calculé Auto)", 
                         value=float(calculated_mf), 
                         disabled=True, 
                         help="FM = Σ(Refus cumulés sur 4, 2, 1, 0.5, 0.25, 0.125 mm) / 100",
-                        key=f"mf_{key}"
+                        key=f"{prefix}_mf_{key}"
                     )
-                    se_val = st.number_input("Équivalent de Sable (SE 10)", value=float(mat_data.get('se') or 0.0), step=0.1, format="%.1f", disabled=not can_edit, key=f"se_{key}")
+                    se_val = st.number_input("Équivalent de Sable (SE 10)", value=float(mat_data.get('se') or 0.0), step=0.1, format="%.1f", disabled=not can_edit, key=f"{prefix}_se_{key}")
                 fi_val, la_val = 0.0, 0.0
 
             if can_edit:
@@ -1261,7 +1264,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         st.subheader("📋 Validation et Enregistrement Global des Essais")
 
         if can_edit:
-            if st.button("✅ Valider et enregistrer l'ensemble des essais", type="primary", use_container_width=True, key="btn_validate_all"):
+            if st.button("✅ Valider et enregistrer l'ensemble des essais", type="primary", use_container_width=True, key=f"{prefix}_btn_validate_all"):
                 for mat_k in st.session_state['data_granulats'].keys():
                     update_passants(st.session_state['data_granulats'][mat_k])
                     if mat_k in ["SC", "SD"]:
@@ -1308,18 +1311,18 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
             c1, c2, c3 = st.columns(3)
             c4, c5, c6 = st.columns(3)
             
-            projet_val   = c1.text_input("Chantier / Projet", pv_info_dict.get('projet', ''), disabled=not can_edit, key="pv_proj")
-            client_val   = c2.text_input("Client", pv_info_dict.get('client', ''), disabled=not can_edit, key="pv_cli")
+            projet_val   = c1.text_input("Chantier / Projet", pv_info_dict.get('projet', ''), disabled=not can_edit, key=f"{prefix}_pv_proj")
+            client_val   = c2.text_input("Client", pv_info_dict.get('client', ''), disabled=not can_edit, key=f"{prefix}_pv_cli")
             ref_val      = c3.text_input(
                 "N° RAPPORT D'ESSAI N°",
                 st.session_state['info_prelevement'].get('num_rapport', default_num_rapport),
                 disabled=True,
-                key="pv_ref",
+                key=f"{prefix}_pv_ref",
                 help="Identique au N° Rapport d'essai de la feuille d'essais."
             )
-            date_val     = c4.text_input("Date du prélèvement", pv_info_dict.get('date', ''), disabled=not can_edit, key="pv_dt")
-            coord_val    = c5.text_input("Coordinateur des essais", pv_info_dict.get('coord_essais', 'O.IKEN'), disabled=not can_edit, key="pv_coo")
-            chef_val     = c6.text_input("Chef du laboratoire", pv_info_dict.get('chef_labo', 'H.BAALLAL'), disabled=not can_edit, key="pv_che")
+            date_val     = c4.text_input("Date du prélèvement", pv_info_dict.get('date', ''), disabled=not can_edit, key=f"{prefix}_pv_dt")
+            coord_val    = c5.text_input("Coordinateur des essais", pv_info_dict.get('coord_essais', 'O.IKEN'), disabled=not can_edit, key=f"{prefix}_pv_coo")
+            chef_val     = c6.text_input("Chef du laboratoire", pv_info_dict.get('chef_labo', 'H.BAALLAL'), disabled=not can_edit, key=f"{prefix}_pv_che")
 
             st.session_state['pv_info']['ref_pv'] = st.session_state['info_prelevement'].get('num_rapport', default_num_rapport)
 
@@ -1348,7 +1351,8 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                 file_name=f"PV_Granulats_{st.session_state['pv_info'].get('ref_pv', 'rapport').replace('/', '_')}.html",
                 mime="text/html",
                 use_container_width=True,
-                type="secondary"
+                type="secondary",
+                key=f"{prefix}_dl_html_tab2"
             )
 
         with col_dl_pdf2:
@@ -1365,7 +1369,8 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                         file_name=f"PV_Granulats_{st.session_state['pv_info'].get('ref_pv', 'rapport').replace('/', '_')}.pdf",
                         mime="application/pdf",
                         use_container_width=True,
-                        type="primary"
+                        type="primary",
+                        key=f"{prefix}_dl_pdf_tab2"
                     )
                 except Exception as e:
                     st.error(f"Erreur lors de la création du PDF : {e}")
@@ -1398,7 +1403,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         )
         st.plotly_chart(fig_global_tab2, use_container_width=True)
 
-        comm_input = st.text_area("COMMENTAIRES :", value=st.session_state['pv_info'].get('commentaires', ''), disabled=not can_edit, height=80)
+        comm_input = st.text_area("COMMENTAIRES :", value=st.session_state['pv_info'].get('commentaires', ''), disabled=not can_edit, height=80, key=f"{prefix}_pv_comm_input")
         if can_edit:
             st.session_state['pv_info']['commentaires'] = comm_input
 
@@ -1411,7 +1416,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         if st.session_state['historique_pv']:
             st.write("### 🔎 Recherche & Sélection de PV")
 
-            # Rubrique de sélection / recherche
+            # Rubrique de sélection / recherche selon le format présenté
             pv_options = {}
             for idx, pv_item in enumerate(reversed(st.session_state['historique_pv'])):
                 ref_pv_item = pv_item.get('ref_pv', f"PV-{idx+1}")
@@ -1426,7 +1431,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
             selected_pv_label = st.selectbox(
                 "Sélectionnez le PV à consulter :",
                 options=list(pv_options.keys()),
-                key="select_pv_dropdown_search"
+                key=f"{prefix}_select_pv_dropdown_search"
             )
 
             selected_pv = pv_options[selected_pv_label]
@@ -1455,7 +1460,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                             data=pdf_hist_bytes,
                             file_name=f"PV_Granulats_{str(pv_ref_selected).replace('/', '_')}.pdf",
                             mime="application/pdf",
-                            key="dl_pdf_sel_pv_main",
+                            key=f"{prefix}_dl_pdf_sel_pv_main",
                             type="primary",
                             use_container_width=True
                         )
@@ -1468,7 +1473,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                     data=pv_hist_html,
                     file_name=f"PV_{str(pv_ref_selected).replace('/', '_')}.html",
                     mime="text/html",
-                    key="dl_html_sel_pv_main",
+                    key=f"{prefix}_dl_html_sel_pv_main",
                     use_container_width=True
                 )
 
@@ -1478,16 +1483,35 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                     data=json.dumps(selected_pv, indent=2, ensure_ascii=False),
                     file_name=f"PV_Data_{str(pv_ref_selected).replace('/', '_')}.json",
                     mime="application/json",
-                    key="dl_json_sel_pv_main",
+                    key=f"{prefix}_dl_json_sel_pv_main",
                     use_container_width=True
                 )
 
             with col_act4:
                 if can_edit:
-                    if st.button("📥 Charger dans l'application", use_container_width=True, key="btn_load_pv_active_main"):
+                    if st.button("📥 Charger dans l'application", use_container_width=True, key=f"{prefix}_btn_load_pv_active_main"):
                         st.session_state['info_prelevement'] = copy.deepcopy(selected_pv.get('info_prelevement', {}))
                         st.session_state['pv_info'] = copy.deepcopy(selected_pv.get('pv_info', {}))
                         st.session_state['data_granulats'] = copy.deepcopy(selected_pv.get('data_granulats', {}))
+
+                        # Synchronisation des widgets de session
+                        info_p_ld = st.session_state['info_prelevement']
+                        st.session_state[f"{prefix}_common_client"] = info_p_ld.get('client', '')
+                        st.session_state[f"{prefix}_common_chantier"] = info_p_ld.get('chantier', '')
+                        st.session_state[f"{prefix}_common_dossier"] = info_p_ld.get('dossier_no', '')
+                        st.session_state[f"{prefix}_common_date_prelev"] = info_p_ld.get('date_prelevement', '')
+                        st.session_state[f"{prefix}_common_lieu_prelev"] = info_p_ld.get('lieu_prelevement', '')
+                        st.session_state[f"{prefix}_common_provenance"] = info_p_ld.get('provenance', '')
+                        st.session_state[f"{prefix}_common_num_rapport"] = info_p_ld.get('num_rapport', '')
+
+                        pv_info_ld = st.session_state['pv_info']
+                        st.session_state[f"{prefix}_pv_proj"] = pv_info_ld.get('projet', '')
+                        st.session_state[f"{prefix}_pv_cli"] = pv_info_ld.get('client', '')
+                        st.session_state[f"{prefix}_pv_dt"] = pv_info_ld.get('date', '')
+                        st.session_state[f"{prefix}_pv_coo"] = pv_info_ld.get('coord_essais', 'O.IKEN')
+                        st.session_state[f"{prefix}_pv_che"] = pv_info_ld.get('chef_labo', 'H.BAALLAL')
+                        st.session_state[f"{prefix}_pv_comm_input"] = pv_info_ld.get('commentaires', '')
+
                         st.session_state['success_msg'] = f"✅ Le PV N° '{pv_ref_selected}' a été chargé dans les onglets de saisie et de synthèse !"
                         st.rerun()
 
@@ -1502,7 +1526,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                 with del_col1:
                     confirm_delete = st.checkbox(
                         f"Je confirme vouloir supprimer définitivement le PV N° '{pv_ref_selected}'",
-                        key=f"confirm_del_selected_{selected_pv.get('id', 'sel')}"
+                        key=f"{prefix}_confirm_del_selected_{selected_pv.get('id', 'sel')}_{selected_pv.get('ref_pv', '')}"
                     )
                 with del_col2:
                     if st.button(
@@ -1510,7 +1534,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                         type="secondary",
                         use_container_width=True,
                         disabled=not confirm_delete,
-                        key=f"btn_del_selected_{selected_pv.get('id', 'sel')}"
+                        key=f"{prefix}_btn_del_selected_{selected_pv.get('id', 'sel')}_{selected_pv.get('ref_pv', '')}"
                     ):
                         pv_id_to_delete = selected_pv.get('id')
                         st.session_state['historique_pv'] = [
