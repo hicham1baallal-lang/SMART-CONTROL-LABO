@@ -1,4 +1,4 @@
-import streamlit as st
+[cite: 8]import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
@@ -965,7 +965,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         del st.session_state['success_msg']
 
     # --------------------------------------------------------------------------
-    # IDENTIFICATION DE L'UTILISATEUR (Détection flexible pour baallal)
+    # IDENTIFICATION DE L'UTILISATEUR
     # --------------------------------------------------------------------------
     user_tokens = []
     for _uk in ('username', 'user', 'user_name', 'current_user', 'user_email', 'email', 'nom_utilisateur', 'role'):
@@ -1396,4 +1396,160 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
     # FENÊTRE 3 : HISTORIQUE, CONSULTATION ET GESTION DES PV
     # ------------------------------------------------------------------------------
     with tabs[2]:
-        pass
+        st.subheader("📥 Re-télécharger un Procès-Verbal")
+
+        historique = st.session_state.get('historique_pv', [])
+
+        col_search1, col_search2 = st.columns(2)
+        with col_search1:
+            search_query = st.text_input(
+                "🔍 Rechercher (réf, ouvrage, classe...)",
+                placeholder="Ex: gare casa sud, B/394...",
+                key="hist_search_query"
+            )
+        with col_search2:
+            search_date = st.text_input(
+                "📅 Rechercher par Date d'écrasement",
+                placeholder="Ex: 2026-08-08",
+                key="hist_search_date"
+            )
+
+        filtered_pvs = []
+        for item in historique:
+            pv_ref = str(item.get('ref_pv', '')).lower()
+            pv_inf = item.get('pv_info', {})
+            inf_p = item.get('info_prelevement', {})
+            projet = str(pv_inf.get('projet', '') or inf_p.get('chantier', '')).lower()
+            client = str(pv_inf.get('client', '') or inf_p.get('client', '')).lower()
+            date_val = str(pv_inf.get('date', '') or inf_p.get('date_prelevement', '') or item.get('date_creation', '')).lower()
+
+            match_q = True
+            if search_query.strip():
+                q = search_query.strip().lower()
+                match_q = (q in pv_ref) or (q in projet) or (q in client)
+
+            match_d = True
+            if search_date.strip():
+                d = search_date.strip().lower()
+                match_d = (d in date_val)
+
+            if match_q and match_d:
+                filtered_pvs.append(item)
+
+        st.markdown("<br><b>Sélectionnez le PV à consulter :</b>", unsafe_allow_html=True)
+
+        if not filtered_pvs:
+            st.warning("⚠️ Aucun PV trouvé selon vos critères de recherche.")
+        else:
+            def format_pv_label(item):
+                p_ref = item.get('ref_pv', 'Sans Réf')
+                p_inf = item.get('pv_info', {})
+                inf_p = item.get('info_prelevement', {})
+                proj = p_inf.get('projet', inf_p.get('chantier', '-'))
+                client = p_inf.get('client', inf_p.get('client', '-'))
+                date_str = p_inf.get('date', inf_p.get('date_prelevement', item.get('date_creation', '-')))
+                pv_id = item.get('id', '-')
+                return f"Référence : {p_ref} | Client : {client} | Ouvrage : {proj} | Échéance / Date : {date_str} | Lot ID #{pv_id}"
+
+            selected_pv = st.selectbox(
+                "Sélectionnez le PV à consulter :",
+                options=filtered_pvs,
+                format_func=format_pv_label,
+                label_visibility="collapsed",
+                key="hist_selected_pv_dropdown"
+            )
+
+            if selected_pv:
+                sel_pv_info = selected_pv.get('pv_info', {})
+                sel_info_p = selected_pv.get('info_prelevement', {})
+                sel_data_granulats = selected_pv.get('data_granulats', {})
+                ref_pv_clean = selected_pv.get('ref_pv', 'rapport').replace('/', '_')
+
+                if REPORTLAB_AVAILABLE:
+                    try:
+                        pdf_data = generate_pv_pdf(sel_pv_info, sel_info_p, sel_data_granulats)
+                        st.download_button(
+                            label=f"📄 Télécharger le PV (PV_{ref_pv_clean}.pdf)",
+                            data=pdf_data,
+                            file_name=f"PV_{ref_pv_clean}.pdf",
+                            mime="application/pdf",
+                            use_container_width=True,
+                            type="primary"
+                        )
+                    except Exception as e:
+                        st.error(f"Erreur de génération PDF : {e}")
+                else:
+                    html_data = generate_pv_html(sel_pv_info, sel_info_p, sel_data_granulats)
+                    st.download_button(
+                        label=f"📄 Télécharger le PV (PV_{ref_pv_clean}.html)",
+                        data=html_data,
+                        file_name=f"PV_{ref_pv_clean}.html",
+                        mime="text/html",
+                        use_container_width=True,
+                        type="primary"
+                    )
+
+        st.markdown("<br><hr>", unsafe_allow_html=True)
+        st.subheader("📊 Base de données globale")
+
+        col_db1, col_db2 = st.columns(2)
+        with col_db1:
+            db_ref_query = st.text_input(
+                "🔍 Recherche par Réf. Contrôle",
+                placeholder="Ex: REF-123-GARE CASA SUD",
+                key="db_ref_query"
+            )
+        with col_db2:
+            db_date_query = st.text_input(
+                "📅 Recherche par Date de coulée",
+                placeholder="Ex: 2026-08-24",
+                key="db_date_query"
+            )
+
+        rows_data = []
+        for item in historique:
+            pv_ref = item.get('ref_pv', '')
+            p_inf = item.get('pv_info', {})
+            inf_p = item.get('info_prelevement', {})
+            dt_create = item.get('date_creation', '')
+            dt_prelev = p_inf.get('date', inf_p.get('date_prelevement', dt_create))
+
+            match_ref = True
+            if db_ref_query.strip():
+                match_ref = (db_ref_query.strip().lower() in str(pv_ref).lower()) or (db_ref_query.strip().lower() in str(inf_p.get('chantier', '')).lower())
+
+            match_dt = True
+            if db_date_query.strip():
+                match_dt = db_date_query.strip().lower() in str(dt_prelev).lower()
+
+            if match_ref and match_dt:
+                rows_data.append({
+                    "id": item.get('id', '-'),
+                    "betonnage_id": item.get('id', '-'),
+                    "ref_controle": pv_ref,
+                    "repere_eprouvette": f"/{item.get('id', 1)}",
+                    "num_bl": inf_p.get('dossier_no', '-'),
+                    "ouvrage": p_inf.get('projet', inf_p.get('chantier', '-')),
+                    "classe_beton": "C25/30",
+                    "statut_validation": "Validé",
+                    "date_coulee": dt_prelev,
+                    "affaissement_mm": 150,
+                    "temp_beton_C": 20,
+                    "echeance": "28 jours",
+                    "date_ecrasement": dt_prelev
+                })
+
+        if rows_data:
+            df_global = pd.DataFrame(rows_data)
+            st.dataframe(df_global, use_container_width=True, hide_index=True)
+
+            if is_baallal_admin or is_admin or can_edit:
+                with st.expander("🗑️ Supprimer un PV de la base de données", expanded=False):
+                    pv_to_del_ref = st.selectbox("Choisir le PV à supprimer :", options=[r['ref_controle'] for r in rows_data if r['ref_controle']])
+                    if st.button("❌ Supprimer définitivement ce PV", type="secondary"):
+                        st.session_state['historique_pv'] = [p for p in st.session_state['historique_pv'] if p.get('ref_pv') != pv_to_del_ref]
+                        delete_pv_from_supabase(supabase_client, pv_to_del_ref)
+                        st.success(f"PV '{pv_to_del_ref}' supprimé avec succès !")
+                        st.rerun()
+        else:
+            st.info("Aucune donnée disponible dans la base de données globale.")
