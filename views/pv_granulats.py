@@ -814,7 +814,7 @@ def fetch_pvs_from_supabase(supabase_client):
     for table_name in ['pv_granulats', 'historique_pv']:
         try:
             res = supabase_client.table(table_name).select('*').execute()
-            if res and hasattr(res, 'data') and res.data:
+            if res and hasattr(res, 'data') and res.data is not None:
                 loaded = []
                 for row in res.data:
                     if 'data' in row and isinstance(row['data'], dict):
@@ -1411,7 +1411,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         if st.session_state['historique_pv']:
             st.write("### 🔎 Recherche & Sélection de PV")
 
-            # Rubrique de sélection / recherche selon le format présenté
+            # Rubrique de sélection / recherche
             pv_options = {}
             for idx, pv_item in enumerate(reversed(st.session_state['historique_pv'])):
                 ref_pv_item = pv_item.get('ref_pv', f"PV-{idx+1}")
