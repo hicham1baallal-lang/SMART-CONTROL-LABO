@@ -919,6 +919,38 @@ def delete_pv_from_supabase(supabase_client, pv_ref):
 def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
     prefix = kwargs.get('key_prefix', 'pvg')
 
+    # ------------------------------------------------------------------------
+    # APPLICATION D'UN CHARGEMENT DE PV EN ATTENTE (depuis l'historique) —
+    # DOIT s'exécuter tout en haut de show(), AVANT la création de tout widget,
+    # pour pouvoir écrire dans st.session_state[f"{prefix}_..."] sans provoquer
+    # de StreamlitWidgetAlreadyInstantiatedError.
+    # ------------------------------------------------------------------------
+    if '_pending_pv_load' in st.session_state:
+        _pending = st.session_state.pop('_pending_pv_load')
+        st.session_state['info_prelevement'] = _pending.get('info_prelevement', {})
+        st.session_state['pv_info'] = _pending.get('pv_info', {})
+        st.session_state['data_granulats'] = _pending.get('data_granulats', {})
+
+        _info_p_ld = st.session_state['info_prelevement']
+        _pv_info_ld = st.session_state['pv_info']
+
+        st.session_state[f"{prefix}_common_client"] = _info_p_ld.get('client', '')
+        st.session_state[f"{prefix}_common_chantier"] = _info_p_ld.get('chantier', '')
+        st.session_state[f"{prefix}_common_dossier"] = _info_p_ld.get('dossier_no', '')
+        st.session_state[f"{prefix}_common_date_prelev"] = _info_p_ld.get('date_prelevement', '')
+        st.session_state[f"{prefix}_common_lieu_prelev"] = _info_p_ld.get('lieu_prelevement', '')
+        st.session_state[f"{prefix}_common_provenance"] = _info_p_ld.get('provenance', '')
+        st.session_state[f"{prefix}_common_num_rapport"] = _info_p_ld.get('num_rapport', '')
+
+        st.session_state[f"{prefix}_pv_proj"] = _pv_info_ld.get('projet', '')
+        st.session_state[f"{prefix}_pv_cli"] = _pv_info_ld.get('client', '')
+        st.session_state[f"{prefix}_pv_dt"] = _pv_info_ld.get('date', '')
+        st.session_state[f"{prefix}_pv_coo"] = _pv_info_ld.get('coord_essais', 'O.IKEN')
+        st.session_state[f"{prefix}_pv_che"] = _pv_info_ld.get('chef_labo', 'H.BAALLAL')
+        st.session_state[f"{prefix}_pv_comm_input"] = _pv_info_ld.get('commentaires', '')
+
+        st.session_state['success_msg'] = _pending.get('success_msg', "✅ PV chargé.")
+
     if 'info_prelevement' not in st.session_state:
         st.session_state['info_prelevement'] = {}
 
@@ -1594,29 +1626,19 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
             with col_act4:
                 if can_edit:
                     if st.button("📥 Charger dans l'application", use_container_width=True, key=f"{prefix}_btn_load_pv_active_main"):
-                        st.session_state['info_prelevement'] = copy.deepcopy(selected_pv.get('info_prelevement', {}))
-                        st.session_state['pv_info'] = copy.deepcopy(selected_pv.get('pv_info', {}))
-                        st.session_state['data_granulats'] = copy.deepcopy(selected_pv.get('data_granulats', {}))
-
-                        # Synchronisation des widgets de session
-                        info_p_ld = st.session_state['info_prelevement']
-                        st.session_state[f"{prefix}_common_client"] = info_p_ld.get('client', '')
-                        st.session_state[f"{prefix}_common_chantier"] = info_p_ld.get('chantier', '')
-                        st.session_state[f"{prefix}_common_dossier"] = info_p_ld.get('dossier_no', '')
-                        st.session_state[f"{prefix}_common_date_prelev"] = info_p_ld.get('date_prelevement', '')
-                        st.session_state[f"{prefix}_common_lieu_prelev"] = info_p_ld.get('lieu_prelevement', '')
-                        st.session_state[f"{prefix}_common_provenance"] = info_p_ld.get('provenance', '')
-                        st.session_state[f"{prefix}_common_num_rapport"] = info_p_ld.get('num_rapport', '')
-
-                        pv_info_ld = st.session_state['pv_info']
-                        st.session_state[f"{prefix}_pv_proj"] = pv_info_ld.get('projet', '')
-                        st.session_state[f"{prefix}_pv_cli"] = pv_info_ld.get('client', '')
-                        st.session_state[f"{prefix}_pv_dt"] = pv_info_ld.get('date', '')
-                        st.session_state[f"{prefix}_pv_coo"] = pv_info_ld.get('coord_essais', 'O.IKEN')
-                        st.session_state[f"{prefix}_pv_che"] = pv_info_ld.get('chef_labo', 'H.BAALLAL')
-                        st.session_state[f"{prefix}_pv_comm_input"] = pv_info_ld.get('commentaires', '')
-
-                        st.session_state['success_msg'] = f"✅ Le PV N° '{pv_ref_selected}' a été chargé dans les onglets de saisie et de synthèse !"
+                        # IMPORTANT : on ne peut pas réassigner ici les clés de
+                        # session_state déjà liées à des widgets (ex: {prefix}_common_client)
+                        # car ces widgets ont déjà été instanciés plus haut dans CE MÊME
+                        # run (l'onglet 1 s'exécute avant l'onglet 3, même s'il n'est pas
+                        # affiché). Cela déclenche StreamlitWidgetAlreadyInstantiatedError.
+                        # On stocke donc la demande de chargement et on la traite tout en
+                        # haut de show(), AVANT la création de ces widgets, au prochain run.
+                        st.session_state['_pending_pv_load'] = {
+                            'info_prelevement': copy.deepcopy(selected_pv.get('info_prelevement', {})),
+                            'pv_info': copy.deepcopy(selected_pv.get('pv_info', {})),
+                            'data_granulats': copy.deepcopy(selected_pv.get('data_granulats', {})),
+                            'success_msg': f"✅ Le PV N° '{pv_ref_selected}' a été chargé dans les onglets de saisie et de synthèse !"
+                        }
                         st.rerun()
 
             # ------------------------------------------------------------------
