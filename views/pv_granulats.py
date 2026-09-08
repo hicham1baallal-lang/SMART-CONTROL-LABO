@@ -10,6 +10,7 @@ import io
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+from matplotlib.ticker import FixedLocator, FixedFormatter, NullLocator
 
 try:
     from reportlab.lib.pagesizes import A4
@@ -31,6 +32,10 @@ SUFFIX_MAP = {
     'SC': '/3',
     'SD': '/4'
 }
+
+# Graduation normative des tamis pour l'axe des abscisses (échelle log)
+SIEVE_TICKVALS = [0.063, 0.125, 0.25, 0.5, 1, 2, 4, 8, 16, 31.5, 63]
+SIEVE_TICKTEXT = ["0,063", "0,125", "0,25", "0,5", "1", "2", "4", "8", "16", "31,5", "63"]
 
 def clean_html(html_str):
     """Supprime les espaces en début de ligne pour éviter le rendu en bloc de code Markdown dans Streamlit."""
@@ -514,9 +519,9 @@ def generate_pv_html(pv_info, info_p, data_granulats):
 # ------------------------------------------------------------------------------
 # FONCTION DE GÉNÉRATION DU GRAPHIQUE COMPATIBLE PDF
 # ------------------------------------------------------------------------------
-def create_curve_image_buffer(data_granulats, ref_b):
+def create_curve_image_buffer(data_granulats, ref_b, fig_width=8, fig_height=3.2):
     """Génère un buffer image PNG haute définition de la courbe granulométrique pour le PDF."""
-    fig, ax = plt.subplots(figsize=(8, 3.2), dpi=200)
+    fig, ax = plt.subplots(figsize=(fig_width, fig_height), dpi=200)
     colors_map = {'GII': '#1e40af', 'GI': '#0284c7', 'SC': '#16a34a', 'SD': '#ea580c'}
     
     for k in ['GII', 'GI', 'SC', 'SD']:
@@ -528,6 +533,9 @@ def create_curve_image_buffer(data_granulats, ref_b):
 
     ax.set_xscale('log')
     ax.set_xlim(0.063, 63)  # Ordre croissant : petit tamis (gauche) -> grand tamis (droite)
+    ax.xaxis.set_major_locator(FixedLocator(SIEVE_TICKVALS))
+    ax.xaxis.set_major_formatter(FixedFormatter(SIEVE_TICKTEXT))
+    ax.xaxis.set_minor_locator(NullLocator())  # masque les graduations intermédiaires (10^-1, 10^0...)
     ax.set_xlabel("Tamis (mm)", fontsize=8, fontweight='bold')
     ax.set_ylabel("% Passants Cumulés", fontsize=8, fontweight='bold')
     ax.set_ylim(-2, 105)
@@ -737,15 +745,9 @@ def generate_pv_pdf(pv_info, info_p, data_granulats):
     story.append(build_mat_table(t4_cols, t4_row1, t4_row2))
     story.append(Spacer(1, 4))
 
-    # 4. Insertion de la Courbe Granulométrique
-    chart_buf = create_curve_image_buffer(data_granulats, ref_b)
-    img = Image(chart_buf, width=565, height=210)
-    story.append(KeepTogether([
-        img,
-        Spacer(1, 4)
-    ]))
-
-    # 5. Commentaires
+    # 4. Préparation des blocs restants (commentaires + signatures) AVANT le
+    #    calcul de la hauteur de la courbe, afin de pouvoir mesurer précisément
+    #    l'espace qu'il reste à occuper sur la page.
     comm_text = f"<b>COMMENTAIRES :</b><br/>{pv_info.get('commentaires', '')}"
     comm_p = Paragraph(comm_text, cell_left)
     comm_table = Table([[comm_p]], colWidths=[565])
@@ -755,10 +757,8 @@ def generate_pv_pdf(pv_info, info_p, data_granulats):
         ('TOPPADDING', (0,0), (-1,-1), 3),
         ('BOTTOMPADDING', (0,0), (-1,-1), 3),
     ]))
-    story.append(comm_table)
-    story.append(Spacer(1, 4))
+    comm_spacer = Spacer(1, 4)
 
-    # 6. Signatures
     sig_data = [
         [
             Paragraph(f"<b>LE COORDINATEUR DES ESSAIS</b><br/><br/><font color='#64748b'>Nom: {pv_info.get('coord_essais', 'O.IKEN')}</font><br/>Visa:", cell_norm),
@@ -774,6 +774,45 @@ def generate_pv_pdf(pv_info, info_p, data_granulats):
         ('TOPPADDING', (0,0), (-1,-1), 4),
         ('BOTTOMPADDING', (0,0), (-1,-1), 16),
     ]))
+
+    # 5. Calcul de l'espace disponible pour que le PV occupe toute la page,
+    #    sans vide en bas : on mesure la hauteur réellement prise par tout ce
+    #    qui est déjà dans le "story" ainsi que par les blocs commentaires et
+    #    signatures, puis la courbe est dimensionnée pour combler l'écart.
+    def _flowable_height(flowable, avail_w=565):
+        try:
+            return flowable.wrap(avail_w, 100000)[1]
+        except Exception:
+            return 0
+
+    FRAME_PADDING = 12  # padding interne par défaut du Frame ReportLab (6pt haut + 6pt bas)
+    page_height = A4[1] - doc.topMargin - doc.bottomMargin - FRAME_PADDING
+    CHART_BOTTOM_SPACER = 4
+    SAFETY_MARGIN = 6
+
+    used_height = sum(_flowable_height(f) for f in story)
+    used_height += _flowable_height(comm_table) + _flowable_height(comm_spacer) + _flowable_height(sig_table)
+
+    chart_height = page_height - used_height - CHART_BOTTOM_SPACER - SAFETY_MARGIN
+    chart_height = max(200, min(chart_height, 480))  # bornes raisonnables de lisibilité
+
+    # 6. Insertion de la Courbe Granulométrique (hauteur ajustée dynamiquement)
+    chart_buf = create_curve_image_buffer(
+        data_granulats, ref_b,
+        fig_width=565 / 72.0,
+        fig_height=chart_height / 72.0
+    )
+    img = Image(chart_buf, width=565, height=chart_height)
+    story.append(KeepTogether([
+        img,
+        Spacer(1, CHART_BOTTOM_SPACER)
+    ]))
+
+    # 7. Commentaires
+    story.append(comm_table)
+    story.append(comm_spacer)
+
+    # 8. Signatures
     story.append(sig_table)
 
     doc.build(story)
@@ -1130,7 +1169,10 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
             fig.update_layout(
                 xaxis=dict(
                     title="Tamis (mm)",
-                    type="log"
+                    type="log",
+                    tickmode="array",
+                    tickvals=SIEVE_TICKVALS,
+                    ticktext=SIEVE_TICKTEXT
                 ),
                 yaxis=dict(
                     title="% Passants Cumulés",
@@ -1260,7 +1302,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                 ))
             
         fig_global_tab2.update_layout(
-            xaxis=dict(type="log", title="Tamis (mm)", tickvals=[0.063, 0.125, 0.25, 0.5, 1, 2, 4, 8, 16, 31.5, 63]),
+            xaxis=dict(type="log", title="Tamis (mm)", tickmode="array", tickvals=SIEVE_TICKVALS, ticktext=SIEVE_TICKTEXT),
             yaxis=dict(title="% Passants Cumulés", range=[0, 105]),
             height=440,
             margin=dict(l=30, r=30, t=30, b=30),
