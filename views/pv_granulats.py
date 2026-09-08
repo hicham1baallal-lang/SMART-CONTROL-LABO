@@ -949,6 +949,33 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         st.success(st.session_state['success_msg'])
         del st.session_state['success_msg']
 
+    # --------------------------------------------------------------------------
+    # IDENTIFICATION DE L'UTILISATEUR (pour restreindre la suppression de PV
+    # strictement à l'admin "baallal")
+    # --------------------------------------------------------------------------
+    _current_user = ''
+    for _uk in ('username', 'user', 'user_name', 'current_user', 'user_email', 'email', 'nom_utilisateur'):
+        _uv = kwargs.get(_uk)
+        if _uv:
+            _current_user = str(_uv)
+            break
+    is_baallal_admin = bool(is_admin) and 'baallal' in _current_user.lower()
+
+    def _build_pv_snapshot():
+        """Construit un instantané complet du PV courant pour l'historique."""
+        existing_ids = [p.get('id', 0) for p in st.session_state['historique_pv']]
+        next_id = (max(existing_ids) + 1) if existing_ids else 1
+        return {
+            'id': next_id,
+            'date_creation': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'ref_pv': st.session_state['pv_info'].get('ref_pv', '').strip(),
+            'projet': st.session_state['pv_info'].get('projet', ''),
+            'client': st.session_state['pv_info'].get('client', ''),
+            'info_prelevement': copy.deepcopy(st.session_state['info_prelevement']),
+            'pv_info': copy.deepcopy(st.session_state['pv_info']),
+            'data_granulats': copy.deepcopy(st.session_state['data_granulats'])
+        }
+
     st.title("🏗️ Module Identification des Granulats pour Béton")
     
     if not can_edit:
@@ -1240,7 +1267,10 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                                 st.session_state['data_granulats'][mat_k]['passants']
                             )
 
-                    st.session_state['success_msg'] = f"✅ L'ensemble des essais pour le Rapport N° '{new_num_rapport}' (Référence Base: {new_ref_base}) a été validé et enregistré avec succès !"
+                    # Ajout automatique du PV validé dans l'historique (Fenêtre 3)
+                    st.session_state['historique_pv'].append(_build_pv_snapshot())
+
+                    st.session_state['success_msg'] = f"✅ L'ensemble des essais pour le Rapport N° '{new_num_rapport}' (Référence Base: {new_ref_base}) a été validé et ajouté à l'historique des PV !"
                     st.rerun()
 
     # ------------------------------------------------------------------------------
@@ -1372,17 +1402,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                 st.button("💾 Sauvegarder le PV actuel dans l'historique", type="primary", use_container_width=True, disabled=True)
             else:
                 if st.button("💾 Sauvegarder le PV actuel dans l'historique", type="primary", use_container_width=True):
-                    pv_snapshot = {
-                        'id': len(st.session_state['historique_pv']) + 1,
-                        'date_creation': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                        'ref_pv': current_ref_pv,
-                        'projet': st.session_state['pv_info'].get('projet', ''),
-                        'client': st.session_state['pv_info'].get('client', ''),
-                        'info_prelevement': copy.deepcopy(st.session_state['info_prelevement']),
-                        'pv_info': copy.deepcopy(st.session_state['pv_info']),
-                        'data_granulats': copy.deepcopy(st.session_state['data_granulats'])
-                    }
-                    st.session_state['historique_pv'].append(pv_snapshot)
+                    st.session_state['historique_pv'].append(_build_pv_snapshot())
                     st.session_state['success_msg'] = f"✅ Le PV N° '{current_ref_pv}' a été sauvegardé avec succès dans l'historique !"
                     st.rerun()
 
@@ -1460,5 +1480,35 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
 
                     with st.popover("👁️ Voir la structure JSON brute"):
                         st.json(pv)
+
+                    # --------------------------------------------------------
+                    # SUPPRESSION D'UN PV — strictement réservée à l'admin
+                    # "baallal". Les autres utilisateurs ne voient pas cette
+                    # section, même en mode édition.
+                    # --------------------------------------------------------
+                    if is_baallal_admin:
+                        st.markdown("---")
+                        st.markdown("##### 🔐 Suppression (Admin uniquement)")
+                        del_col1, del_col2 = st.columns([3, 1])
+                        with del_col1:
+                            confirm_delete = st.checkbox(
+                                "Je confirme vouloir supprimer définitivement ce PV de l'historique",
+                                key=f"confirm_del_{pv_id_str}_{i}"
+                            )
+                        with del_col2:
+                            if st.button(
+                                "🗑️ Supprimer",
+                                type="secondary",
+                                use_container_width=True,
+                                disabled=not confirm_delete,
+                                key=f"btn_del_{pv_id_str}_{i}"
+                            ):
+                                pv_id_to_delete = pv.get('id')
+                                st.session_state['historique_pv'] = [
+                                    p for p in st.session_state['historique_pv']
+                                    if p.get('id') != pv_id_to_delete
+                                ]
+                                st.session_state['success_msg'] = f"🗑️ Le PV N° '{ref_pv_disp}' a été supprimé de l'historique."
+                                st.rerun()
         else:
             st.info("Aucun PV n'a été sauvegardé dans cette session pour l'instant.")
