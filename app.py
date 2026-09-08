@@ -6,6 +6,7 @@ from datetime import datetime
 import json
 import copy
 import io
+from supabase import create_client, Client
 
 import matplotlib
 matplotlib.use('Agg')
@@ -20,6 +21,22 @@ try:
     REPORTLAB_AVAILABLE = True
 except ImportError:
     REPORTLAB_AVAILABLE = False
+
+# ------------------------------------------------------------------------------
+# CONFIGURATION SUPABASE
+# ------------------------------------------------------------------------------
+SUPABASE_URL = "https://pfyfmfjccibiwfiwknu.supabase.co"
+SUPABASE_KEY = "sb_publishable_6h8ZUeV8i5TjKUV9B1Ewg_eDawQRkW"
+SUPABASE_SECRET_KEY = "sb_secret_jHQ1RtAC6_jadP5atk2RQ_UKatyPg8"
+
+@st.cache_resource
+def init_supabase_client():
+    try:
+        return create_client(SUPABASE_URL, SUPABASE_KEY)
+    except Exception:
+        return None
+
+default_supabase_client = init_supabase_client()
 
 # ------------------------------------------------------------------------------
 # CONSTANTES & SUFFIXES DES MATÉRIAUX
@@ -865,6 +882,9 @@ def delete_pv_from_supabase(supabase_client, pv_ref):
 # FONCTION PRINCIPALE STREAMLIT
 # ------------------------------------------------------------------------------
 def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
+    if supabase_client is None:
+        supabase_client = default_supabase_client
+
     prefix = kwargs.get('key_prefix', 'pvg')
 
     if 'info_prelevement' not in st.session_state:
