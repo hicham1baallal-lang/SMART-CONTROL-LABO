@@ -1315,6 +1315,13 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         st.markdown("---")
         st.subheader("📋 Validation et Enregistrement Global des Essais")
 
+        if not supabase_client:
+            st.warning(
+                "⚠️ Aucune base de données n'est connectée à ce module : la validation ci-dessous "
+                "enregistrera bien le PV dans l'historique de **cette session**, mais il sera **perdu** "
+                "au prochain redémarrage/reconnexion. Voir l'onglet 3️⃣ Historique pour le diagnostic complet."
+            )
+
         if can_edit:
             if st.button("✅ Valider et enregistrer l'ensemble des essais", type="primary", use_container_width=True, key=f"{prefix}_btn_validate_all"):
                 for mat_k in st.session_state['data_granulats'].keys():
@@ -1465,16 +1472,39 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
     with tabs[2]:
         st.header("Historique et Sauvegarde des PV")
 
-        with st.expander("🔧 Diagnostic connexion base de données (persistance des PV)"):
-            if supabase_client:
-                st.success("✅ Un client Supabase est bien transmis à ce module.")
-            else:
-                st.error("❌ Aucun client Supabase n'est transmis à ce module (`supabase_client=None`). "
-                          "Tant que l'application hôte ne fournit pas de client valide, l'historique des PV "
-                          "reste uniquement en mémoire de session et sera perdu à la reconnexion.")
-            _dbg_fetch = st.session_state.get('_pv_db_debug_fetch')
-            _dbg_save = st.session_state.get('_pv_db_debug_save')
-            _dbg_delete = st.session_state.get('_pv_db_debug_delete')
+        # Bannière de diagnostic toujours visible (pas besoin de dérouler quoi
+        # que ce soit) pour comprendre immédiatement si la persistance en base
+        # fonctionne ou non.
+        _dbg_fetch = st.session_state.get('_pv_db_debug_fetch')
+        _dbg_save = st.session_state.get('_pv_db_debug_save')
+        _dbg_delete = st.session_state.get('_pv_db_debug_delete')
+
+        if not supabase_client:
+            st.error(
+                "❌ **Aucun client Supabase n'est transmis à ce module** (`supabase_client=None`). "
+                "C'est pour cela que l'historique des PV est perdu à chaque redémarrage/reconnexion : "
+                "il n'existe alors qu'en mémoire de la session en cours. "
+                "Ce paramètre est fourni par l'application qui appelle `show(...)` — vérifiez l'endroit où "
+                "ce module est invoqué (le routeur principal de l'app) pour vous assurer qu'un client "
+                "Supabase valide y est bien passé en argument `supabase_client`."
+            )
+        elif _dbg_fetch and _dbg_fetch.get('attempts') and not any(a.get('ok') for a in _dbg_fetch['attempts']):
+            st.error(
+                "❌ **Le client Supabase est bien transmis, mais la lecture de l'historique a échoué** "
+                "sur les deux tables testées (`pv_granulats` et `historique_pv`). Détail ci-dessous — "
+                "il s'agit très probablement d'une table manquante, d'un nom de colonne incorrect, ou "
+                "d'une policy RLS qui bloque l'accès."
+            )
+        elif _dbg_save and not _dbg_save.get('saved') and _dbg_save.get('attempts'):
+            st.warning(
+                "⚠️ La dernière tentative d'enregistrement d'un PV en base a échoué sur les deux tables "
+                "testées. Détail ci-dessous."
+            )
+        elif supabase_client and _dbg_fetch and _dbg_fetch.get('loaded_from'):
+            st.success(f"✅ Connexion à la base OK — historique chargé depuis la table `{_dbg_fetch['loaded_from']}` ({_dbg_fetch.get('loaded_count', 0)} PV).")
+
+        with st.expander("🔧 Détail technique du diagnostic base de données", expanded=(not supabase_client or bool(_dbg_fetch and not _dbg_fetch.get('loaded_from')))):
+            st.write("Client Supabase transmis :", "✅ Oui" if supabase_client else "❌ Non")
             if _dbg_fetch:
                 st.markdown("**Dernière tentative de chargement (au démarrage de la session) :**")
                 st.json(_dbg_fetch)
