@@ -809,11 +809,18 @@ def generate_pv_pdf(pv_info, info_p, data_granulats):
 # ------------------------------------------------------------------------------
 def fetch_pvs_from_supabase(supabase_client):
     """Charge l'historique complet des PV depuis la base de données Supabase."""
+    debug = {'client_present': bool(supabase_client), 'attempts': []}
     if not supabase_client:
+        try:
+            st.session_state['_pv_db_debug_fetch'] = debug
+        except Exception:
+            pass
         return None
     for table_name in ['pv_granulats', 'historique_pv']:
         try:
             res = supabase_client.table(table_name).select('*').execute()
+            n_rows = len(res.data) if res and hasattr(res, 'data') and res.data else 0
+            debug['attempts'].append({'table': table_name, 'ok': True, 'rows_found': n_rows})
             if res and hasattr(res, 'data') and res.data:
                 loaded = []
                 for row in res.data:
@@ -827,14 +834,30 @@ def fetch_pvs_from_supabase(supabase_client):
                         loaded.append(item)
                     else:
                         loaded.append(row)
+                debug['loaded_from'] = table_name
+                debug['loaded_count'] = len(loaded)
+                try:
+                    st.session_state['_pv_db_debug_fetch'] = debug
+                except Exception:
+                    pass
                 return loaded
-        except Exception:
+        except Exception as e:
+            debug['attempts'].append({'table': table_name, 'ok': False, 'error': str(e)})
             continue
+    try:
+        st.session_state['_pv_db_debug_fetch'] = debug
+    except Exception:
+        pass
     return None
 
 def save_pv_to_supabase(supabase_client, pv_snapshot):
     """Sauvegarde ou met à jour de façon permanente un PV sur la base de données Supabase."""
+    debug = {'client_present': bool(supabase_client), 'attempts': [], 'saved': False}
     if not supabase_client:
+        try:
+            st.session_state['_pv_db_debug_save'] = debug
+        except Exception:
+            pass
         return
     payload = {
         'ref_pv': pv_snapshot.get('ref_pv'),
@@ -846,20 +869,49 @@ def save_pv_to_supabase(supabase_client, pv_snapshot):
     for table_name in ['pv_granulats', 'historique_pv']:
         try:
             supabase_client.table(table_name).upsert(payload, on_conflict='ref_pv').execute()
+            debug['attempts'].append({'table': table_name, 'ok': True})
+            debug['saved'] = True
+            debug['saved_to'] = table_name
+            try:
+                st.session_state['_pv_db_debug_save'] = debug
+            except Exception:
+                pass
             return
-        except Exception:
+        except Exception as e:
+            debug['attempts'].append({'table': table_name, 'ok': False, 'error': str(e)})
             continue
+    try:
+        st.session_state['_pv_db_debug_save'] = debug
+    except Exception:
+        pass
 
 def delete_pv_from_supabase(supabase_client, pv_ref):
     """Supprime un PV de la base de données Supabase."""
+    debug = {'client_present': bool(supabase_client), 'attempts': [], 'deleted': False}
     if not supabase_client or not pv_ref:
+        try:
+            st.session_state['_pv_db_debug_delete'] = debug
+        except Exception:
+            pass
         return
     for table_name in ['pv_granulats', 'historique_pv']:
         try:
             supabase_client.table(table_name).delete().eq('ref_pv', pv_ref).execute()
+            debug['attempts'].append({'table': table_name, 'ok': True})
+            debug['deleted'] = True
+            debug['deleted_from'] = table_name
+            try:
+                st.session_state['_pv_db_debug_delete'] = debug
+            except Exception:
+                pass
             return
-        except Exception:
+        except Exception as e:
+            debug['attempts'].append({'table': table_name, 'ok': False, 'error': str(e)})
             continue
+    try:
+        st.session_state['_pv_db_debug_delete'] = debug
+    except Exception:
+        pass
 
 # ------------------------------------------------------------------------------
 # FONCTION PRINCIPALE STREAMLIT
@@ -1412,6 +1464,28 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
     # ------------------------------------------------------------------------------
     with tabs[2]:
         st.header("Historique et Sauvegarde des PV")
+
+        with st.expander("🔧 Diagnostic connexion base de données (persistance des PV)"):
+            if supabase_client:
+                st.success("✅ Un client Supabase est bien transmis à ce module.")
+            else:
+                st.error("❌ Aucun client Supabase n'est transmis à ce module (`supabase_client=None`). "
+                          "Tant que l'application hôte ne fournit pas de client valide, l'historique des PV "
+                          "reste uniquement en mémoire de session et sera perdu à la reconnexion.")
+            _dbg_fetch = st.session_state.get('_pv_db_debug_fetch')
+            _dbg_save = st.session_state.get('_pv_db_debug_save')
+            _dbg_delete = st.session_state.get('_pv_db_debug_delete')
+            if _dbg_fetch:
+                st.markdown("**Dernière tentative de chargement (au démarrage de la session) :**")
+                st.json(_dbg_fetch)
+            if _dbg_save:
+                st.markdown("**Dernière tentative d'enregistrement :**")
+                st.json(_dbg_save)
+            if _dbg_delete:
+                st.markdown("**Dernière tentative de suppression :**")
+                st.json(_dbg_delete)
+            if not any([_dbg_fetch, _dbg_save, _dbg_delete]):
+                st.caption("Aucune tentative d'accès à la base n'a encore eu lieu dans cette session.")
 
         if st.session_state['historique_pv']:
             st.write("### 🔎 Recherche & Sélection de PV")
