@@ -597,153 +597,169 @@ def generate_pv_pdf(pv_info, info_p, data_granulats):
     story.append(header_table)
     story.append(Spacer(1, 4))
 
-    # 2. Grille d'Informations Chantier
-    info_data = [
-        [Paragraph("Client :", cell_left_bold), Paragraph(str(pv_info.get('client', '')), cell_left_bold),
-         Paragraph("N° Dossier :", cell_left_bold), Paragraph(str(info_p.get('dossier_no', '-')), cell_left)],
-        [Paragraph("Chantier :", cell_left_bold), Paragraph(str(pv_info.get('projet', '')), cell_left),
-         Paragraph("Provenance :", cell_left_bold), Paragraph(str(info_p.get('provenance', '-')), cell_left)],
-        [Paragraph("Date prélèvement :", cell_left_bold), Paragraph(str(pv_info.get('date', '')), cell_left),
-         Paragraph("Lieu prélèvement :", cell_left_bold), Paragraph(str(info_p.get('lieu_prelevement', '-')), cell_left)],
-        [Paragraph("Réf. Échantillon :", cell_left_bold), Paragraph(f"<b>{ref_b}</b>", cell_left),
-         Paragraph("", cell_left), Paragraph("", cell_left)]
-    ]
-    info_table = Table(info_data, colWidths=[90, 192.5, 90, 192.5])
-    info_table.setStyle(TableStyle([
-        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#cbd5e1')),
-        ('BACKGROUND', (0,0), (0,-1), colors.HexColor('#f8fafc')),
-        ('BACKGROUND', (2,0), (2,-1), colors.HexColor('#f8fafc')),
-        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-        ('TOPPADDING', (0,0), (-1,-1), 2),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 2),
-    ]))
-    story.append(info_table)
-    story.append(Spacer(1, 4))
+    # Compute des tables "ajustables" (infos, normes, GII/GI/SC/SD) : leur
+    # padding (haut/bas) est paramétrable pour absorber l'espace restant sur
+    # la page une fois la hauteur de la courbe fixée (voir plus bas).
+    def build_adjustable_tables(pad_extra):
+        flowables = []
 
-    # 3. Références Normatives
-    norm_data = [
-        [Paragraph("Référence Normative", cell_bold), "", "", "", ""],
-        [Paragraph("<b>A.G :</b> NF EN 933-1", cell_norm),
-         Paragraph("<b>Équivalent de sable :</b> NF EN 933-8", cell_norm),
-         Paragraph("<b>VB :</b> NF EN 933-9", cell_norm),
-         Paragraph("<b>LOS ANGELES :</b> NF EN 1097-2", cell_norm),
-         Paragraph("<b>CA :</b> NF EN 933-3", cell_norm)]
-    ]
-    norm_table = Table(norm_data, colWidths=[113]*5)
-    norm_table.setStyle(TableStyle([
-        ('SPAN', (0,0), (4,0)),
-        ('BACKGROUND', (0,0), (4,0), colors.HexColor('#f1f5f9')),
-        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#cbd5e1')),
-        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-        ('TOPPADDING', (0,0), (-1,-1), 2),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 2),
-    ]))
-    story.append(norm_table)
-    story.append(Spacer(1, 4))
-
-    # Helper pour la création des sous-tableaux de matériaux
-    def build_mat_table(title_cols, row_data_vals, row_lim_vals):
-        t_data = [
-            [Paragraph("<b>Désignations</b>", cell_bold)] + [Paragraph(f"<b>{c}</b>", cell_bold) for c in title_cols[0]],
-            [""] + [Paragraph(f"<b>{c}</b>", cell_bold) for c in title_cols[1]],
-            row_data_vals,
-            row_lim_vals
+        # 2. Grille d'Informations Chantier
+        info_data = [
+            [Paragraph("Client :", cell_left_bold), Paragraph(str(pv_info.get('client', '')), cell_left_bold),
+             Paragraph("N° Dossier :", cell_left_bold), Paragraph(str(info_p.get('dossier_no', '-')), cell_left)],
+            [Paragraph("Chantier :", cell_left_bold), Paragraph(str(pv_info.get('projet', '')), cell_left),
+             Paragraph("Provenance :", cell_left_bold), Paragraph(str(info_p.get('provenance', '-')), cell_left)],
+            [Paragraph("Date prélèvement :", cell_left_bold), Paragraph(str(pv_info.get('date', '')), cell_left),
+             Paragraph("Lieu prélèvement :", cell_left_bold), Paragraph(str(info_p.get('lieu_prelevement', '-')), cell_left)],
+            [Paragraph("Réf. Échantillon :", cell_left_bold), Paragraph(f"<b>{ref_b}</b>", cell_left),
+             Paragraph("", cell_left), Paragraph("", cell_left)]
         ]
-        col_w = [165] + [50]*8
-        t = Table(t_data, colWidths=col_w)
-        t.setStyle(TableStyle([
-            ('SPAN', (0,0), (0,1)),
-            ('BACKGROUND', (0,0), (-1,1), colors.HexColor('#2563eb')),
-            ('TEXTCOLOR', (0,0), (-1,1), colors.white),
+        info_table = Table(info_data, colWidths=[90, 192.5, 90, 192.5])
+        info_table.setStyle(TableStyle([
             ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#cbd5e1')),
-            ('BACKGROUND', (0,2), (0,2), colors.HexColor('#f1f5f9')),
-            ('BACKGROUND', (0,3), (-1,3), colors.HexColor('#fafafa')),
+            ('BACKGROUND', (0,0), (0,-1), colors.HexColor('#f8fafc')),
+            ('BACKGROUND', (2,0), (2,-1), colors.HexColor('#f8fafc')),
             ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-            ('TOPPADDING', (0,0), (-1,-1), 1.5),
-            ('BOTTOMPADDING', (0,0), (-1,-1), 1.5),
+            ('TOPPADDING', (0,0), (-1,-1), 2 + pad_extra),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 2 + pad_extra),
         ]))
-        return t
+        flowables.append(info_table)
+        flowables.append(Spacer(1, 4))
 
-    empty_char = ({'2D': 0, '1.4D': 0, 'D': 0, 'd': 0, 'd/2': 0}, {'2D': 0.0, '1.4D': 0.0, 'D': 0.0, 'd': 0.0, 'd/2': 0.0})
-    gii_data = data_granulats.get('GII', {})
-    gi_data  = data_granulats.get('GI', {})
-    sc_data  = data_granulats.get('SC', {})
-    sd_data  = data_granulats.get('SD', {})
+        # 3. Références Normatives
+        norm_data = [
+            [Paragraph("Référence Normative", cell_bold), "", "", "", ""],
+            [Paragraph("<b>A.G :</b> NF EN 933-1", cell_norm),
+             Paragraph("<b>Équivalent de sable :</b> NF EN 933-8", cell_norm),
+             Paragraph("<b>VB :</b> NF EN 933-9", cell_norm),
+             Paragraph("<b>LOS ANGELES :</b> NF EN 1097-2", cell_norm),
+             Paragraph("<b>CA :</b> NF EN 933-3", cell_norm)]
+        ]
+        norm_table = Table(norm_data, colWidths=[113]*5)
+        norm_table.setStyle(TableStyle([
+            ('SPAN', (0,0), (4,0)),
+            ('BACKGROUND', (0,0), (4,0), colors.HexColor('#f1f5f9')),
+            ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#cbd5e1')),
+            ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+            ('TOPPADDING', (0,0), (-1,-1), 2 + pad_extra),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 2 + pad_extra),
+        ]))
+        flowables.append(norm_table)
+        flowables.append(Spacer(1, 4))
 
-    gii_s, gii_p = calculate_characteristic_data(gii_data) if gii_data else empty_char
-    gi_s, gi_p   = calculate_characteristic_data(gi_data) if gi_data else empty_char
-    sc_s, sc_p   = calculate_characteristic_data(sc_data) if sc_data else empty_char
-    sd_s, sd_p   = calculate_characteristic_data(sd_data) if sd_data else empty_char
+        # Helper pour la création des sous-tableaux de matériaux
+        def build_mat_table(title_cols, row_data_vals, row_lim_vals):
+            t_data = [
+                [Paragraph("<b>Désignations</b>", cell_bold)] + [Paragraph(f"<b>{c}</b>", cell_bold) for c in title_cols[0]],
+                [""] + [Paragraph(f"<b>{c}</b>", cell_bold) for c in title_cols[1]],
+                row_data_vals,
+                row_lim_vals
+            ]
+            col_w = [165] + [50]*8
+            t = Table(t_data, colWidths=col_w)
+            t.setStyle(TableStyle([
+                ('SPAN', (0,0), (0,1)),
+                ('BACKGROUND', (0,0), (-1,1), colors.HexColor('#2563eb')),
+                ('TEXTCOLOR', (0,0), (-1,1), colors.white),
+                ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#cbd5e1')),
+                ('BACKGROUND', (0,2), (0,2), colors.HexColor('#f1f5f9')),
+                ('BACKGROUND', (0,3), (-1,3), colors.HexColor('#fafafa')),
+                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                ('TOPPADDING', (0,0), (-1,-1), 1.5 + pad_extra),
+                ('BOTTOMPADDING', (0,0), (-1,-1), 1.5 + pad_extra),
+            ]))
+            return t
 
-    # Tableau GII
-    t1_cols = [
-        ["2D", "1,4D", "D", "d", "d/2", "f", "FI", "LA"],
-        [str(gii_s['2D']), str(gii_s['1.4D']), str(gii_s['D']), str(gii_s['d']), str(gii_s['d/2']), "% < 63µm", "-", "-"]
-    ]
-    t1_row1 = [
-        Paragraph(f"<b>{gii_data.get('nom', 'GII')} - ({ref_b}/1)</b>", cell_left),
-        Paragraph(f"{gii_p['2D']:.0f}", cell_norm), Paragraph(f"{gii_p['1.4D']:.0f}", cell_norm), Paragraph(f"{gii_p['D']:.0f}", cell_norm),
-        Paragraph(f"{gii_p['d']:.0f}", cell_norm), Paragraph(f"{gii_p['d/2']:.0f}", cell_norm),
-        Paragraph(f"{get_passant_at_sieve(gii_data.get('sieves', []), gii_data.get('passants', []), 0.063):.1f}", cell_norm),
-        Paragraph(f"{gii_data.get('fi', '-') if gii_data.get('fi') is not None else '-'}", cell_norm),
-        Paragraph(f"{gii_data.get('la', '-') if gii_data.get('la') is not None else '-'}", cell_norm)
-    ]
-    t1_row2 = [Paragraph("Caractéristique générale", cell_left)] + [Paragraph(v, cell_norm) for v in ["100", "98-100", "85-99", "0-20", "0-5", "< 1,5", "FI 20", "< 30"]]
-    story.append(build_mat_table(t1_cols, t1_row1, t1_row2))
-    story.append(Spacer(1, 3))
+        empty_char = ({'2D': 0, '1.4D': 0, 'D': 0, 'd': 0, 'd/2': 0}, {'2D': 0.0, '1.4D': 0.0, 'D': 0.0, 'd': 0.0, 'd/2': 0.0})
+        gii_data = data_granulats.get('GII', {})
+        gi_data  = data_granulats.get('GI', {})
+        sc_data  = data_granulats.get('SC', {})
+        sd_data  = data_granulats.get('SD', {})
 
-    # Tableau GI
-    t2_cols = [
-        ["2D", "1,4D", "D", "d", "d/2", "f", "FI", "LA"],
-        [str(gi_s['2D']), str(gi_s['1.4D']), str(gi_s['D']), str(gi_s['d']), str(gi_s['d/2']), "% < 63µm", "-", "-"]
-    ]
-    t2_row1 = [
-        Paragraph(f"<b>{gi_data.get('nom', 'GI')} - ({ref_b}/2)</b>", cell_left),
-        Paragraph(f"{gi_p['2D']:.0f}", cell_norm), Paragraph(f"{gi_p['1.4D']:.0f}", cell_norm), Paragraph(f"{gi_p['D']:.0f}", cell_norm),
-        Paragraph(f"{gi_p['d']:.0f}", cell_norm), Paragraph(f"{gi_p['d/2']:.0f}", cell_norm),
-        Paragraph(f"{get_passant_at_sieve(gi_data.get('sieves', []), gi_data.get('passants', []), 0.063):.1f}", cell_norm),
-        Paragraph(f"{gi_data.get('fi', '-') if gi_data.get('fi') is not None else '-'}", cell_norm),
-        Paragraph(f"{gi_data.get('la', '-') if gi_data.get('la') is not None else '-'}", cell_norm)
-    ]
-    t2_row2 = [Paragraph("Caractéristique générale", cell_left)] + [Paragraph(v, cell_norm) for v in ["100", "98-100", "80-99", "0-20", "0-5", "< 1,5", "FI 20", "< 30"]]
-    story.append(build_mat_table(t2_cols, t2_row1, t2_row2))
-    story.append(Spacer(1, 3))
+        gii_s, gii_p = calculate_characteristic_data(gii_data) if gii_data else empty_char
+        gi_s, gi_p   = calculate_characteristic_data(gi_data) if gi_data else empty_char
+        sc_s, sc_p   = calculate_characteristic_data(sc_data) if sc_data else empty_char
+        sd_s, sd_p   = calculate_characteristic_data(sd_data) if sd_data else empty_char
 
-    # Tableau SC
-    t3_cols = [
-        ["2D", "1,4D", "D", "% < 1mm", "% < 250µm", "% < 63µm", "MF", "SE (10)"],
-        [str(sc_s['2D']), str(sc_s['1.4D']), str(sc_s['D']), "-", "-", "-", "CF", "-"]
-    ]
-    t3_row1 = [
-        Paragraph(f"<b>{sc_data.get('nom', 'SC')} - ({ref_b}/3)</b>", cell_left),
-        Paragraph(f"{sc_p['2D']:.0f}", cell_norm), Paragraph(f"{sc_p['1.4D']:.0f}", cell_norm), Paragraph(f"{sc_p['D']:.0f}", cell_norm),
-        Paragraph(f"{get_passant_at_sieve(sc_data.get('sieves', []), sc_data.get('passants', []), 1.0):.0f}", cell_norm),
-        Paragraph(f"{get_passant_at_sieve(sc_data.get('sieves', []), sc_data.get('passants', []), 0.25):.0f}", cell_norm),
-        Paragraph(f"{get_passant_at_sieve(sc_data.get('sieves', []), sc_data.get('passants', []), 0.063):.1f}", cell_norm),
-        Paragraph(f"{sc_data.get('mf', '-') if sc_data.get('mf') is not None else '-'}", cell_norm),
-        Paragraph(f"{sc_data.get('se', '-') if sc_data.get('se') is not None else '-'}", cell_norm)
-    ]
-    t3_row2 = [Paragraph("Caractéristique générale", cell_left)] + [Paragraph(v, cell_norm) for v in ["100", "95-100", "85-99", "40(±20)", "50(±20)", "≤ 16", "2.4-4.0", "≥ 60"]]
-    story.append(build_mat_table(t3_cols, t3_row1, t3_row2))
-    story.append(Spacer(1, 3))
+        # Tableau GII
+        t1_cols = [
+            ["2D", "1,4D", "D", "d", "d/2", "f", "FI", "LA"],
+            [str(gii_s['2D']), str(gii_s['1.4D']), str(gii_s['D']), str(gii_s['d']), str(gii_s['d/2']), "% < 63µm", "-", "-"]
+        ]
+        t1_row1 = [
+            Paragraph(f"<b>{gii_data.get('nom', 'GII')} - ({ref_b}/1)</b>", cell_left),
+            Paragraph(f"{gii_p['2D']:.0f}", cell_norm), Paragraph(f"{gii_p['1.4D']:.0f}", cell_norm), Paragraph(f"{gii_p['D']:.0f}", cell_norm),
+            Paragraph(f"{gii_p['d']:.0f}", cell_norm), Paragraph(f"{gii_p['d/2']:.0f}", cell_norm),
+            Paragraph(f"{get_passant_at_sieve(gii_data.get('sieves', []), gii_data.get('passants', []), 0.063):.1f}", cell_norm),
+            Paragraph(f"{gii_data.get('fi', '-') if gii_data.get('fi') is not None else '-'}", cell_norm),
+            Paragraph(f"{gii_data.get('la', '-') if gii_data.get('la') is not None else '-'}", cell_norm)
+        ]
+        t1_row2 = [Paragraph("Caractéristique générale", cell_left)] + [Paragraph(v, cell_norm) for v in ["100", "98-100", "85-99", "0-20", "0-5", "< 1,5", "FI 20", "< 30"]]
+        flowables.append(build_mat_table(t1_cols, t1_row1, t1_row2))
+        flowables.append(Spacer(1, 3))
 
-    # Tableau SD
-    t4_cols = [
-        ["2D", "1,4D", "D", "% < 1mm", "% < 250µm", "% < 63µm", "MB", "-"],
-        [str(sd_s['2D']), str(sd_s['1.4D']), str(sd_s['D']), "-", "-", "-", "-", "-"]
-    ]
-    t4_row1 = [
-        Paragraph(f"<b>{sd_data.get('nom', 'SD')} - ({ref_b}/4)</b>", cell_left),
-        Paragraph(f"{sd_p['2D']:.0f}", cell_norm), Paragraph(f"{sd_p['1.4D']:.0f}", cell_norm), Paragraph(f"{sd_p['D']:.0f}", cell_norm),
-        Paragraph(f"{get_passant_at_sieve(sd_data.get('sieves', []), sd_data.get('passants', []), 1.0):.0f}", cell_norm),
-        Paragraph(f"{get_passant_at_sieve(sd_data.get('sieves', []), sd_data.get('passants', []), 0.25):.0f}", cell_norm),
-        Paragraph(f"{get_passant_at_sieve(sd_data.get('sieves', []), sd_data.get('passants', []), 0.063):.1f}", cell_norm),
-        Paragraph(f"{sd_data.get('mb', '-') if sd_data.get('mb') is not None else '-'}", cell_norm),
-        Paragraph("-", cell_norm)
-    ]
-    t4_row2 = [Paragraph("Caractéristique générale", cell_left)] + [Paragraph(v, cell_norm) for v in ["100", "95-100", "85-99", "40(±20)", "50(±25)", "≤ 10", "VSS 2", "-"]]
-    story.append(build_mat_table(t4_cols, t4_row1, t4_row2))
-    story.append(Spacer(1, 4))
+        # Tableau GI
+        t2_cols = [
+            ["2D", "1,4D", "D", "d", "d/2", "f", "FI", "LA"],
+            [str(gi_s['2D']), str(gi_s['1.4D']), str(gi_s['D']), str(gi_s['d']), str(gi_s['d/2']), "% < 63µm", "-", "-"]
+        ]
+        t2_row1 = [
+            Paragraph(f"<b>{gi_data.get('nom', 'GI')} - ({ref_b}/2)</b>", cell_left),
+            Paragraph(f"{gi_p['2D']:.0f}", cell_norm), Paragraph(f"{gi_p['1.4D']:.0f}", cell_norm), Paragraph(f"{gi_p['D']:.0f}", cell_norm),
+            Paragraph(f"{gi_p['d']:.0f}", cell_norm), Paragraph(f"{gi_p['d/2']:.0f}", cell_norm),
+            Paragraph(f"{get_passant_at_sieve(gi_data.get('sieves', []), gi_data.get('passants', []), 0.063):.1f}", cell_norm),
+            Paragraph(f"{gi_data.get('fi', '-') if gi_data.get('fi') is not None else '-'}", cell_norm),
+            Paragraph(f"{gi_data.get('la', '-') if gi_data.get('la') is not None else '-'}", cell_norm)
+        ]
+        t2_row2 = [Paragraph("Caractéristique générale", cell_left)] + [Paragraph(v, cell_norm) for v in ["100", "98-100", "80-99", "0-20", "0-5", "< 1,5", "FI 20", "< 30"]]
+        flowables.append(build_mat_table(t2_cols, t2_row1, t2_row2))
+        flowables.append(Spacer(1, 3))
+
+        # Tableau SC
+        t3_cols = [
+            ["2D", "1,4D", "D", "% < 1mm", "% < 250µm", "% < 63µm", "MF", "SE (10)"],
+            [str(sc_s['2D']), str(sc_s['1.4D']), str(sc_s['D']), "-", "-", "-", "CF", "-"]
+        ]
+        t3_row1 = [
+            Paragraph(f"<b>{sc_data.get('nom', 'SC')} - ({ref_b}/3)</b>", cell_left),
+            Paragraph(f"{sc_p['2D']:.0f}", cell_norm), Paragraph(f"{sc_p['1.4D']:.0f}", cell_norm), Paragraph(f"{sc_p['D']:.0f}", cell_norm),
+            Paragraph(f"{get_passant_at_sieve(sc_data.get('sieves', []), sc_data.get('passants', []), 1.0):.0f}", cell_norm),
+            Paragraph(f"{get_passant_at_sieve(sc_data.get('sieves', []), sc_data.get('passants', []), 0.25):.0f}", cell_norm),
+            Paragraph(f"{get_passant_at_sieve(sc_data.get('sieves', []), sc_data.get('passants', []), 0.063):.1f}", cell_norm),
+            Paragraph(f"{sc_data.get('mf', '-') if sc_data.get('mf') is not None else '-'}", cell_norm),
+            Paragraph(f"{sc_data.get('se', '-') if sc_data.get('se') is not None else '-'}", cell_norm)
+        ]
+        t3_row2 = [Paragraph("Caractéristique générale", cell_left)] + [Paragraph(v, cell_norm) for v in ["100", "95-100", "85-99", "40(±20)", "50(±20)", "≤ 16", "2.4-4.0", "≥ 60"]]
+        flowables.append(build_mat_table(t3_cols, t3_row1, t3_row2))
+        flowables.append(Spacer(1, 3))
+
+        # Tableau SD
+        t4_cols = [
+            ["2D", "1,4D", "D", "% < 1mm", "% < 250µm", "% < 63µm", "MB", "-"],
+            [str(sd_s['2D']), str(sd_s['1.4D']), str(sd_s['D']), "-", "-", "-", "-", "-"]
+        ]
+        t4_row1 = [
+            Paragraph(f"<b>{sd_data.get('nom', 'SD')} - ({ref_b}/4)</b>", cell_left),
+            Paragraph(f"{sd_p['2D']:.0f}", cell_norm), Paragraph(f"{sd_p['1.4D']:.0f}", cell_norm), Paragraph(f"{sd_p['D']:.0f}", cell_norm),
+            Paragraph(f"{get_passant_at_sieve(sd_data.get('sieves', []), sd_data.get('passants', []), 1.0):.0f}", cell_norm),
+            Paragraph(f"{get_passant_at_sieve(sd_data.get('sieves', []), sd_data.get('passants', []), 0.25):.0f}", cell_norm),
+            Paragraph(f"{get_passant_at_sieve(sd_data.get('sieves', []), sd_data.get('passants', []), 0.063):.1f}", cell_norm),
+            Paragraph(f"{sd_data.get('mb', '-') if sd_data.get('mb') is not None else '-'}", cell_norm),
+            Paragraph("-", cell_norm)
+        ]
+        t4_row2 = [Paragraph("Caractéristique générale", cell_left)] + [Paragraph(v, cell_norm) for v in ["100", "95-100", "85-99", "40(±20)", "50(±25)", "≤ 10", "VSS 2", "-"]]
+        flowables.append(build_mat_table(t4_cols, t4_row1, t4_row2))
+        flowables.append(Spacer(1, 4))
+
+        return flowables
+
+    # Nombre de lignes "ajustables" (4 info + 2 normes + 4x4 matériaux) sur
+    # lesquelles répartir le padding supplémentaire.
+    ADJUSTABLE_ROWS = 4 + 2 + (4 * 4)
+
+    # Pré-construction avec padding de base (0) pour mesurer la hauteur de
+    # référence avant ajustement.
+    baseline_tables = build_adjustable_tables(0)
 
     # 4. Préparation des blocs restants (commentaires + signatures) AVANT le
     #    calcul de la hauteur de la courbe, afin de pouvoir mesurer précisément
@@ -776,9 +792,9 @@ def generate_pv_pdf(pv_info, info_p, data_granulats):
     ]))
 
     # 5. Calcul de l'espace disponible pour que le PV occupe toute la page,
-    #    sans vide en bas : on mesure la hauteur réellement prise par tout ce
-    #    qui est déjà dans le "story" ainsi que par les blocs commentaires et
-    #    signatures, puis la courbe est dimensionnée pour combler l'écart.
+    #    sans vide en bas : la hauteur de la courbe est désormais fixe (220),
+    #    et c'est le padding (haut/bas) des tableaux "ajustables" qui absorbe
+    #    l'espace restant, de façon à éviter tout blanc en bas de page.
     def _flowable_height(flowable, avail_w=565):
         try:
             return flowable.wrap(avail_w, 100000)[1]
@@ -787,16 +803,34 @@ def generate_pv_pdf(pv_info, info_p, data_granulats):
 
     FRAME_PADDING = 12  # padding interne par défaut du Frame ReportLab (6pt haut + 6pt bas)
     page_height = A4[1] - doc.topMargin - doc.bottomMargin - FRAME_PADDING
+    CHART_HEIGHT = 220
     CHART_BOTTOM_SPACER = 4
     SAFETY_MARGIN = 6
 
-    used_height = sum(_flowable_height(f) for f in story)
-    used_height += _flowable_height(comm_table) + _flowable_height(comm_spacer) + _flowable_height(sig_table)
+    fixed_height = sum(_flowable_height(f) for f in story)  # header + spacer
+    fixed_height += _flowable_height(comm_table) + _flowable_height(comm_spacer) + _flowable_height(sig_table)
+    baseline_height = sum(_flowable_height(f) for f in baseline_tables)
 
-    chart_height = page_height - used_height - CHART_BOTTOM_SPACER - SAFETY_MARGIN
-    chart_height = max(200, min(chart_height, 480))  # bornes raisonnables de lisibilité
+    leftover = page_height - fixed_height - baseline_height - CHART_HEIGHT - CHART_BOTTOM_SPACER - SAFETY_MARGIN
+    # pad_extra à appliquer sur le padding haut ET bas de chaque ligne ajustable
+    raw_pad = leftover / (2 * ADJUSTABLE_ROWS)
+    pad_extra = max(0.0, min(raw_pad, 12.0))  # borne raisonnable de lisibilité
 
-    # 6. Insertion de la Courbe Granulométrique (hauteur ajustée dynamiquement)
+    chart_height = CHART_HEIGHT
+    if raw_pad > 12.0:
+        # trop d'espace pour être absorbé uniquement par le padding : la
+        # courbe grandit un peu au-delà de 220 pour combler le reste.
+        chart_height += (raw_pad - 12.0) * 2 * ADJUSTABLE_ROWS
+        chart_height = min(chart_height, 420)
+    elif raw_pad < 0:
+        # pas assez de place : on réduit légèrement la courbe plutôt que de
+        # déborder sur une seconde page.
+        chart_height = max(180, CHART_HEIGHT + leftover)
+
+    final_tables = build_adjustable_tables(pad_extra) if pad_extra > 0 else baseline_tables
+    story.extend(final_tables)
+
+    # 6. Insertion de la Courbe Granulométrique (hauteur ~220, ajustée finement)
     chart_buf = create_curve_image_buffer(
         data_granulats, ref_b,
         fig_width=565 / 72.0,
