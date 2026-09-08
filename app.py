@@ -805,7 +805,7 @@ def generate_pv_pdf(pv_info, info_p, data_granulats):
     return buffer.getvalue()
 
 # ------------------------------------------------------------------------------
-# FONCTIONS DE PERSISTANCE BD / SUPABASE (Restauration permanente après déconnexion)
+# FONCTIONS DE PERSISTANCE BD / SUPABASE
 # ------------------------------------------------------------------------------
 def fetch_pvs_from_supabase(supabase_client):
     """Charge l'historique complet des PV depuis la base de données Supabase."""
@@ -940,7 +940,6 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
     if 'historique_pv' not in st.session_state:
         st.session_state['historique_pv'] = []
 
-    # Chargement initial automatique depuis Supabase si reconnecté / déconnecté au préalable
     if supabase_client and not st.session_state.get('pvs_loaded_from_db', False):
         db_pvs = fetch_pvs_from_supabase(supabase_client)
         if db_pvs is not None:
@@ -966,9 +965,6 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         st.success(st.session_state['success_msg'])
         del st.session_state['success_msg']
 
-    # --------------------------------------------------------------------------
-    # IDENTIFICATION DE L'UTILISATEUR
-    # --------------------------------------------------------------------------
     user_tokens = []
     for _uk in ('username', 'user', 'user_name', 'current_user', 'user_email', 'email', 'nom_utilisateur', 'role'):
         _uv = kwargs.get(_uk) or st.session_state.get(_uk)
@@ -982,7 +978,6 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
     is_baallal_admin = bool(is_admin) or ('baallal' in combined_user_str) or st.session_state.get('is_admin', False) or (st.session_state.get('role') == 'admin')
 
     def _build_pv_snapshot():
-        """Construit un instantané complet du PV courant pour l'historique."""
         existing_ids = [p.get('id', 0) for p in st.session_state['historique_pv']]
         next_id = (max(existing_ids) + 1) if existing_ids else 1
         return {
@@ -1013,9 +1008,6 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         "3️⃣ Historique & Téléchargement de PV"
     ])
 
-    # ------------------------------------------------------------------------------
-    # FENÊTRE 1 : FEUILLES D'ESSAIS COMPLETS
-    # ------------------------------------------------------------------------------
     with tabs[0]:
         st.header("Feuilles d'Analyse Granulométrique et Caractéristiques")
         
@@ -1224,7 +1216,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
             st.subheader("Courbe Granulométrique Globale")
 
             fig = go.Figure()
-            colors = {'GII': 'navy', 'GI': '#0284c7', 'SC': '#16a34a', 'SD': '#ea580c'}
+            colors_dict = {'GII': 'navy', 'GI': '#0284c7', 'SC': '#16a34a', 'SD': '#ea580c'}
             
             for k, d in st.session_state['data_granulats'].items():
                 if d.get('sieves') and d.get('passants') and len(d['sieves']) == len(d['passants']):
@@ -1236,7 +1228,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                         x=s_s, y=p_s,
                         mode="lines+markers",
                         name=f"{d['nom']} ({new_ref_base}{SUFFIX_MAP[k]})" if new_ref_base else d['nom'],
-                        line=dict(color=colors[k], width=line_width),
+                        line=dict(color=colors_dict[k], width=line_width),
                         marker=dict(size=6),
                         opacity=opacity
                     ))
@@ -1273,7 +1265,6 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                             st.session_state['data_granulats'][mat_k]['passants']
                         )
 
-                # Mettre à jour les informations du PV d'Identification courant
                 st.session_state['pv_info']['ref_pv'] = new_num_rapport
                 st.session_state['pv_info']['projet'] = new_chantier
                 st.session_state['pv_info']['client'] = new_client
@@ -1281,7 +1272,6 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
 
                 snapshot = _build_pv_snapshot()
                 
-                # Mise à jour ou ajout dans la liste locale de session
                 existing_idx = None
                 for idx_pv, p_item in enumerate(st.session_state['historique_pv']):
                     if p_item.get('ref_pv', '').strip().lower() == new_num_rapport.strip().lower():
@@ -1293,15 +1283,11 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                 else:
                     st.session_state['historique_pv'].append(snapshot)
                 
-                # Persistance permanente dans Supabase
                 save_pv_to_supabase(supabase_client, snapshot)
 
                 st.session_state['success_msg'] = f"✅ L'ensemble des essais pour le Rapport N° '{new_num_rapport}' a été validé ! Le PV est disponible sous la phase 2️⃣ et enregistré sous la phase 3️⃣."
                 st.rerun()
 
-    # ------------------------------------------------------------------------------
-    # FENÊTRE 2 : PV D'IDENTIFICATION / SYNTHÈSE
-    # ------------------------------------------------------------------------------
     with tabs[1]:
         st.header("PV d'Identification des Granulats pour Béton")
         
@@ -1381,7 +1367,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         st.subheader("COURBE GRANULOMETRIQUE GLOBALE DU PV")
         fig_global_tab2 = go.Figure()
         
-        colors = {'GII': '#1e40af', 'GI': '#0284c7', 'SC': '#16a34a', 'SD': '#ea580c'}
+        colors_dict2 = {'GII': '#1e40af', 'GI': '#0284c7', 'SC': '#16a34a', 'SD': '#ea580c'}
         ref_b = st.session_state['info_prelevement'].get('num_rapport', default_num_rapport)
         
         for k, d in st.session_state['data_granulats'].items():
@@ -1391,7 +1377,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                     x=s_s, y=p_s,
                     mode='lines+markers',
                     name=f"{d['nom']} ({ref_b}{SUFFIX_MAP[k]})" if ref_b else d['nom'],
-                    line=dict(color=colors[k], width=2)
+                    line=dict(color=colors_dict2[k], width=2)
                 ))
             
         fig_global_tab2.update_layout(
@@ -1407,16 +1393,12 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         if can_edit:
             st.session_state['pv_info']['commentaires'] = comm_input
 
-    # ------------------------------------------------------------------------------
-    # FENÊTRE 3 : HISTORIQUE & TÉLÉCHARGEMENT DE PV (RUBRIQUE DE RECHERCHE)
-    # ------------------------------------------------------------------------------
     with tabs[2]:
         st.header("Historique et Sauvegarde des PV")
 
         if st.session_state['historique_pv']:
             st.write("### 🔎 Recherche & Sélection de PV")
 
-            # Rubrique de sélection / recherche selon le format présenté
             pv_options = {}
             for idx, pv_item in enumerate(reversed(st.session_state['historique_pv'])):
                 ref_pv_item = pv_item.get('ref_pv', f"PV-{idx+1}")
@@ -1424,7 +1406,6 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                 projet_item = pv_item.get('projet', '-')
                 date_item   = pv_item.get('date_creation', pv_item.get('date', '-'))
                 
-                # Format d'affichage : Référence | Client | Chantier | Date
                 option_label = f"Référence : {ref_pv_item} | Client : {client_item} | Chantier : {projet_item} | Date : {date_item}"
                 pv_options[option_label] = pv_item
 
@@ -1494,7 +1475,6 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                         st.session_state['pv_info'] = copy.deepcopy(selected_pv.get('pv_info', {}))
                         st.session_state['data_granulats'] = copy.deepcopy(selected_pv.get('data_granulats', {}))
 
-                        # Synchronisation des widgets de session
                         info_p_ld = st.session_state['info_prelevement']
                         st.session_state[f"{prefix}_common_client"] = info_p_ld.get('client', '')
                         st.session_state[f"{prefix}_common_chantier"] = info_p_ld.get('chantier', '')
@@ -1515,9 +1495,6 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                         st.session_state['success_msg'] = f"✅ Le PV N° '{pv_ref_selected}' a été chargé dans les onglets de saisie et de synthèse !"
                         st.rerun()
 
-            # ------------------------------------------------------------------
-            # SECTION SUPPRESSION — Accessible aux administrateurs
-            # ------------------------------------------------------------------
             if is_baallal_admin:
                 st.markdown("---")
                 st.markdown("##### 🔐 Suppression sécurisée (Administration)")
