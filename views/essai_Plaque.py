@@ -53,14 +53,13 @@ def evaluer_conformite_couche(couche, ev2_val):
 
 
 def generer_pdf_pv(essai):
-    """Génère un Procès-Verbal (PV) professionnel sur format A4 avec le logo, le centre régional et la hiérarchie des titres."""
+    """Génère un Procès-Verbal (PV) professionnel sur format A4 avec l'espace de 4 lignes demandé."""
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
     elements = []
     
     styles = getSampleStyleSheet()
     
-    # Titre du PV
     title_style = ParagraphStyle(
         'TitleStyle',
         parent=styles['Heading1'],
@@ -91,27 +90,24 @@ def generer_pdf_pv(essai):
     normal_style = ParagraphStyle('NormalText', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#262626'))
     bold_style = ParagraphStyle('BoldText', parent=normal_style, fontName='Helvetica-Bold')
 
-    # En-tête avec Logo (logo.png.jpg), Nom du Laboratoire et Centre Régional
+    # En-tête avec Logo (logo.png.jpg) et Nom du Centre Régional
     logo_path = "logo.png.jpg"
     
     org_style = ParagraphStyle(
         'OrgStyle',
         parent=bold_style,
         alignment=0,
-        fontSize=14,  # Plus grand que le titre du PV (14pt vs 12pt)
+        fontSize=13,
         textColor=colors.HexColor('#1f4e78')
     )
     
-    header_text = (
-        "<b>LABORATOIRE PUBLIC D'ESSAIS ET D'ÉTUDES (LPEE)</b><br/>"
-        "<font size=8.5 color='#595959'>CENTRE TECHNIQUE REGIONALE DE CASABLANCA -SETTAT BENIMELLAL</font>"
-    )
+    texte_entete = "CENTRE TECHNIQUE RÉGIONAL DE CASABLANCA - SETTAT BENIMELLAL"
     
     if os.path.exists(logo_path):
         try:
             img = Image(logo_path, width=45, height=45)
             img.hAlign = 'LEFT'
-            txt_header = Paragraph(header_text, org_style)
+            txt_header = Paragraph(f"<b>{texte_entete}</b>", org_style)
             header_table = Table([[img, txt_header]], colWidths=[55, 470])
             header_table.setStyle(TableStyle([
                 ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
@@ -122,11 +118,13 @@ def generer_pdf_pv(essai):
             ]))
             elements.append(header_table)
         except Exception:
-            elements.append(Paragraph(header_text, org_style))
+            elements.append(Paragraph(f"<b>{texte_entete}</b>", org_style))
     else:
-        elements.append(Paragraph(header_text, org_style))
+        elements.append(Paragraph(f"<b>{texte_entete}</b>", org_style))
 
-    elements.append(Spacer(1, 6))
+    # Espace d'environ 4 lignes vides (4 * ~10pt = 40pt)
+    elements.append(Spacer(1, 40))
+    
     elements.append(Paragraph("PROCÈS-VERBAL D'ESSAI À LA PLAQUE (NF P 94-117-1)", title_style))
     elements.append(Paragraph(f"Référence : <b>{essai.get('reference', '-')}</b> | Date : {essai.get('date_essai', '-')}", subtitle_style))
     elements.append(Spacer(1, 4))
