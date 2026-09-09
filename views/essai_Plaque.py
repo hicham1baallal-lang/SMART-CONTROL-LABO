@@ -53,7 +53,6 @@ def show(supabase):
         default_tech = editing_item.get("technicien", current_user)
         default_obs = editing_item.get("observations", "")
         
-        # Gestion des points de mesure (supporte un historique sous forme de liste ou de valeurs uniques)
         saved_points = editing_item.get("points_mesure")
         if not saved_points or not isinstance(saved_points, list):
             default_points = [{"z1": float(editing_item.get("z1", 0.53)), "z2": float(editing_item.get("z2", 0.52))}]
@@ -103,7 +102,6 @@ def show(supabase):
     if "plaque_points_count" not in st.session_state or editing_item:
         st.session_state["plaque_points_count"] = len(default_points)
 
-    # Gestion dynamique du nombre de points via Streamlit state
     col_add, col_rem, _ = st.columns([1, 1, 3])
     with col_add:
         if st.button("➕ Ajouter un point"):
@@ -128,12 +126,10 @@ def show(supabase):
         
         points_data.append({"z1": z1, "z2": z2})
 
-    # Utilisation du premier point pour l'affichage des métriques principales ou calcul moyen si multi-points
-    # Par défaut, on prend le premier point ou le dernier saisi pour les indicateurs visuels immédiats
     active_z1 = points_data[0]["z1"]
     active_z2 = points_data[0]["z2"]
 
-    # Calculs automatiques (NF P 94-117-1) basés sur le point actif
+    # Calculs automatiques (NF P 94-117-1)
     ev1 = round(112.5 / (active_z1 * 2), 2) if active_z1 > 0 else 0.0
     ev2 = round(90.0 / (active_z2 * 2), 2) if active_z2 > 0 else 0.0
     k_ratio = round(ev2 / ev1, 2) if ev1 > 0 else 0.0
@@ -168,7 +164,7 @@ def show(supabase):
                 "nature_materiau": nature_materiau,
                 "z1": float(active_z1),
                 "z2": float(active_z2),
-                "points_mesure": points_data, # Sauvegarde de la liste complète des points
+                "points_mesure": points_data,
                 "ev1": float(ev1),
                 "ev2": float(ev2),
                 "k_ratio": float(k_ratio),
@@ -177,7 +173,7 @@ def show(supabase):
             }
 
             try:
-                sample_query = supabase.table("essais_plaque").select("*").limit(1).execute()
+                sample_query = supabase.table("essai_plaque").select("*").limit(1).execute()
                 if sample_query.data and len(sample_query.data) > 0:
                     valid_columns = set(sample_query.data[0].keys())
                     safe_payload = {k: v for k, v in payload.items() if k in valid_columns}
@@ -188,10 +184,10 @@ def show(supabase):
 
                 if editing_item:
                     anciennes_valeurs_plaque = {k: editing_item.get(k) for k in safe_payload}
-                    supabase.table("essais_plaque").update(safe_payload).eq("id", editing_item["id"]).eq("projet_id", projet_id_actif).execute()
+                    supabase.table("essai_plaque").update(safe_payload).eq("id", editing_item["id"]).eq("projet_id", projet_id_actif).execute()
                     enregistrer_modification(
                         supabase,
-                        table_concernee="essais_plaque",
+                        table_concernee="essai_plaque",
                         enregistrement_id=editing_item["id"],
                         action="MODIFICATION",
                         anciennes_valeurs=anciennes_valeurs_plaque,
@@ -200,12 +196,12 @@ def show(supabase):
                     st.success(f"✅ Essai #{editing_item['id']} mis à jour avec succès !")
                     st.session_state["edit_plaque_item"] = None
                 else:
-                    res_ins_plaque = supabase.table("essais_plaque").insert(safe_payload).execute()
+                    res_ins_plaque = supabase.table("essai_plaque").insert(safe_payload).execute()
                     if res_ins_plaque.data:
                         nouvel_id_plaque = res_ins_plaque.data[0].get("id")
                         enregistrer_modification(
                             supabase,
-                            table_concernee="essais_plaque",
+                            table_concernee="essai_plaque",
                             enregistrement_id=nouvel_id_plaque,
                             action="CREATION",
                             nouvelles_valeurs=safe_payload,
@@ -230,7 +226,7 @@ def show(supabase):
     st.subheader("📋 Historique des Essais Enregistrés")
 
     try:
-        res = supabase.table("essais_plaque").select("*").eq("projet_id", projet_id_actif).order("id", desc=True).execute()
+        res = supabase.table("essai_plaque").select("*").eq("projet_id", projet_id_actif).order("id", desc=True).execute()
         if res.data and len(res.data) > 0:
             
             clean_rows = []
@@ -267,7 +263,7 @@ def show(supabase):
             )
 
             if is_baallal_admin:
-                afficher_historique_modifications(supabase, "essais_plaque", selected_id)
+                afficher_historique_modifications(supabase, "essai_plaque", selected_id)
 
             if is_admin:
                 act_col1, act_col2 = st.columns(2)
@@ -284,13 +280,13 @@ def show(supabase):
                             item_a_supprimer = next((item for item in res.data if item["id"] == selected_id), None)
                             enregistrer_modification(
                                 supabase,
-                                table_concernee="essais_plaque",
+                                table_concernee="essai_plaque",
                                 enregistrement_id=selected_id,
                                 action="SUPPRESSION",
                                 anciennes_valeurs={k: v for k, v in (item_a_supprimer or {}).items() if k != "id"},
                                 commentaire="Suppression définitive de l'essai",
                             )
-                            supabase.table("essais_plaque").delete().eq("id", selected_id).eq("projet_id", projet_id_actif).execute()
+                            supabase.table("essai_plaque").delete().eq("id", selected_id).eq("projet_id", projet_id_actif).execute()
                             st.success(f"🗑️ Essai #{selected_id} supprimé avec succès.")
                             st.rerun()
                         except Exception as e:
