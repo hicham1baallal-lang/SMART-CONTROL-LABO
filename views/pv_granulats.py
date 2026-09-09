@@ -1504,12 +1504,18 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
     with tabs[2]:
         st.header("Historique et Sauvegarde des PV")
 
-        # Bannière de diagnostic toujours visible (pas besoin de dérouler quoi
-        # que ce soit) pour comprendre immédiatement si la persistance en base
-        # fonctionne ou non.
+        # Diagnostic : le message d'alerte reste visible pour tout le monde
+        # UNIQUEMENT s'il y a un vrai problème (ça affecte la sécurité de leurs
+        # données). Le détail technique brut (JSON), lui, est réservé à
+        # l'admin baallal pour ne plus encombrer l'écran des autres
+        # utilisateurs maintenant que la connexion fonctionne.
         _dbg_fetch = st.session_state.get('_pv_db_debug_fetch')
         _dbg_save = st.session_state.get('_pv_db_debug_save')
         _dbg_delete = st.session_state.get('_pv_db_debug_delete')
+
+        _fetch_failed = bool(_dbg_fetch and _dbg_fetch.get('attempts') and not any(a.get('ok') for a in _dbg_fetch['attempts']))
+        _save_failed = bool(_dbg_save and not _dbg_save.get('saved') and _dbg_save.get('attempts'))
+        _has_db_problem = (not supabase_client) or _fetch_failed or _save_failed
 
         if not supabase_client:
             st.error(
@@ -1520,34 +1526,40 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                 "ce module est invoqué (le routeur principal de l'app) pour vous assurer qu'un client "
                 "Supabase valide y est bien passé en argument `supabase_client`."
             )
-        elif _dbg_fetch and _dbg_fetch.get('attempts') and not any(a.get('ok') for a in _dbg_fetch['attempts']):
+        elif _fetch_failed:
             st.error(
                 "❌ **Le client Supabase est bien transmis, mais la lecture de l'historique a échoué** "
-                "sur les deux tables testées (`pv_granulats` et `historique_pv`). Détail ci-dessous — "
-                "il s'agit très probablement d'une table manquante, d'un nom de colonne incorrect, ou "
-                "d'une policy RLS qui bloque l'accès."
+                "sur les deux tables testées (`pv_granulats` et `historique_pv`). "
+                + ("Voir le détail technique ci-dessous (admin)." if is_baallal_admin else
+                   "Contactez l'administrateur pour le détail technique.")
             )
-        elif _dbg_save and not _dbg_save.get('saved') and _dbg_save.get('attempts'):
+        elif _save_failed:
             st.warning(
-                "⚠️ La dernière tentative d'enregistrement d'un PV en base a échoué sur les deux tables "
-                "testées. Détail ci-dessous."
+                "⚠️ La dernière tentative d'enregistrement d'un PV en base a échoué sur les deux tables testées. "
+                + ("Voir le détail technique ci-dessous (admin)." if is_baallal_admin else
+                   "Contactez l'administrateur pour le détail technique.")
             )
-        elif supabase_client and _dbg_fetch and _dbg_fetch.get('loaded_from'):
-            st.success(f"✅ Connexion à la base OK — historique chargé depuis la table `{_dbg_fetch['loaded_from']}` ({_dbg_fetch.get('loaded_count', 0)} PV).")
+        elif is_baallal_admin and supabase_client and _dbg_fetch and _dbg_fetch.get('loaded_from'):
+            st.caption(f"✅ Connexion base de données OK — historique chargé depuis `{_dbg_fetch['loaded_from']}` ({_dbg_fetch.get('loaded_count', 0)} PV).")
 
-        with st.expander("🔧 Détail technique du diagnostic base de données", expanded=(not supabase_client or bool(_dbg_fetch and not _dbg_fetch.get('loaded_from')))):
-            st.write("Client Supabase transmis :", "✅ Oui" if supabase_client else "❌ Non")
-            if _dbg_fetch:
-                st.markdown("**Dernière tentative de chargement (au démarrage de la session) :**")
-                st.json(_dbg_fetch)
-            if _dbg_save:
-                st.markdown("**Dernière tentative d'enregistrement :**")
-                st.json(_dbg_save)
-            if _dbg_delete:
-                st.markdown("**Dernière tentative de suppression :**")
-                st.json(_dbg_delete)
-            if not any([_dbg_fetch, _dbg_save, _dbg_delete]):
-                st.caption("Aucune tentative d'accès à la base n'a encore eu lieu dans cette session.")
+        # Détail technique brut : réservé à l'admin baallal, et n'apparaît
+        # QUE s'il y a un problème détecté. Dès que tout fonctionne, ce bloc
+        # ne s'affiche plus du tout (au lieu de rester replié mais visible),
+        # pour ne pas encombrer l'écran une fois la connexion opérationnelle.
+        if is_baallal_admin and _has_db_problem:
+            with st.expander("🔧 Détail technique du diagnostic base de données (Admin)", expanded=True):
+                st.write("Client Supabase transmis :", "✅ Oui" if supabase_client else "❌ Non")
+                if _dbg_fetch:
+                    st.markdown("**Dernière tentative de chargement (au démarrage de la session) :**")
+                    st.json(_dbg_fetch)
+                if _dbg_save:
+                    st.markdown("**Dernière tentative d'enregistrement :**")
+                    st.json(_dbg_save)
+                if _dbg_delete:
+                    st.markdown("**Dernière tentative de suppression :**")
+                    st.json(_dbg_delete)
+                if not any([_dbg_fetch, _dbg_save, _dbg_delete]):
+                    st.caption("Aucune tentative d'accès à la base n'a encore eu lieu dans cette session.")
 
         if st.session_state['historique_pv']:
             st.write("### 🔎 Recherche & Sélection de PV")
