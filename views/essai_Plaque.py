@@ -49,7 +49,7 @@ def show(supabase):
         default_projet = editing_item.get("projet", "LGV CASA SUD")
         default_empl = editing_item.get("emplacement", "")
         default_pk = editing_item.get("pk_profil", editing_item.get("pkl", ""))
-        default_couche = editing_item.get("couche", "Assise")
+        default_couche = editing_item.get("couche", "Sous-couche et Couche de forme ferroviaire (LGV)")
         default_mat = editing_item.get("nature_materiau", "")
         default_tech = editing_item.get("technicien", current_user)
         default_obs = editing_item.get("observations", "")
@@ -66,10 +66,10 @@ def show(supabase):
         default_projet = "LGV CASA SUD"
         default_empl = "Voie B"
         default_pk = "PK 1+200"
-        default_couche = "Assise"
+        default_couche = "Sous-couche et Couche de forme ferroviaire (LGV)"
         default_mat = "GNT 0/31.5 Classée B2"
         default_tech = current_user
-        default_obs = "Portance conforme aux exigences du CPT."
+        default_obs = ""
         default_points = [{"z1": 0.53, "z2": 0.52, "pk_point": "PK 1+200"}]
 
     # ---------------------------------------------------------
@@ -88,9 +88,18 @@ def show(supabase):
         client = st.text_input("Client / Organisme", value=default_client, key="plaque_client")
         projet = st.text_input("Chantier / Projet", value=default_projet, key="plaque_projet")
     with col2:
-        couche_options = ["Arase", "Assise", "Remblai", "PST", "Couche de forme", "Autre"]
+        couche_options = [
+            "Sous-couche et Couche de forme ferroviaire (LGV)",
+            "Remblais contigus aux Ouvrages d'Art (PRO)",
+            "Arase des terrassements / PST",
+            "Corps de remblai courant (avant PST)",
+            "Remblais de fouilles d'ouvrages d'art",
+            "Couche de forme des rétablissements / accès",
+            "Plateforme support d'étaiements / cintres",
+            "Autre"
+        ]
         couche_idx = couche_options.index(default_couche) if default_couche in couche_options else 0
-        couche = st.selectbox("Couche testée", couche_options, index=couche_idx, key="plaque_couche")
+        couche = st.selectbox("Couche / Ouvrage testé", couche_options, index=couche_idx, key="plaque_couche")
         emplacement = st.text_input("Emplacement / Zone", value=default_empl, key="plaque_empl")
         pk_profil = st.text_input("PK / Profil Global", value=default_pk, key="plaque_pk")
 
@@ -141,6 +150,8 @@ def show(supabase):
     st.subheader("📈 Résultats Calculés Automatiquement pour tous les points")
 
     points_results = []
+    commentaires_points = []
+    
     for i, p in enumerate(points_data):
         z1_val = p["z1"]
         z2_val = p["z2"]
@@ -148,10 +159,58 @@ def show(supabase):
         ev2_i = round(90.0 / (z2_val * 2), 2) if z2_val > 0 else 0.0
         k_ratio_i = round(ev2_i / ev1_i, 2) if ev1_i > 0 else 0.0
 
+        # --- ÉVALUATION SYSTÉMATIQUE SELON LES EXIGENCES DU MARCHÉ ---
+        conforme = True
+        motif = []
+
+        if couche == "Sous-couche et Couche de forme ferroviaire (LGV)":
+            if ev2_i < 80.0:
+                conforme = False
+                motif.append(f"EV2 = {ev2_i} MPa < 80 MPa requis")
+        elif couche == "Remblais contigus aux Ouvrages d'Art (PRO)":
+            if ev2_i < 80.0:
+                conforme = False
+                motif.append(f"EV2 = {ev2_i} MPa < 80 MPa requis (plateforme)")
+        elif couche == "Arase des terrassements / PST":
+            if ev2_i < 50.0:
+                conforme = False
+                motif.append(f"EV2 = {ev2_i} MPa < 50 MPa absolu requis (100%)")
+            elif ev2_i < 60.0:
+                motif.append(f"EV2 = {ev2_i} MPa entre 50 et 60 MPa")
+        elif couche == "Corps de remblai courant (avant PST)":
+            if ev2_i < 30.0:
+                conforme = False
+                motif.append(f"EV2 = {ev2_i} MPa < 30 MPa requis")
+        elif couche == "Remblais de fouilles d'ouvrages d'art":
+            if ev2_i < 80.0:
+                conforme = False
+                motif.append(f"EV2 = {ev2_i} MPa < 80 MPa (800 bars) requis")
+        elif couche == "Couche de forme des rétablissements / accès":
+            if ev2_i <= 50.0:
+                conforme = False
+                motif.append(f"EV2 = {ev2_i} MPa non supérieur à 50 MPa requis (PF2)")
+        elif couche == "Plateforme support d'étaiements / cintres":
+            if ev2_i <= 80.0:
+                conforme = False
+                motif.append(f"EV2 = {ev2_i} MPa non supérieur à 80 MPa requis")
+
+        if k_ratio_i > 2.0:
+            motif.append(f"K = {k_ratio_i} > 2.0 (Attention tassement)")
+
+        if conforme and not motif:
+            comm_pt = f"Point {p['pk_point']} : Portance conforme aux exigences du marché (EV2 = {ev2_i} MPa, K = {k_ratio_i})."
+        elif conforme and motif:
+            comm_pt = f"Point {p['pk_point']} : Portance conforme avec remarques ({', '.join(motif)})."
+        else:
+            comm_pt = f"Point {p['pk_point']} : Non conforme aux exigences du marché ({', '.join(motif)})."
+
+        commentaires_points.append(comm_pt)
+
         points_results.append({
             "ev1": ev1_i,
             "ev2": ev2_i,
-            "k_ratio": k_ratio_i
+            "k_ratio": k_ratio_i,
+            "commentaire": comm_pt
         })
 
         st.markdown(f"**Point de mesure N° {i+1} ({p['pk_point']})**")
@@ -161,6 +220,7 @@ def show(supabase):
         
         k_delta = "Conforme (K ≤ 2.0)" if k_ratio_i <= 2.0 else "Attention (K > 2.0)"
         res_col3.metric(f"Coefficient K [Point {i+1}]", f"{k_ratio_i:.2f}", delta=k_delta, delta_color="normal" if k_ratio_i <= 2.0 else "inverse")
+        st.caption(f"💬 **Avis automatique :** {comm_pt}")
 
     # Valeurs de référence principales (premier point ou moyennes)
     active_z1 = points_data[0]["z1"]
@@ -169,7 +229,14 @@ def show(supabase):
     ev2 = points_results[0]["ev2"]
     k_ratio = points_results[0]["k_ratio"]
 
-    observations = st.text_area("Observations / Remarques", value=default_obs, key="plaque_obs")
+    # Commentaire global établi systématiquement
+    default_obs_systematique = "\n".join(commentaires_points)
+    if not default_obs and not editing_item:
+        default_obs = default_obs_systematique
+    elif editing_item and not default_obs:
+        default_obs = default_obs_systematique
+
+    observations = st.text_area("Commentaire / Remarques (établi systématiquement)", value=default_obs, key="plaque_obs")
 
     # ---------------------------------------------------------
     # 3. ENREGISTREMENT OU MISE À JOUR SÉCURISÉE
@@ -191,7 +258,6 @@ def show(supabase):
                     st.error(f"⚠️ Erreur : La référence d'essai '{reference}' existe déjà dans ce projet. Double bloqué.")
                     st.stop()
             except Exception as ref_err:
-                # Si la table n'a pas encore la colonne reference, on laisse passer ou on gère l'exception
                 pass
 
             payload = {
