@@ -53,20 +53,23 @@ def evaluer_conformite_couche(couche, ev2_val):
 
 
 def generer_pdf_pv(essai):
-    """Génère un Procès-Verbal (PV) professionnel et parfaitement centré sur format A4 avec le logo et une taille de titre augmentée."""
+    """Génère un Procès-Verbal (PV) professionnel sur format A4 avec le logo et les tailles de texte inversées."""
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
     elements = []
     
     styles = getSampleStyleSheet()
+    
+    # Titre du PV plus petit (ex: 12pt)
     title_style = ParagraphStyle(
         'TitleStyle',
         parent=styles['Heading1'],
-        fontSize=18,  # Taille augmentée de plus de 2 points (passée de 15/16 à 18)
+        fontSize=12,
         textColor=colors.HexColor('#1f4e78'),
         alignment=1,
         spaceAfter=10
     )
+    
     subtitle_style = ParagraphStyle(
         'SubTitleStyle',
         parent=styles['Normal'],
@@ -75,6 +78,7 @@ def generer_pdf_pv(essai):
         alignment=1,
         spaceAfter=12
     )
+    
     section_style = ParagraphStyle(
         'SectionStyle',
         parent=styles['Heading2'],
@@ -83,17 +87,26 @@ def generer_pdf_pv(essai):
         spaceBefore=10,
         spaceAfter=4
     )
+    
     normal_style = ParagraphStyle('NormalText', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#262626'))
     bold_style = ParagraphStyle('BoldText', parent=normal_style, fontName='Helvetica-Bold')
 
-    # En-tête avec Logo (logo.png.jpg) et Titre de l'organisme
+    # En-tête avec Logo (logo.png.jpg) et Nom du Laboratoire plus grand (ex: 16pt)
     logo_path = "logo.png.jpg"
+    
+    org_style = ParagraphStyle(
+        'OrgStyle',
+        parent=bold_style,
+        alignment=0,
+        fontSize=16,  # Plus grand que le titre du PV (16pt vs 12pt)
+        textColor=colors.HexColor('#1f4e78')
+    )
     
     if os.path.exists(logo_path):
         try:
             img = Image(logo_path, width=45, height=45)
             img.hAlign = 'LEFT'
-            txt_header = Paragraph("<b>LABORATOIRE PUBLIC D'ESSAIS ET D'ÉTUDES (LPEE)</b>", ParagraphStyle('CenterBold', parent=bold_style, alignment=0, fontSize=10, textColor=colors.HexColor('#1f4e78')))
+            txt_header = Paragraph("<b>LABORATOIRE PUBLIC D'ESSAIS ET D'ÉTUDES (LPEE)</b>", org_style)
             header_table = Table([[img, txt_header]], colWidths=[55, 470])
             header_table.setStyle(TableStyle([
                 ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
@@ -104,16 +117,16 @@ def generer_pdf_pv(essai):
             ]))
             elements.append(header_table)
         except Exception:
-            elements.append(Paragraph("<b>LABORATOIRE PUBLIC D'ESSAIS ET D'ÉTUDES (LPEE)</b>", ParagraphStyle('CenterBold', parent=bold_style, alignment=1, fontSize=10, textColor=colors.HexColor('#1f4e78'))))
+            elements.append(Paragraph("<b>LABORATOIRE PUBLIC D'ESSAIS ET D'ÉTUDES (LPEE)</b>", org_style))
     else:
-        elements.append(Paragraph("<b>LABORATOIRE PUBLIC D'ESSAIS ET D'ÉTUDES (LPEE)</b>", ParagraphStyle('CenterBold', parent=bold_style, alignment=1, fontSize=10, textColor=colors.HexColor('#1f4e78'))))
+        elements.append(Paragraph("<b>LABORATOIRE PUBLIC D'ESSAIS ET D'ÉTUDES (LPEE)</b>", org_style))
 
     elements.append(Spacer(1, 6))
     elements.append(Paragraph("PROCÈS-VERBAL D'ESSAI À LA PLAQUE (NF P 94-117-1)", title_style))
     elements.append(Paragraph(f"Référence : <b>{essai.get('reference', '-')}</b> | Date : {essai.get('date_essai', '-')}", subtitle_style))
     elements.append(Spacer(1, 4))
 
-    # Informations Générales (hauteurs de lignes augmentées pour éviter les vides en bas)
+    # Informations Générales
     data_infos = [
         [Paragraph("Client / Organisme :", bold_style), Paragraph(str(essai.get('client', '-')), normal_style),
          Paragraph("Chantier / Projet :", bold_style), Paragraph(str(essai.get('projet', '-')), normal_style)],
