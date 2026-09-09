@@ -246,8 +246,26 @@ def show(supabase):
             
             clean_rows = []
             for row in res.data:
-                k_val = row.get("k_ratio") if row.get("k_ratio") is not None else row.get("k")
                 pk_val = row.get("pk_profil") if row.get("pk_profil") is not None else row.get("pkl")
+                points = row.get("points_mesure")
+                if not isinstance(points, list) or len(points) == 0:
+                    z1_fallback = float(row.get("z1", 0.53))
+                    z2_fallback = float(row.get("z2", 0.52))
+                    points = [{"z1": z1_fallback, "z2": z2_fallback}]
+
+                ev1_list = []
+                ev2_list = []
+                k_list = []
+                for idx, pt in enumerate(points):
+                    z1_val = float(pt.get("z1", 0.53))
+                    z2_val = float(pt.get("z2", 0.52))
+                    ev1_pt = round(112.5 / (z1_val * 2), 2) if z1_val > 0 else 0.0
+                    ev2_pt = round(90.0 / (z2_val * 2), 2) if z2_val > 0 else 0.0
+                    k_pt = round(ev2_pt / ev1_pt, 2) if ev1_pt > 0 else 0.0
+                    
+                    ev1_list.append(f"P{idx+1}: {ev1_pt:.2f}")
+                    ev2_list.append(f"P{idx+1}: {ev2_pt:.2f}")
+                    k_list.append(f"P{idx+1}: {k_pt:.2f}")
 
                 clean_rows.append({
                     "ID": row.get("id"),
@@ -258,10 +276,10 @@ def show(supabase):
                     "PK/profil": pk_val,
                     "Couche": row.get("couche"),
                     "Nature de matériaux": row.get("nature_materiau"),
-                    "Nb Points": len(row.get("points_mesure")) if isinstance(row.get("points_mesure"), list) else 1,
-                    "EV1": row.get("ev1"),
-                    "EV2": row.get("ev2"),
-                    "K": k_val,
+                    "Nb Points": len(points),
+                    "EV1 (MPa)": " | ".join(ev1_list),
+                    "EV2 (MPa)": " | ".join(ev2_list),
+                    "K (EV2/EV1)": " | ".join(k_list),
                     "Remarques": row.get("observations"),
                     "Technicien": row.get("technicien")
                 })
