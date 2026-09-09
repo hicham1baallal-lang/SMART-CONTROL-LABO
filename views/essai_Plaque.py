@@ -11,10 +11,49 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 import io
 
+def evaluer_conformite_couche(couche, ev2_val):
+    """Évalue automatiquement si les résultats sont conformes ou non selon le type de couche."""
+    conforme = True
+    motif = []
+
+    if couche == "Sous-couche et Couche de forme ferroviaire (LGV)":
+        if ev2_val < 80.0:
+            conforme = False
+            motif.append(f"EV2 = {ev2_val} MPa < 80 MPa requis")
+    elif couche == "Remblais contigus aux Ouvrages d'Art (PRO)":
+        if ev2_val < 80.0:
+            conforme = False
+            motif.append(f"EV2 = {ev2_val} MPa < 80 MPa requis")
+    elif couche == "Arase des terrassements / PST":
+        if ev2_val < 50.0:
+            conforme = False
+            motif.append(f"EV2 = {ev2_val} MPa < 50 MPa requis")
+    elif couche == "Corps de remblai courant (avant PST)":
+        if ev2_val < 30.0:
+            conforme = False
+            motif.append(f"EV2 = {ev2_val} MPa < 30 MPa requis")
+    elif couche == "Remblais de fouilles d'ouvrages d'art":
+        if ev2_val < 80.0:
+            conforme = False
+            motif.append(f"EV2 = {ev2_val} MPa < 80 MPa requis")
+    elif couche == "Couche de forme des rétablissements / accès":
+        if ev2_val <= 50.0:
+            conforme = False
+            motif.append(f"EV2 = {ev2_val} MPa non supérieur à 50 MPa requis")
+    elif couche == "Plateforme support d'étaiements / cintres":
+        if ev2_val <= 80.0:
+            conforme = False
+            motif.append(f"EV2 = {ev2_val} MPa non supérieur à 80 MPa requis")
+
+    if conforme:
+        return "Résultats conforme"
+    else:
+        return f"Résultats non conforme ({', '.join(motif)})"
+
+
 def generer_pdf_pv(essai):
     """Génère un Procès-Verbal (PV) professionnel et parfaitement centré sur format A4."""
     buffer = io.BytesIO()
-    # Marges symétriques de 36 pt (0.5 pouce) garantissant un centrage géométrique optimal sur A4 (595.27 x 841.89 pt)
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
     elements = []
     
@@ -24,7 +63,7 @@ def generer_pdf_pv(essai):
         parent=styles['Heading1'],
         fontSize=15,
         textColor=colors.HexColor('#1f4e78'),
-        alignment=1, # Centré
+        alignment=1,
         spaceAfter=10
     )
     subtitle_style = ParagraphStyle(
@@ -53,7 +92,7 @@ def generer_pdf_pv(essai):
     elements.append(Paragraph(f"Référence : <b>{essai.get('reference', '-')}</b> | Date : {essai.get('date_essai', '-')}", subtitle_style))
     elements.append(Spacer(1, 4))
 
-    # Informations Générales (Largeur totale exacte : 525 pt)
+    # Informations Générales
     data_infos = [
         [Paragraph("Client / Organisme :", bold_style), Paragraph(str(essai.get('client', '-')), normal_style),
          Paragraph("Chantier / Projet :", bold_style), Paragraph(str(essai.get('projet', '-')), normal_style)],
@@ -78,7 +117,7 @@ def generer_pdf_pv(essai):
     elements.append(t_infos)
     elements.append(Spacer(1, 8))
 
-    # Points de mesure (Largeur totale : 525 pt)
+    # Points de mesure
     elements.append(Paragraph("Détail des Points de Mesure et Résultats (NF P 94-117-1)", section_style))
     
     points = essai.get('points_mesure', [])
@@ -118,10 +157,14 @@ def generer_pdf_pv(essai):
     elements.append(t_pts)
     elements.append(Spacer(1, 8))
 
-    # Observations / Commentaires (Largeur totale : 525 pt)
-    elements.append(Paragraph("Observations et Avis technique :", section_style))
-    obs_text = str(essai.get('observations', 'Aucune observation particulière.'))
-    t_obs = Table([[Paragraph(obs_text, normal_style)]], colWidths=[525])
+    # Section Commentaire automatique (chargé selon le type de couche)
+    elements.append(Paragraph("Commentaire", section_style))
+    
+    couche_nom = essai.get('couche', '')
+    ev2_principal = float(essai.get('ev2', 0))
+    commentaire_automatique = evaluer_conformite_couche(couche_nom, ev2_principal)
+    
+    t_obs = Table([[Paragraph(commentaire_automatique, normal_style)]], colWidths=[525])
     t_obs.setStyle(TableStyle([
         ('BOX', (0,0), (-1,-1), 0.5, colors.HexColor('#d9d9d9')),
         ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#fafafa')),
@@ -133,16 +176,12 @@ def generer_pdf_pv(essai):
     elements.append(t_obs)
     elements.append(Spacer(1, 15))
 
-    # Bloc Signatures & Visas (Centré avec largeurs égales, total 525 pt)
-    sig_style = ParagraphStyle('SigStyle', parent=normal_style, alignment=1) # Centré horizontalement
+    # Bloc Signatures & Visas (Centré, sans les tirets de signature)
+    sig_style = ParagraphStyle('SigStyle', parent=normal_style, alignment=1)
     data_sig = [
         [
             Paragraph("<b>Responsable d'essai</b><br/>O. IKKEN", sig_style), 
             Paragraph("<b>Chef du laboratoire</b><br/>H. BAALLAL", sig_style)
-        ],
-        [
-            Paragraph("<br/><br/>____________________________<br/><i>(Visa et Signature)</i>", sig_style), 
-            Paragraph("<br/><br/>____________________________<br/><i>(Visa et Signature)</i>", sig_style)
         ]
     ]
     t_sig = Table(data_sig, colWidths=[262.5, 262.5])
@@ -162,9 +201,6 @@ def generer_pdf_pv(essai):
 def show(supabase):
     st.title("🚜 Essai à la Plaque (NF P 94-117-1)")
 
-    # ---------------------------------------------------------
-    # RÉCUPÉRATION DYNAMIQUE DU TECHNICIEN CONNECTÉ
-    # ---------------------------------------------------------
     user_raw = (
         st.session_state.get("username") or 
         st.session_state.get("user") or 
@@ -188,9 +224,6 @@ def show(supabase):
         return
     st.caption(f"📁 Projet actif : **{projets_config.nom_projet(projet_id_actif)}**")
 
-    # ---------------------------------------------------------
-    # CRÉATION DES ONGLET / FENÊTRES PRINCIPALES
-    # ---------------------------------------------------------
     tab_saisie, tab_pv = st.tabs(["📝 Saisie & Historique", "📄 PV / Synthèse & PDF"])
 
     with tab_saisie:
@@ -334,7 +367,6 @@ def show(supabase):
             button_label = "🔄 Mettre à jour l'essai" if editing_item else "💾 Enregistrer l'essai"
             if st.button(button_label, key="btn_enregistrer_plaque", type="primary", use_container_width=True):
                 
-                # BLOCAGE DOUBLON RÉFÉRENCE
                 try:
                     query_doublon = supabase.table("essai_plaque").select("id").eq("projet_id", projet_id_actif).eq("reference", reference)
                     if editing_item:
