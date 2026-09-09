@@ -43,7 +43,7 @@ def show(supabase):
     if editing_item:
         st.info(f"✏️ **Mode Modification** - Essai ID #{editing_item['id']}")
         
-        default_ref = editing_item.get("reference", "260/26/PLQ/01")
+        default_ref = editing_item.get("reference") or editing_item.get("ref_essai") or "260/26/PLQ/01"
         default_date = datetime.strptime(editing_item["date_essai"], "%Y-%m-%d").date() if isinstance(editing_item.get("date_essai"), str) else date.today()
         default_client = editing_item.get("client", "TGCC")
         default_projet = editing_item.get("projet", "LGV CASA SUD")
@@ -338,7 +338,11 @@ def show(supabase):
             
             clean_rows = []
             for row in res.data:
-                ref_val = row.get("reference", "-")
+                # Récupération robuste de la référence (gestion des différentes variations de noms de colonnes en base)
+                ref_val = row.get("reference") or row.get("ref_essai") or row.get("ref") or "-"
+                if not ref_val or str(ref_val).strip() == "":
+                    ref_val = "-"
+
                 pk_val = row.get("pk_profil") if row.get("pk_profil") is not None else row.get("pkl")
                 points = row.get("points_mesure")
                 if not isinstance(points, list) or len(points) == 0:
@@ -424,7 +428,7 @@ def show(supabase):
                 if st.button("✏️ Modifier cet essai", type="secondary", use_container_width=True):
                     selected_item = next((item for item in res.data if item["id"] == selected_id), None)
                     if selected_item:
-                        st.session_state["edit_plaque_item"] = selected_item
+                        st.session_state["edit_plquare_item"] = selected_item
                         st.rerun()
 
         else:
