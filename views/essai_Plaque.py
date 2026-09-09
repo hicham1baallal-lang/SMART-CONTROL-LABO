@@ -4,6 +4,147 @@ from datetime import date, datetime
 from audit_log import enregistrer_modification, afficher_historique_modifications
 import projets_config
 
+# Import pour la génération du PDF
+from reportlab.lib.pagesizes import A4
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib import colors
+import io
+
+def generer_pdf_pv(essai):
+    """Génère un Procès-Verbal (PV) professionnel au format PDF pour l'essai à la plaque."""
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
+    elements = []
+    
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        'TitleStyle',
+        parent=styles['Heading1'],
+        fontSize=16,
+        textColor=colors.HexColor('#1f4e78'),
+        alignment=1, # Centré
+        spaceAfter=15
+    )
+    subtitle_style = ParagraphStyle(
+        'SubTitleStyle',
+        parent=styles['Normal'],
+        fontSize=10,
+        textColor=colors.HexColor('#595959'),
+        alignment=1,
+        spaceAfter=20
+    )
+    section_style = ParagraphStyle(
+        'SectionStyle',
+        parent=styles['Heading2'],
+        fontSize=12,
+        textColor=colors.HexColor('#1f4e78'),
+        spaceBefore=10,
+        spaceAfter=6
+    )
+    normal_style = ParagraphStyle('NormalText', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#262626'))
+    bold_style = ParagraphStyle('BoldText', parent=normal_style, fontName='Helvetica-Bold')
+
+    # En-tête
+    elements.append(Paragraph("LABORATOIRE PUBLIC D'ESSAIS ET D'ÉTUDES (LPEE)", bold_style))
+    elements.append(Paragraph("PROCÈS-VERBAL D'ESSAI À LA PLAQUE (NF P 94-117-1)", title_style))
+    elements.append(Paragraph(f"Référence : <b>{essai.get('reference', '-')}</b> | Date : {essai.get('date_essai', '-')}", subtitle_style))
+    elements.append(Spacer(1, 10))
+
+    # Informations Générales sous forme de tableau
+    data_infos = [
+        [Paragraph("Client / Organisme :", bold_style), Paragraph(str(essai.get('client', '-')), normal_style),
+         Paragraph("Chantier / Projet :", bold_style), Paragraph(str(essai.get('projet', '-')), normal_style)],
+        [Paragraph("Emplacement / Zone :", bold_style), Paragraph(str(essai.get('emplacement', '-')), normal_style),
+         Paragraph("PK / Profil :", bold_style), Paragraph(str(essai.get('pk_profil', '-')), normal_style)],
+        [Paragraph("Couche / Ouvrage :", bold_style), Paragraph(str(essai.get('couche', '-')), normal_style),
+         Paragraph("Nature du matériau :", bold_style), Paragraph(str(essai.get('nature_materiau', '-')), normal_style)],
+        [Paragraph("Technicien :", bold_style), Paragraph(str(essai.get('technicien', '-')), normal_style),
+         Paragraph("", normal_style), Paragraph("", normal_style)]
+    ]
+    
+    t_infos = Table(data_infos, colWidths=[110, 140, 110, 140])
+    t_infos.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#f2f2f2')),
+        ('BOX', (0,0), (-1,-1), 0.5, colors.HexColor('#d9d9d9')),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 6),
+        ('TOPPADDING', (0,0), (-1,-1), 6),
+    ]))
+    elements.append(t_infos)
+    elements.append(Spacer(1, 15))
+
+    # Points de mesure
+    elements.append(Paragraph("Détail des Points de Mesure et Résultats (NF P 94-117-1)", section_style))
+    
+    points = essai.get('points_mesure', [])
+    if not points:
+        points = [{"z1": essai.get('z1', 0), "z2": essai.get('z2', 0), "pk_point": essai.get('pk_profil', '-')}]
+
+    table_pts_data = [["Point / PK", "Z1 1er chrg (mm)", "Z2 2ème chrg (mm)", "EV1 (MPa)", "EV2 (MPa)", "K (EV2/EV1)"]]
+    
+    for idx, pt in enumerate(points):
+        z1_v = float(pt.get("z1", 0.53))
+        z2_v = float(pt.get("z2", 0.52))
+        ev1_v = round(112.5 / (z1_v * 2), 2) if z1_v > 0 else 0.0
+        ev2_v = round(90.0 / (z2_v * 2), 2) if z2_v > 0 else 0.0
+        k_v = round(ev2_v / ev1_v, 2) if ev1_v > 0 else 0.0
+        
+        table_pts_data.append([
+            str(pt.get("pk_point", f"P{idx+1}")),
+            f"{z1_v:.2f}",
+            f"{z2_v:.2f}",
+            f"{ev1_v:.2f}",
+            f"{ev2_v:.2f}",
+            f"{k_v:.2f}"
+        ])
+
+    t_pts = Table(table_pts_data, colWidths=[100, 90, 90, 80, 80, 60])
+    t_pts.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#1f4e78')),
+        ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
+        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0,0), (-1,-1), 8),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 5),
+        ('TOPPADDING', (0,0), (-1,-1), 5),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#bfbfbf')),
+    ]))
+    elements.append(t_pts)
+    elements.append(Spacer(1, 15))
+
+    # Observations / Commentaires
+    elements.append(Paragraph("Observations et Avis technique :", section_style))
+    obs_text = str(essai.get('observations', 'Aucune observation particulière.'))
+    t_obs = Table([[Paragraph(obs_text, normal_style)]], colWidths=[500])
+    t_obs.setStyle(TableStyle([
+        ('BOX', (0,0), (-1,-1), 0.5, colors.HexColor('#d9d9d9')),
+        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#fafafa')),
+        ('TOPPADDING', (0,0), (-1,-1), 8),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 8),
+        ('LEFTPADDING', (0,0), (-1,-1), 8),
+        ('RIGHTPADDING', (0,0), (-1,-1), 8),
+    ]))
+    elements.append(t_obs)
+    elements.append(Spacer(1, 30))
+
+    # Signatures
+    data_sig = [
+        [Paragraph("<b>Le Technicien LPEE</b>", normal_style), Paragraph("<b>Le Responsable / Client</b>", normal_style)],
+        [Paragraph("<br/><br/><br/>_________________________", normal_style), Paragraph("<br/><br/><br/>_________________________", normal_style)]
+    ]
+    t_sig = Table(data_sig, colWidths=[250, 250])
+    t_sig.setStyle(TableStyle([
+        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+    ]))
+    elements.append(t_sig)
+
+    doc.build(elements)
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
 def show(supabase):
     st.title("🚜 Essai à la Plaque (NF P 94-117-1)")
 
@@ -36,410 +177,280 @@ def show(supabase):
     st.caption(f"📁 Projet actif : **{projets_config.nom_projet(projet_id_actif)}**")
 
     # ---------------------------------------------------------
-    # 1. GESTION DU MOTEUR D'ÉDITION / MODIFICATION
+    # CRÉATION DES ONGLET / FENÊTRES PRINCIPALES
     # ---------------------------------------------------------
-    editing_item = st.session_state.get("edit_plaque_item", None)
+    tab_saisie, tab_pv = st.tabs(["📝 Saisie & Historique", "📄 PV / Synthèse & PDF"])
 
-    if editing_item:
-        st.info(f"✏️ **Mode Modification** - Essai ID #{editing_item['id']}")
-        
-        default_ref = editing_item.get("reference") or editing_item.get("ref_essai") or editing_item.get("ref") or "260/26/PLQ/01"
-        default_date = datetime.strptime(editing_item["date_essai"], "%Y-%m-%d").date() if isinstance(editing_item.get("date_essai"), str) else date.today()
-        default_client = editing_item.get("client", "TGCC")
-        default_projet = editing_item.get("projet", "LGV CASA SUD")
-        default_empl = editing_item.get("emplacement", "")
-        default_pk = editing_item.get("pk_profil", editing_item.get("pkl", ""))
-        default_couche = editing_item.get("couche", "Sous-couche et Couche de forme ferroviaire (LGV)")
-        default_mat = editing_item.get("nature_materiau", "")
-        default_tech = editing_item.get("technicien", current_user)
-        default_obs = editing_item.get("observations", "")
-        
-        saved_points = editing_item.get("points_mesure")
-        if not saved_points or not isinstance(saved_points, list):
-            default_points = [{"z1": float(editing_item.get("z1", 0.53)), "z2": float(editing_item.get("z2", 0.52)), "pk_point": default_pk}]
-        else:
-            default_points = saved_points
-    else:
-        default_ref = "260/26/PLQ/01"
-        default_date = date.today()
-        default_client = "TGCC"
-        default_projet = "LGV CASA SUD"
-        default_empl = "Voie B"
-        default_pk = "PK 1+200"
-        default_couche = "Sous-couche et Couche de forme ferroviaire (LGV)"
-        default_mat = "GNT 0/31.5 Classée B2"
-        default_tech = current_user
-        default_obs = ""
-        default_points = [{"z1": 0.53, "z2": 0.52, "pk_point": "PK 1+200"}]
+    with tab_saisie:
+        # ---------------------------------------------------------
+        # 1. GESTION DU MOTEUR D'ÉDITION / MODIFICATION
+        # ---------------------------------------------------------
+        editing_item = st.session_state.get("edit_plaque_item", None)
 
-    # ---------------------------------------------------------
-    # 2. FORMULAIRE DE SAISIE / ÉDITION
-    # ---------------------------------------------------------
-    st.subheader("📝 " + ("Modifier l'essai" if editing_item else "Saisie d'un nouvel essai"))
-
-    # --- SECTION 1 : INFORMATIONS GÉNÉRALES ---
-    st.markdown("### 1. Informations Générales d'essai")
-    col0, col1, col2 = st.columns(3)
-
-    with col0:
-        reference = st.text_input("Référence de l'essai", value=default_ref, key="plaque_reference")
-    with col1:
-        date_essai = st.date_input("Date de l'essai", value=default_date, key="plaque_date")
-        client = st.text_input("Client / Organisme", value=default_client, key="plaque_client")
-        projet = st.text_input("Chantier / Projet", value=default_projet, key="plaque_projet")
-    with col2:
-        couche_options = [
-            "Sous-couche et Couche de forme ferroviaire (LGV)",
-            "Remblais contigus aux Ouvrages d'Art (PRO)",
-            "Arase des terrassements / PST",
-            "Corps de remblai courant (avant PST)",
-            "Remblais de fouilles d'ouvrages d'art",
-            "Couche de forme des rétablissements / accès",
-            "Plateforme support d'étaiements / cintres",
-            "Autre"
-        ]
-        couche_idx = couche_options.index(default_couche) if default_couche in couche_options else 0
-        couche = st.selectbox("Couche / Ouvrage testé", couche_options, index=couche_idx, key="plaque_couche")
-        emplacement = st.text_input("Emplacement / Zone", value=default_empl, key="plaque_empl")
-        pk_profil = st.text_input("PK / Profil Global", value=default_pk, key="plaque_pk")
-
-    col_m1, col_m2 = st.columns(2)
-    with col_m1:
-        nature_materiau = st.text_input("Nature du matériau", value=default_mat, key="plaque_mat")
-    with col_m2:
-        technicien = st.text_input("Technicien LPEE", value=default_tech, key="plaque_tech")
-
-    st.markdown("---")
-
-    # --- SECTION 2 : POINTS DE MESURE D'ESSAI À LA PLAQUE ---
-    st.markdown("### 2. Points de Mesure d'essai à la plaque")
-    st.caption("Vous pouvez ajouter un ou plusieurs points de mesure pour cet essai, avec un Num/PK/Profil spécifique pour chaque point.")
-
-    if "plaque_points_count" not in st.session_state or editing_item:
-        st.session_state["plaque_points_count"] = len(default_points)
-
-    col_add, col_rem, _ = st.columns([1, 1, 3])
-    with col_add:
-        if st.button("➕ Ajouter un point"):
-            st.session_state["plaque_points_count"] += 1
-    with col_rem:
-        if st.session_state["plaque_points_count"] > 1:
-            if st.button("➖ Supprimer un point"):
-                st.session_state["plaque_points_count"] -= 1
-
-    points_data = []
-    for i in range(st.session_state["plaque_points_count"]):
-        st.markdown(f"**Point de mesure N° {i+1}**")
-        p_col0, p_col1, p_col2 = st.columns([1, 1, 1])
-        
-        default_pk_point = default_points[i].get("pk_point", default_pk) if i < len(default_points) else default_pk
-        default_z1_val = default_points[i]["z1"] if i < len(default_points) else 0.53
-        default_z2_val = default_points[i]["z2"] if i < len(default_points) else 0.52
-
-        with p_col0:
-            pk_point = st.text_input(f"Num/PK/Profil [Point {i+1}]", value=str(default_pk_point), key=f"plaque_pk_point_{i}")
-        with p_col1:
-            z1 = st.number_input(f"Z1 - 1er chrg (mm) [Point {i+1}]", min_value=0.01, max_value=10.0, value=float(default_z1_val), step=0.01, format="%.2f", key=f"plaque_z1_{i}")
-        with p_col2:
-            z2 = st.number_input(f"Z2 - 2ème chrg (mm) [Point {i+1}]", min_value=0.01, max_value=10.0, value=float(default_z2_val), step=0.01, format="%.2f", key=f"plaque_z2_{i}")
-        
-        points_data.append({"z1": z1, "z2": z2, "pk_point": pk_point})
-
-    # Calculs automatiques pour tous les points (NF P 94-117-1)
-    st.markdown("---")
-    st.subheader("📈 Résultats Calculés Automatiquement pour tous les points")
-
-    points_results = []
-    commentaires_points = []
-    
-    for i, p in enumerate(points_data):
-        z1_val = p["z1"]
-        z2_val = p["z2"]
-        ev1_i = round(112.5 / (z1_val * 2), 2) if z1_val > 0 else 0.0
-        ev2_i = round(90.0 / (z2_val * 2), 2) if z2_val > 0 else 0.0
-        k_ratio_i = round(ev2_i / ev1_i, 2) if ev1_i > 0 else 0.0
-
-        # --- ÉVALUATION SYSTÉMATIQUE SELON LES EXIGENCES DU MARCHÉ ---
-        conforme = True
-        motif = []
-
-        if couche == "Sous-couche et Couche de forme ferroviaire (LGV)":
-            if ev2_i < 80.0:
-                conforme = False
-                motif.append(f"EV2 = {ev2_i} MPa < 80 MPa requis")
-        elif couche == "Remblais contigus aux Ouvrages d'Art (PRO)":
-            if ev2_i < 80.0:
-                conforme = False
-                motif.append(f"EV2 = {ev2_i} MPa < 80 MPa requis (plateforme)")
-        elif couche == "Arase des terrassements / PST":
-            if ev2_i < 50.0:
-                conforme = False
-                motif.append(f"EV2 = {ev2_i} MPa < 50 MPa absolu requis (100%)")
-            elif ev2_i < 60.0:
-                motif.append(f"EV2 = {ev2_i} MPa entre 50 et 60 MPa")
-        elif couche == "Corps de remblai courant (avant PST)":
-            if ev2_i < 30.0:
-                conforme = False
-                motif.append(f"EV2 = {ev2_i} MPa < 30 MPa requis")
-        elif couche == "Remblais de fouilles d'ouvrages d'art":
-            if ev2_i < 80.0:
-                conforme = False
-                motif.append(f"EV2 = {ev2_i} MPa < 80 MPa (800 bars) requis")
-        elif couche == "Couche de forme des rétablissements / accès":
-            if ev2_i <= 50.0:
-                conforme = False
-                motif.append(f"EV2 = {ev2_i} MPa non supérieur à 50 MPa requis (PF2)")
-        elif couche == "Plateforme support d'étaiements / cintres":
-            if ev2_i <= 80.0:
-                conforme = False
-                motif.append(f"EV2 = {ev2_i} MPa non supérieur à 80 MPa requis")
-
-        if k_ratio_i > 2.0:
-            motif.append(f"K = {k_ratio_i} > 2.0 (Attention tassement)")
-
-        if conforme and not motif:
-            comm_pt = f"Point {p['pk_point']} : Portance conforme aux exigences du marché (EV2 = {ev2_i} MPa, K = {k_ratio_i})."
-        elif conforme and motif:
-            comm_pt = f"Point {p['pk_point']} : Portance conforme avec remarques ({', '.join(motif)})."
-        else:
-            comm_pt = f"Point {p['pk_point']} : Non conforme aux exigences du marché ({', '.join(motif)})."
-
-        commentaires_points.append(comm_pt)
-
-        points_results.append({
-            "ev1": ev1_i,
-            "ev2": ev2_i,
-            "k_ratio": k_ratio_i,
-            "commentaire": comm_pt
-        })
-
-        st.markdown(f"**Point de mesure N° {i+1} ({p['pk_point']})**")
-        res_col1, res_col2, res_col3 = st.columns(3)
-        res_col1.metric(f"EV1 (MPa) [Point {i+1}]", f"{ev1_i:.2f}")
-        res_col2.metric(f"EV2 (MPa) [Point {i+1}]", f"{ev2_i:.2f}")
-        
-        k_delta = "Conforme (K ≤ 2.0)" if k_ratio_i <= 2.0 else "Attention (K > 2.0)"
-        res_col3.metric(f"Coefficient K [Point {i+1}]", f"{k_ratio_i:.2f}", delta=k_delta, delta_color="normal" if k_ratio_i <= 2.0 else "inverse")
-        st.caption(f"💬 **Avis automatique :** {comm_pt}")
-
-    # Valeurs de référence principales (premier point ou moyennes)
-    active_z1 = points_data[0]["z1"]
-    active_z2 = points_data[0]["z2"]
-    ev1 = points_results[0]["ev1"]
-    ev2 = points_results[0]["ev2"]
-    k_ratio = points_results[0]["k_ratio"]
-
-    # Commentaire global établi systématiquement
-    default_obs_systematique = "\n".join(commentaires_points)
-    if not default_obs and not editing_item:
-        default_obs = default_obs_systematique
-    elif editing_item and not default_obs:
-        default_obs = default_obs_systematique
-
-    observations = st.text_area("Commentaire / Remarques (établi systématiquement)", value=default_obs, key="plaque_obs")
-
-    # ---------------------------------------------------------
-    # 3. ENREGISTREMENT OU MISE À JOUR SÉCURISÉE (AVEC BLOQUAGE DES DOUBLONS)
-    # ---------------------------------------------------------
-    btn_col1, btn_col2 = st.columns([3, 1])
-
-    with btn_col1:
-        button_label = "🔄 Mettre à jour l'essai" if editing_item else "💾 Enregistrer l'essai"
-        if st.button(button_label, key="btn_enregistrer_plaque", type="primary", use_container_width=True):
-            
-            # --- VÉRIFICATION ANTI-DOUBLON DE LA RÉFÉRENCE ---
-            try:
-                query_doublon = supabase.table("essai_plaque").select("id").eq("projet_id", projet_id_actif).eq("reference", reference)
-                if editing_item:
-                    # En mode modification, on ignore l'essai en cours d'édition pour éviter de s'auto-bloquer
-                    query_doublon = query_doublon.neq("id", editing_item["id"])
-                
-                res_doublon = query_doublon.execute()
-                if res_doublon.data and len(res_doublon.data) > 0:
-                    st.error(f"🚫 **BLOCAGE** : La référence d'essai **'{reference}'** existe déjà dans ce projet ! Veuillez utiliser une référence unique.")
-                    st.stop()
-            except Exception as e_doublon:
-                # Si la colonne reference n'existe pas encore dans Supabase, on laisse passer ou on gère
-                pass
-
-            payload = {
-                "reference": reference,
-                "date_essai": str(date_essai),
-                "client": client,
-                "projet": projet,
-                "emplacement": emplacement,
-                "pk_profil": pk_profil,
-                "couche": couche,
-                "nature_materiau": nature_materiau,
-                "z1": float(active_z1),
-                "z2": float(active_z2),
-                "points_mesure": points_data,
-                "ev1": float(ev1),
-                "ev2": float(ev2),
-                "k_ratio": float(k_ratio),
-                "technicien": technicien,
-                "observations": observations
-            }
-
-            try:
-                sample_query = supabase.table("essai_plaque").select("*").limit(1).execute()
-                if sample_query.data and len(sample_query.data) > 0:
-                    valid_columns = set(sample_query.data[0].keys())
-                    if "reference" not in valid_columns and "ref" in valid_columns:
-                        payload["ref"] = payload.pop("reference")
-                        valid_columns.add("ref")
-                    elif "reference" not in valid_columns and "ref_essai" in valid_columns:
-                        payload["ref_essai"] = payload.pop("reference")
-                        valid_columns.add("ref_essai")
-                    
-                    safe_payload = {k: v for k, v in payload.items() if k in valid_columns}
-                else:
-                    safe_payload = payload
-
-                safe_payload["projet_id"] = projet_id_actif
-
-                if editing_item:
-                    anciennes_valeurs_plaque = {k: editing_item.get(k) for k in safe_payload}
-                    supabase.table("essai_plaque").update(safe_payload).eq("id", editing_item["id"]).eq("projet_id", projet_id_actif).execute()
-                    enregistrer_modification(
-                        supabase,
-                        table_concernee="essai_plaque",
-                        enregistrement_id=editing_item["id"],
-                        action="MODIFICATION",
-                        anciennes_valeurs=anciennes_valeurs_plaque,
-                        nouvelles_valeurs=safe_payload,
-                    )
-                    st.success(f"✅ Essai #{editing_item['id']} mis à jour avec succès !")
-                    st.session_state["edit_plaque_item"] = None
-                else:
-                    res_ins_plaque = supabase.table("essai_plaque").insert(safe_payload).execute()
-                    if res_ins_plaque.data:
-                        nouvel_id_plaque = res_ins_plaque.data[0].get("id")
-                        enregistrer_modification(
-                            supabase,
-                            table_concernee="essai_plaque",
-                            enregistrement_id=nouvel_id_plaque,
-                            action="CREATION",
-                            nouvelles_valeurs=safe_payload,
-                        )
-                    st.success("✅ Essai enregistré avec succès !")
-
-                st.rerun()
-
-            except Exception as e:
-                st.error(f"Erreur lors de l'enregistrement : {e}")
-
-    with btn_col2:
         if editing_item:
-            if st.button("❌ Annuler l'édition", use_container_width=True):
+            st.info(f"✏️ **Mode Modification** - Essai ID #{editing_item['id']}")
+            
+            default_ref = editing_item.get("reference") or editing_item.get("ref_essai") or editing_item.get("ref") or "260/26/PLQ/01"
+            default_date = datetime.strptime(editing_item["date_essai"], "%Y-%m-%d").date() if isinstance(editing_item.get("date_essai"), str) else date.today()
+            default_client = editing_item.get("client", "TGCC")
+            default_projet = editing_item.get("projet", "LGV CASA SUD")
+            default_empl = editing_item.get("emplacement", "")
+            default_pk = editing_item.get("pk_profil", editing_item.get("pkl", ""))
+            default_couche = editing_item.get("couche", "Sous-couche et Couche de forme ferroviaire (LGV)")
+            default_mat = editing_item.get("nature_materiau", "")
+            default_tech = editing_item.get("technicien", current_user)
+            default_obs = editing_item.get("observations", "")
+            
+            saved_points = editing_item.get("points_mesure")
+            if not saved_points or not isinstance(saved_points, list):
+                default_points = [{"z1": float(editing_item.get("z1", 0.53)), "z2": float(editing_item.get("z2", 0.52)), "pk_point": default_pk}]
+            else:
+                default_points = saved_points
+        else:
+            default_ref = "260/26/PLQ/01"
+            default_date = date.today()
+            default_client = "TGCC"
+            default_projet = "LGV CASA SUD"
+            default_empl = "Voie B"
+            default_pk = "PK 1+200"
+            default_couche = "Sous-couche et Couche de forme ferroviaire (LGV)"
+            default_mat = "GNT 0/31.5 Classée B2"
+            default_tech = current_user
+            default_obs = ""
+            default_points = [{"z1": 0.53, "z2": 0.52, "pk_point": "PK 1+200"}]
+
+        # ---------------------------------------------------------
+        # 2. FORMULAIRE DE SAISIE / ÉDITION
+        # ---------------------------------------------------------
+        st.subheader("📝 " + ("Modifier l'essai" if editing_item else "Saisie d'un nouvel essai"))
+
+        col0, col1, col2 = st.columns(3)
+
+        with col0:
+            reference = st.text_input("Référence de l'essai", value=default_ref, key="plaque_reference")
+        with col1:
+            date_essai = st.date_input("Date de l'essai", value=default_date, key="plaque_date")
+            client = st.text_input("Client / Organisme", value=default_client, key="plaque_client")
+            projet = st.text_input("Chantier / Projet", value=default_projet, key="plaque_projet")
+        with col2:
+            couche_options = [
+                "Sous-couche et Couche de forme ferroviaire (LGV)",
+                "Remblais contigus aux Ouvrages d'Art (PRO)",
+                "Arase des terrassements / PST",
+                "Corps de remblai courant (avant PST)",
+                "Remblais de fouilles d'ouvrages d'art",
+                "Couche de forme des rétablissements / accès",
+                "Plateforme support d'étaiements / cintres",
+                "Autre"
+            ]
+            couche_idx = couche_options.index(default_couche) if default_couche in couche_options else 0
+            couche = st.selectbox("Couche / Ouvrage testé", couche_options, index=couche_idx, key="plaque_couche")
+            emplacement = st.text_input("Emplacement / Zone", value=default_empl, key="plaque_empl")
+            pk_profil = st.text_input("PK / Profil Global", value=default_pk, key="plaque_pk")
+
+        col_m1, col_m2 = st.columns(2)
+        with col_m1:
+            nature_materiau = st.text_input("Nature du matériau", value=default_mat, key="plaque_mat")
+        with col_m2:
+            technicien = st.text_input("Technicien LPEE", value=default_tech, key="plaque_tech")
+
+        st.markdown("---")
+        st.subheader("2. Points de Mesure d'essai à la plaque")
+
+        if "plaque_points_count" not in st.session_state or editing_item:
+            st.session_state["plaque_points_count"] = len(default_points)
+
+        col_add, col_rem, _ = st.columns([1, 1, 3])
+        with col_add:
+            if st.button("➕ Ajouter un point"):
+                st.session_state["plaque_points_count"] += 1
+        with col_rem:
+            if st.session_state["plaque_points_count"] > 1:
+                if st.button("➖ Supprimer un point"):
+                    st.session_state["plaque_points_count"] -= 1
+
+        points_data = []
+        for i in range(st.session_state["plaque_points_count"]):
+            st.markdown(f"**Point de mesure N° {i+1}**")
+            p_col0, p_col1, p_col2 = st.columns([1, 1, 1])
+            
+            default_pk_point = default_points[i].get("pk_point", default_pk) if i < len(default_points) else default_pk
+            default_z1_val = default_points[i]["z1"] if i < len(default_points) else 0.53
+            default_z2_val = default_points[i]["z2"] if i < len(default_points) else 0.52
+
+            with p_col0:
+                pk_point = st.text_input(f"Num/PK/Profil [Point {i+1}]", value=str(default_pk_point), key=f"plaque_pk_point_{i}")
+            with p_col1:
+                z1 = st.number_input(f"Z1 - 1er chrg (mm) [Point {i+1}]", min_value=0.01, max_value=10.0, value=float(default_z1_val), step=0.01, format="%.2f", key=f"plaque_z1_{i}")
+            with p_col2:
+                z2 = st.number_input(f"Z2 - 2ème chrg (mm) [Point {i+1}]", min_value=0.01, max_value=10.0, value=float(default_z2_val), step=0.01, format="%.2f", key=f"plaque_z2_{i}")
+            
+            points_data.append({"z1": z1, "z2": z2, "pk_point": pk_point})
+
+        st.markdown("---")
+        st.subheader("📈 Résultats Calculés Automatiquement")
+
+        points_results = []
+        commentaires_points = []
+        
+        for i, p in enumerate(points_data):
+            z1_val = p["z1"]
+            z2_val = p["z2"]
+            ev1_i = round(112.5 / (z1_val * 2), 2) if z1_val > 0 else 0.0
+            ev2_i = round(90.0 / (z2_val * 2), 2) if z2_val > 0 else 0.0
+            k_ratio_i = round(ev2_i / ev1_i, 2) if ev1_i > 0 else 0.0
+
+            comm_pt = f"Point {p['pk_point']} : EV2 = {ev2_i} MPa, K = {k_ratio_i}."
+            commentaires_points.append(comm_pt)
+            points_results.append({"ev1": ev1_i, "ev2": ev2_i, "k_ratio": k_ratio_i})
+
+            res_col1, res_col2, res_col3 = st.columns(3)
+            res_col1.metric(f"EV1 [Point {i+1}]", f"{ev1_i:.2f} MPa")
+            res_col2.metric(f"EV2 [Point {i+1}]", f"{ev2_i:.2f} MPa")
+            res_col3.metric(f"Coefficient K [Point {i+1}]", f"{k_ratio_i:.2f}")
+
+        active_z1 = points_data[0]["z1"]
+        active_z2 = points_data[0]["z2"]
+        ev1 = points_results[0]["ev1"]
+        ev2 = points_results[0]["ev2"]
+        k_ratio = points_results[0]["k_ratio"]
+
+        default_obs_systematique = "\n".join(commentaires_points)
+        if not default_obs and not editing_item:
+            default_obs = default_obs_systematique
+        elif editing_item and not default_obs:
+            default_obs = default_obs_systematique
+
+        observations = st.text_area("Commentaire / Remarques", value=default_obs, key="plaque_obs")
+
+        # Boutons Enregistrement & Blacage Doublon
+        btn_col1, btn_col2 = st.columns([3, 1])
+        with btn_col1:
+            button_label = "🔄 Mettre à jour l'essai" if editing_item else "💾 Enregistrer l'essai"
+            if st.button(button_label, key="btn_enregistrer_plaque", type="primary", use_container_width=True):
+                
+                # BLOCAGE DOUBLON RÉFÉRENCE
+                try:
+                    query_doublon = supabase.table("essai_plaque").select("id").eq("projet_id", projet_id_actif).eq("reference", reference)
+                    if editing_item:
+                        query_doublon = query_doublon.neq("id", editing_item["id"])
+                    res_doublon = query_doublon.execute()
+                    if res_doublon.data and len(res_doublon.data) > 0:
+                        st.error(f"🚫 **BLOCAGE** : La référence d'essai **'{reference}'** existe déjà dans ce projet !")
+                        st.stop()
+                except Exception:
+                    pass
+
+                payload = {
+                    "reference": reference,
+                    "date_essai": str(date_essai),
+                    "client": client,
+                    "projet": projet,
+                    "emplacement": emplacement,
+                    "pk_profil": pk_profil,
+                    "couche": couche,
+                    "nature_materiau": nature_materiau,
+                    "z1": float(active_z1),
+                    "z2": float(active_z2),
+                    "points_mesure": points_data,
+                    "ev1": float(ev1),
+                    "ev2": float(ev2),
+                    "k_ratio": float(k_ratio),
+                    "technicien": technicien,
+                    "observations": observations
+                }
+
+                try:
+                    sample_query = supabase.table("essai_plaque").select("*").limit(1).execute()
+                    if sample_query.data and len(sample_query.data) > 0:
+                        valid_columns = set(sample_query.data[0].keys())
+                        safe_payload = {k: v for k, v in payload.items() if k in valid_columns}
+                    else:
+                        safe_payload = payload
+
+                    safe_payload["projet_id"] = projet_id_actif
+
+                    if editing_item:
+                        anciennes_valeurs_plaque = {k: editing_item.get(k) for k in safe_payload}
+                        supabase.table("essai_plaque").update(safe_payload).eq("id", editing_item["id"]).eq("projet_id", projet_id_actif).execute()
+                        enregistrer_modification(supabase, "essai_plaque", editing_item["id"], "MODIFICATION", anciennes_valeurs_plaque, safe_payload)
+                        st.success(f"✅ Essai #{editing_item['id']} mis à jour avec succès !")
+                        st.session_state["edit_plaque_item"] = None
+                    else:
+                        res_ins_plaque = supabase.table("essai_plaque").insert(safe_payload).execute()
+                        if res_ins_plaque.data:
+                            nouvel_id_plaque = res_ins_plaque.data[0].get("id")
+                            enregistrer_modification(supabase, "essai_plaque", nouvel_id_plaque, "CREATION", nouvelles_valeurs=safe_payload)
+                        st.success("✅ Essai enregistré avec succès !")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Erreur lors de l'enregistrement : {e}")
+
+        with btn_col2:
+            if editing_item and st.button("❌ Annuler", use_container_width=True):
                 st.session_state["edit_plaque_item"] = None
                 st.rerun()
 
-    # ---------------------------------------------------------
-    # 4. HISTORIQUE DES ESSAIS ET ACTIONS DE MODIFICATION
-    # ---------------------------------------------------------
-    st.markdown("---")
-    st.subheader("📋 Historique des Essais Enregistrés")
-
-    try:
-        res = supabase.table("essai_plaque").select("*").eq("projet_id", projet_id_actif).order("id", desc=True).execute()
-        if res.data and len(res.data) > 0:
-            
-            clean_rows = []
-            for row in res.data:
-                ref_val = row.get("reference") or row.get("ref_essai") or row.get("ref") or "-"
-                if not ref_val or str(ref_val).strip() == "":
-                    ref_val = "-"
-
-                pk_val = row.get("pk_profil") if row.get("pk_profil") is not None else row.get("pkl")
-                points = row.get("points_mesure")
-                if not isinstance(points, list) or len(points) == 0:
-                    z1_fallback = float(row.get("z1", 0.53))
-                    z2_fallback = float(row.get("z2", 0.52))
-                    points = [{"z1": z1_fallback, "z2": z2_fallback, "pk_point": pk_val}]
-
-                ev1_list = []
-                ev2_list = []
-                k_list = []
-                for idx, pt in enumerate(points):
-                    z1_val = float(pt.get("z1", 0.53))
-                    z2_val = float(pt.get("z2", 0.52))
-                    pt_pk = pt.get("pk_point", f"P{idx+1}")
-                    ev1_pt = round(112.5 / (z1_val * 2), 2) if z1_val > 0 else 0.0
-                    ev2_pt = round(90.0 / (z2_val * 2), 2) if z2_val > 0 else 0.0
-                    k_pt = round(ev2_pt / ev1_pt, 2) if ev1_pt > 0 else 0.0
-                    
-                    ev1_list.append(f"{pt_pk}: {ev1_pt:.2f}")
-                    ev2_list.append(f"{pt_pk}: {ev2_pt:.2f}")
-                    k_list.append(f"{pt_pk}: {k_pt:.2f}")
-
-                clean_rows.append({
-                    "ID": row.get("id"),
-                    "Référence": ref_val,
-                    "Date d'essai": row.get("date_essai"),
-                    "Client": row.get("client"),
-                    "Projet": row.get("projet"),
-                    "Emplacement": row.get("emplacement"),
-                    "PK/profil": pk_val,
-                    "Couche": row.get("couche"),
-                    "Nature de matériaux": row.get("nature_materiau"),
-                    "Nb Points": len(points),
-                    "EV1 (MPa)": " | ".join(ev1_list),
-                    "EV2 (MPa)": " | ".join(ev2_list),
-                    "K (EV2/EV1)": " | ".join(k_list),
-                    "Remarques": row.get("observations"),
-                    "Technicien": row.get("technicien")
-                })
-
-            df_display = pd.DataFrame(clean_rows)
-            st.dataframe(df_display, use_container_width=True, hide_index=True)
-
-            # --- ACTIONS DE SÉLECTION ET EDITION ---
-            st.markdown("### ⚙️ Actions de Modification / Gestion")
-            
-            selected_id = st.selectbox(
-                "Sélectionnez un essai par son ID :", 
-                options=[item["id"] for item in res.data],
-                key="admin_select_plaque_id"
-            )
-
-            if is_baallal_admin:
-                afficher_historique_modifications(supabase, "essai_plaque", selected_id)
-
-            if is_admin:
-                act_col1, act_col2 = st.columns(2)
-                with act_col1:
-                    if st.button("✏️ Modifier cet essai", type="secondary", use_container_width=True):
-                        selected_item = next((item for item in res.data if item["id"] == selected_id), None)
-                        if selected_item:
-                            st.session_state["edit_plaque_item"] = selected_item
-                            st.rerun()
-
-                with act_col2:
-                    if st.button("🗑️ Supprimer cet essai", type="primary", use_container_width=True):
-                        try:
-                            item_a_supprimer = next((item for item in res.data if item["id"] == selected_id), None)
-                            enregistrer_modification(
-                                supabase,
-                                table_concernee="essai_plaque",
-                                enregistrement_id=selected_id,
-                                action="SUPPRESSION",
-                                anciennes_valeurs={k: v for k, v in (item_a_supprimer or {}).items() if k != "id"},
-                                commentaire="Suppression définitive de l'essai",
-                            )
-                            supabase.table("essai_plaque").delete().eq("id", selected_id).eq("projet_id", projet_id_actif).execute()
-                            st.success(f"🗑️ Essai #{selected_id} supprimé avec succès.")
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"Erreur lors de la suppression : {e}")
+        # Historique
+        st.markdown("---")
+        st.subheader("📋 Historique des Essais Enregistrés")
+        try:
+            res = supabase.table("essai_plaque").select("*").eq("projet_id", projet_id_actif).order("id", desc=True).execute()
+            if res.data and len(res.data) > 0:
+                clean_rows = []
+                for row in res.data:
+                    ref_val = row.get("reference") or row.get("ref_essai") or row.get("ref") or "-"
+                    clean_rows.append({
+                        "ID": row.get("id"),
+                        "Référence": ref_val,
+                        "Date": row.get("date_essai"),
+                        "Client": row.get("client"),
+                        "Emplacement": row.get("emplacement"),
+                        "Couche": row.get("couche"),
+                        "EV2 (MPa)": row.get("ev2"),
+                        "Technicien": row.get("technicien")
+                    })
+                st.dataframe(pd.DataFrame(clean_rows), use_container_width=True, hide_index=True)
             else:
-                if st.button("✏️ Modifier cet essai", type="secondary", use_container_width=True):
-                    selected_item = next((item for item in res.data if item["id"] == selected_id), None)
-                    if selected_item:
-                        st.session_state["edit_plaque_item"] = selected_item
-                        st.rerun()
+                st.info("Aucun essai enregistré.")
+        except Exception as e:
+            st.warning(f"Erreur historique : {e}")
 
-        else:
-            st.info("Aucun essai à la plaque n'a encore été enregistré.")
-    except Exception as e:
-        st.warning(f"Impossible de charger l'historique : {e}")
+    with tab_pv:
+        st.subheader("📄 Génération de PV et Synthèse PDF")
+        try:
+            res_pv = supabase.table("essai_plaque").select("*").eq("projet_id", projet_id_actif).order("id", desc=True).execute()
+            if res_pv.data and len(res_pv.data) > 0:
+                options_essais = {f"ID #{item['id']} - Réf: {item.get('reference', 'Sans réf')} ({item.get('date_essai', '')})": item for item in res_pv.data}
+                choix_essai_str = st.selectbox("Sélectionner l'essai à éditer en PV :", options=list(options_essais.keys()))
+                essai_selectionne = options_essais[choix_essai_str]
+
+                st.markdown("---")
+                st.markdown("### 🔍 Aperçu rapide des données")
+                col_p1, col_p2 = st.columns(2)
+                with col_p1:
+                    st.write(f"**Référence :** {essai_selectionne.get('reference', '-')}")
+                    st.write(f"**Date :** {essai_selectionne.get('date_essai', '-')}")
+                    st.write(f"**Client :** {essai_selectionne.get('client', '-')}")
+                    st.write(f"**Projet :** {essai_selectionne.get('projet', '-')}")
+                with col_p2:
+                    st.write(f"**Emplacement :** {essai_selectionne.get('emplacement', '-')}")
+                    st.write(f"**Couche :** {essai_selectionne.get('couche', '-')}")
+                    st.write(f"**Technicien :** {essai_selectionne.get('technicien', '-')}")
+
+                st.markdown("### 📥 Téléchargement du PV")
+                pdf_bytes = generer_pdf_pv(essai_selectionne)
+                nom_fichier = f"PV_Essai_Plaque_{str(essai_selectionne.get('reference', essai_selectionne.get('id'))).replace('/', '_')}.pdf"
+                
+                st.download_button(
+                    label="📥 Télécharger le Procès-Verbal (PDF)",
+                    data=pdf_bytes,
+                    file_name=nom_fichier,
+                    mime="application/pdf",
+                    type="primary",
+                    use_container_width=True
+                )
+            else:
+                st.info("Aucun essai disponible pour générer un PV.")
+        except Exception as e:
+            st.warning(f"Erreur lors du chargement des PV : {e}")
