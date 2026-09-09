@@ -43,7 +43,7 @@ def show(supabase):
     if editing_item:
         st.info(f"✏️ **Mode Modification** - Essai ID #{editing_item['id']}")
         
-        default_ref = editing_item.get("reference") or editing_item.get("ref_essai") or "260/26/PLQ/01"
+        default_ref = editing_item.get("reference") or editing_item.get("ref_essai") or editing_item.get("ref") or "260/26/PLQ/01"
         default_date = datetime.strptime(editing_item["date_essai"], "%Y-%m-%d").date() if isinstance(editing_item.get("date_essai"), str) else date.today()
         default_client = editing_item.get("client", "TGCC")
         default_projet = editing_item.get("projet", "LGV CASA SUD")
@@ -247,19 +247,6 @@ def show(supabase):
         button_label = "🔄 Mettre à jour l'essai" if editing_item else "💾 Enregistrer l'essai"
         if st.button(button_label, key="btn_enregistrer_plaque", type="primary", use_container_width=True):
             
-            # --- VÉRIFICATION DU DOUBLON DE RÉFÉRENCE ---
-            try:
-                ref_query = supabase.table("essai_plaque").select("id").eq("projet_id", projet_id_actif).eq("reference", reference)
-                if editing_item:
-                    ref_query = ref_query.neq("id", editing_item["id"])
-                ref_res = ref_query.execute()
-                
-                if ref_res.data and len(ref_res.data) > 0:
-                    st.error(f"⚠️ Erreur : La référence d'essai '{reference}' existe déjà dans ce projet. Double bloqué.")
-                    st.stop()
-            except Exception as ref_err:
-                pass
-
             payload = {
                 "reference": reference,
                 "date_essai": str(date_essai),
@@ -283,6 +270,16 @@ def show(supabase):
                 sample_query = supabase.table("essai_plaque").select("*").limit(1).execute()
                 if sample_query.data and len(sample_query.data) > 0:
                     valid_columns = set(sample_query.data[0].keys())
+                    # Vérifier si la colonne reference existe, sinon alerter l'utilisateur
+                    if "reference" not in valid_columns and "ref" in valid_columns:
+                        payload["ref"] = payload.pop("reference")
+                        valid_columns.add("ref")
+                    elif "reference" not in valid_columns and "ref_essai" in valid_columns:
+                        payload["ref_essai"] = payload.pop("reference")
+                        valid_columns.add("ref_essai")
+                    elif "reference" not in valid_columns:
+                        st.warning("⚠️ Attention : La colonne 'reference' n'existe pas dans la table Supabase 'essai_plaque'. Pensez à l'ajouter dans Supabase.")
+                    
                     safe_payload = {k: v for k, v in payload.items() if k in valid_columns}
                 else:
                     safe_payload = payload
@@ -338,7 +335,6 @@ def show(supabase):
             
             clean_rows = []
             for row in res.data:
-                # Récupération robuste de la référence (gestion des différentes variations de noms de colonnes en base)
                 ref_val = row.get("reference") or row.get("ref_essai") or row.get("ref") or "-"
                 if not ref_val or str(ref_val).strip() == "":
                     ref_val = "-"
@@ -428,7 +424,7 @@ def show(supabase):
                 if st.button("✏️ Modifier cet essai", type="secondary", use_container_width=True):
                     selected_item = next((item for item in res.data if item["id"] == selected_id), None)
                     if selected_item:
-                        st.session_state["edit_plquare_item"] = selected_item
+                        st.session_state["edit_plaque_item"] = selected_item
                         st.rerun()
 
         else:
