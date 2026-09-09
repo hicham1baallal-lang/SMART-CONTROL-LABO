@@ -87,7 +87,7 @@ def generer_pdf_pv(essai):
     bold_style = ParagraphStyle('BoldText', parent=normal_style, fontName='Helvetica-Bold')
 
     # En-tête avec Logo et Titre de l'organisme
-    logo_path = "logo.png"
+    logo_path = "logo.png.jpg"
     header_data = []
     
     # Si le fichier image du logo existe, on l'intègre dans un tableau d'en-tête
