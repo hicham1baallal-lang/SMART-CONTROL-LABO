@@ -327,7 +327,7 @@ def show(supabase):
         elif editing_item and not default_obs:
             default_obs = default_obs_systematique
 
-        observations = st.text_area("Commentaire / Remarques", value=default_obs, key="plaque_obs")
+        Commentaire = st.text_area("Commentaire / Remarques", value=default_obs, key="plaque_obs")
 
         btn_col1, btn_col2 = st.columns([3, 1])
         with btn_col1:
