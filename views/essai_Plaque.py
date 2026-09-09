@@ -12,46 +12,48 @@ from reportlab.lib import colors
 import io
 
 def generer_pdf_pv(essai):
-    """Génère un Procès-Verbal (PV) professionnel au format PDF pour l'essai à la plaque."""
+    """Génère un Procès-Verbal (PV) professionnel au format PDF pour l'essai à la plaque (centré sur la page)."""
     buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
+    # Marges équilibrées (36 points / 0.5 pouce) pour un centrage parfait et harmonieux sur A4
+    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
     elements = []
     
     styles = getSampleStyleSheet()
     title_style = ParagraphStyle(
         'TitleStyle',
         parent=styles['Heading1'],
-        fontSize=16,
+        fontSize=15,
         textColor=colors.HexColor('#1f4e78'),
         alignment=1, # Centré
-        spaceAfter=15
+        spaceAfter=12
     )
     subtitle_style = ParagraphStyle(
         'SubTitleStyle',
         parent=styles['Normal'],
-        fontSize=10,
+        fontSize=9.5,
         textColor=colors.HexColor('#595959'),
         alignment=1,
-        spaceAfter=20
+        spaceAfter=15
     )
     section_style = ParagraphStyle(
         'SectionStyle',
         parent=styles['Heading2'],
-        fontSize=12,
+        fontSize=11,
         textColor=colors.HexColor('#1f4e78'),
-        spaceBefore=10,
-        spaceAfter=6
+        spaceBefore=8,
+        spaceAfter=4
     )
-    normal_style = ParagraphStyle('NormalText', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#262626'))
+    normal_style = ParagraphStyle('NormalText', parent=styles['Normal'], fontSize=8.5, textColor=colors.HexColor('#262626'))
     bold_style = ParagraphStyle('BoldText', parent=normal_style, fontName='Helvetica-Bold')
 
-    # En-tête
-    elements.append(Paragraph("LABORATOIRE PUBLIC D'ESSAIS ET D'ÉTUDES (LPEE)", bold_style))
+    # En-tête centré
+    elements.append(Paragraph("<b>LABORATOIRE PUBLIC D'ESSAIS ET D'ÉTUDES (LPEE)</b>", ParagraphStyle('CenterBold', parent=bold_style, alignment=1, fontSize=10, textColor=colors.HexColor('#1f4e78'))))
+    elements.append(Spacer(1, 4))
     elements.append(Paragraph("PROCÈS-VERBAL D'ESSAI À LA PLAQUE (NF P 94-117-1)", title_style))
     elements.append(Paragraph(f"Référence : <b>{essai.get('reference', '-')}</b> | Date : {essai.get('date_essai', '-')}", subtitle_style))
-    elements.append(Spacer(1, 10))
+    elements.append(Spacer(1, 6))
 
-    # Informations Générales sous forme de tableau
+    # Informations Générales sous forme de tableau (largeur totale adaptée aux marges de 525 pt)
     data_infos = [
         [Paragraph("Client / Organisme :", bold_style), Paragraph(str(essai.get('client', '-')), normal_style),
          Paragraph("Chantier / Projet :", bold_style), Paragraph(str(essai.get('projet', '-')), normal_style)],
@@ -63,16 +65,18 @@ def generer_pdf_pv(essai):
          Paragraph("", normal_style), Paragraph("", normal_style)]
     ]
     
-    t_infos = Table(data_infos, colWidths=[110, 140, 110, 140])
+    t_infos = Table(data_infos, colWidths=[115, 147, 115, 148])
     t_infos.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#f2f2f2')),
         ('BOX', (0,0), (-1,-1), 0.5, colors.HexColor('#d9d9d9')),
         ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 6),
-        ('TOPPADDING', (0,0), (-1,-1), 6),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 5),
+        ('TOPPADDING', (0,0), (-1,-1), 5),
+        ('LEFTPADDING', (0,0), (-1,-1), 6),
+        ('RIGHTPADDING', (0,0), (-1,-1), 6),
     ]))
     elements.append(t_infos)
-    elements.append(Spacer(1, 15))
+    elements.append(Spacer(1, 10))
 
     # Points de mesure
     elements.append(Paragraph("Détail des Points de Mesure et Résultats (NF P 94-117-1)", section_style))
@@ -99,44 +103,54 @@ def generer_pdf_pv(essai):
             f"{k_v:.2f}"
         ])
 
-    t_pts = Table(table_pts_data, colWidths=[100, 90, 90, 80, 80, 60])
+    t_pts = Table(table_pts_data, colWidths=[105, 90, 90, 80, 80, 80])
     t_pts.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#1f4e78')),
         ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
         ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
         ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
         ('FONTSIZE', (0,0), (-1,-1), 8),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 5),
-        ('TOPPADDING', (0,0), (-1,-1), 5),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 4),
+        ('TOPPADDING', (0,0), (-1,-1), 4),
         ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#bfbfbf')),
     ]))
     elements.append(t_pts)
-    elements.append(Spacer(1, 15))
+    elements.append(Spacer(1, 10))
 
     # Observations / Commentaires
     elements.append(Paragraph("Observations et Avis technique :", section_style))
     obs_text = str(essai.get('observations', 'Aucune observation particulière.'))
-    t_obs = Table([[Paragraph(obs_text, normal_style)]], colWidths=[500])
+    t_obs = Table([[Paragraph(obs_text, normal_style)]], colWidths=[525])
     t_obs.setStyle(TableStyle([
         ('BOX', (0,0), (-1,-1), 0.5, colors.HexColor('#d9d9d9')),
         ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#fafafa')),
-        ('TOPPADDING', (0,0), (-1,-1), 8),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 8),
-        ('LEFTPADDING', (0,0), (-1,-1), 8),
-        ('RIGHTPADDING', (0,0), (-1,-1), 8),
+        ('TOPPADDING', (0,0), (-1,-1), 6),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 6),
+        ('LEFTPADDING', (0,0), (-1,-1), 6),
+        ('RIGHTPADDING', (0,0), (-1,-1), 6),
     ]))
     elements.append(t_obs)
-    elements.append(Spacer(1, 30))
+    elements.append(Spacer(1, 20))
 
-    # Signatures
+    # Bloc Signatures & Visas (Centré, avec les noms demandés)
+    sig_style = ParagraphStyle('SigStyle', parent=normal_style, alignment=1) # Centré
     data_sig = [
-        [Paragraph("<b>Le Technicien LPEE</b>", normal_style), Paragraph("<b>Le Responsable / Client</b>", normal_style)],
-        [Paragraph("<br/><br/><br/>_________________________", normal_style), Paragraph("<br/><br/><br/>_________________________", normal_style)]
+        [
+            Paragraph("<b>Responsable d'essai</b><br/>O. IKKEN", sig_style), 
+            Paragraph("<b>Chef du laboratoire</b><br/>H. BAALLAL", sig_style)
+        ],
+        [
+            Paragraph("<br/><br/>____________________________<br/><i>(Visa et Signature)</i>", sig_style), 
+            Paragraph("<br/><br/>____________________________<br/><i>(Visa et Signature)</i>", sig_style)
+        ]
     ]
-    t_sig = Table(data_sig, colWidths=[250, 250])
+    t_sig = Table(data_sig, colWidths=[262.5, 262.5])
     t_sig.setStyle(TableStyle([
         ('ALIGN', (0,0), (-1,-1), 'CENTER'),
         ('VALIGN', (0,0), (-1,-1), 'TOP'),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 2),
+        ('TOPPADDING', (0,0), (-1,-1), 2),
     ]))
     elements.append(t_sig)
 
@@ -163,12 +177,10 @@ def show(supabase):
 
     current_user = str(user_raw).upper()
 
-    # Détection administrateur pour la suppression
     user_role = str(st.session_state.get("role", "")).upper()
     is_admin = st.session_state.get("is_admin", False) or user_role == "ADMIN"
     is_baallal_admin = current_user.strip() == "BAALLAL" and is_admin
 
-    # Projet actif
     user_info_projet = st.session_state.get("user") or {}
     projet_id_actif = projets_config.projet_actif(user_info_projet)
     if not projet_id_actif:
@@ -182,9 +194,6 @@ def show(supabase):
     tab_saisie, tab_pv = st.tabs(["📝 Saisie & Historique", "📄 PV / Synthèse & PDF"])
 
     with tab_saisie:
-        # ---------------------------------------------------------
-        # 1. GESTION DU MOTEUR D'ÉDITION / MODIFICATION
-        # ---------------------------------------------------------
         editing_item = st.session_state.get("edit_plaque_item", None)
 
         if editing_item:
@@ -219,9 +228,6 @@ def show(supabase):
             default_obs = ""
             default_points = [{"z1": 0.53, "z2": 0.52, "pk_point": "PK 1+200"}]
 
-        # ---------------------------------------------------------
-        # 2. FORMULAIRE DE SAISIE / ÉDITION
-        # ---------------------------------------------------------
         st.subheader("📝 " + ("Modifier l'essai" if editing_item else "Saisie d'un nouvel essai"))
 
         col0, col1, col2 = st.columns(3)
@@ -323,7 +329,6 @@ def show(supabase):
 
         observations = st.text_area("Commentaire / Remarques", value=default_obs, key="plaque_obs")
 
-        # Boutons Enregistrement & Blacage Doublon
         btn_col1, btn_col2 = st.columns([3, 1])
         with btn_col1:
             button_label = "🔄 Mettre à jour l'essai" if editing_item else "💾 Enregistrer l'essai"
@@ -391,7 +396,6 @@ def show(supabase):
                 st.session_state["edit_plaque_item"] = None
                 st.rerun()
 
-        # Historique
         st.markdown("---")
         st.subheader("📋 Historique des Essais Enregistrés")
         try:
