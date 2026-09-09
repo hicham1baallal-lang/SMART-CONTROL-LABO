@@ -1511,11 +1511,9 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         # utilisateurs maintenant que la connexion fonctionne.
         _dbg_fetch = st.session_state.get('_pv_db_debug_fetch')
         _dbg_save = st.session_state.get('_pv_db_debug_save')
-        _dbg_delete = st.session_state.get('_pv_db_debug_delete')
 
         _fetch_failed = bool(_dbg_fetch and _dbg_fetch.get('attempts') and not any(a.get('ok') for a in _dbg_fetch['attempts']))
         _save_failed = bool(_dbg_save and not _dbg_save.get('saved') and _dbg_save.get('attempts'))
-        _has_db_problem = (not supabase_client) or _fetch_failed or _save_failed
 
         if not supabase_client:
             st.error(
@@ -1529,37 +1527,15 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         elif _fetch_failed:
             st.error(
                 "❌ **Le client Supabase est bien transmis, mais la lecture de l'historique a échoué** "
-                "sur les deux tables testées (`pv_granulats` et `historique_pv`). "
-                + ("Voir le détail technique ci-dessous (admin)." if is_baallal_admin else
-                   "Contactez l'administrateur pour le détail technique.")
+                "sur les deux tables testées (`pv_granulats` et `historique_pv`)."
             )
         elif _save_failed:
             st.warning(
-                "⚠️ La dernière tentative d'enregistrement d'un PV en base a échoué sur les deux tables testées. "
-                + ("Voir le détail technique ci-dessous (admin)." if is_baallal_admin else
-                   "Contactez l'administrateur pour le détail technique.")
+                "⚠️ La dernière tentative d'enregistrement d'un PV en base a échoué sur les deux tables testées."
             )
         elif is_baallal_admin and supabase_client and _dbg_fetch and _dbg_fetch.get('loaded_from'):
             st.caption(f"✅ Connexion base de données OK — historique chargé depuis `{_dbg_fetch['loaded_from']}` ({_dbg_fetch.get('loaded_count', 0)} PV).")
 
-        # Détail technique brut : réservé à l'admin baallal, et n'apparaît
-        # QUE s'il y a un problème détecté. Dès que tout fonctionne, ce bloc
-        # ne s'affiche plus du tout (au lieu de rester replié mais visible),
-        # pour ne pas encombrer l'écran une fois la connexion opérationnelle.
-        if is_baallal_admin and _has_db_problem:
-            with st.expander("🔧 Détail technique du diagnostic base de données (Admin)", expanded=True):
-                st.write("Client Supabase transmis :", "✅ Oui" if supabase_client else "❌ Non")
-                if _dbg_fetch:
-                    st.markdown("**Dernière tentative de chargement (au démarrage de la session) :**")
-                    st.json(_dbg_fetch)
-                if _dbg_save:
-                    st.markdown("**Dernière tentative d'enregistrement :**")
-                    st.json(_dbg_save)
-                if _dbg_delete:
-                    st.markdown("**Dernière tentative de suppression :**")
-                    st.json(_dbg_delete)
-                if not any([_dbg_fetch, _dbg_save, _dbg_delete]):
-                    st.caption("Aucune tentative d'accès à la base n'a encore eu lieu dans cette session.")
 
         if st.session_state['historique_pv']:
             st.write("### 🔎 Recherche & Sélection de PV")
@@ -1595,9 +1571,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
             info_p_hist  = selected_pv.get('info_prelevement', {})
             data_g_hist  = selected_pv.get('data_granulats', {})
 
-            pv_hist_html = generate_pv_html(pv_info_hist, info_p_hist, data_g_hist)
-
-            col_act1, col_act2, col_act3, col_act4 = st.columns([1.2, 1, 1, 1])
+            col_act1, col_act4 = st.columns([1.5, 1])
 
             with col_act1:
                 if REPORTLAB_AVAILABLE:
@@ -1614,26 +1588,6 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                         )
                     except Exception as e:
                         st.error(f"Erreur lors de la génération du PDF : {e}")
-
-            with col_act2:
-                st.download_button(
-                    label="📄 Télécharger (HTML)",
-                    data=pv_hist_html,
-                    file_name=f"PV_{str(pv_ref_selected).replace('/', '_')}.html",
-                    mime="text/html",
-                    key=f"{prefix}_dl_html_sel_pv_main",
-                    use_container_width=True
-                )
-
-            with col_act3:
-                st.download_button(
-                    label="💾 Exporter Données (JSON)",
-                    data=json.dumps(selected_pv, indent=2, ensure_ascii=False),
-                    file_name=f"PV_Data_{str(pv_ref_selected).replace('/', '_')}.json",
-                    mime="application/json",
-                    key=f"{prefix}_dl_json_sel_pv_main",
-                    use_container_width=True
-                )
 
             with col_act4:
                 if can_edit:
@@ -1696,8 +1650,5 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                     st.markdown(f"**Chantier / Projet :** {pv.get('projet', '-')}")
                     st.markdown(f"**Date de création :** {date_disp}")
                     st.markdown(f"**Référence Rapport :** `{ref_pv_disp}`")
-
-                    with st.popover("👁️ Voir la structure JSON brute"):
-                        st.json(pv)
         else:
             st.info("Aucun PV n'est enregistré dans l'historique pour le moment. Réalisez un essai et validez-le en Phase 1.")
