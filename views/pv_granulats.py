@@ -1590,41 +1590,48 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
             info_p_hist  = selected_pv.get('info_prelevement', {})
             data_g_hist  = selected_pv.get('data_granulats', {})
 
-            col_act1, col_act4 = st.columns([1.5, 1])
+            if REPORTLAB_AVAILABLE:
+                try:
+                    pdf_hist_bytes = generate_pv_pdf(pv_info_hist, info_p_hist, data_g_hist)
+                    st.download_button(
+                        label="🔴 Télécharger PV en PDF avec Courbe",
+                        data=pdf_hist_bytes,
+                        file_name=f"PV_Granulats_{str(pv_ref_selected).replace('/', '_')}.pdf",
+                        mime="application/pdf",
+                        key=f"{prefix}_dl_pdf_sel_pv_main",
+                        type="primary",
+                        use_container_width=True
+                    )
+                except Exception as e:
+                    st.error(f"Erreur lors de la génération du PDF : {e}")
 
-            with col_act1:
-                if REPORTLAB_AVAILABLE:
-                    try:
-                        pdf_hist_bytes = generate_pv_pdf(pv_info_hist, info_p_hist, data_g_hist)
-                        st.download_button(
-                            label="🔴 Télécharger PV en PDF avec Courbe",
-                            data=pdf_hist_bytes,
-                            file_name=f"PV_Granulats_{str(pv_ref_selected).replace('/', '_')}.pdf",
-                            mime="application/pdf",
-                            key=f"{prefix}_dl_pdf_sel_pv_main",
-                            type="primary",
-                            use_container_width=True
-                        )
-                    except Exception as e:
-                        st.error(f"Erreur lors de la génération du PDF : {e}")
-
-            with col_act4:
-                if can_edit:
-                    if st.button("📥 Charger dans l'application", use_container_width=True, key=f"{prefix}_btn_load_pv_active_main"):
-                        # IMPORTANT : on ne peut pas réassigner ici les clés de
-                        # session_state déjà liées à des widgets (ex: {prefix}_common_client)
-                        # car ces widgets ont déjà été instanciés plus haut dans CE MÊME
-                        # run (l'onglet 1 s'exécute avant l'onglet 3, même s'il n'est pas
-                        # affiché). Cela déclenche StreamlitWidgetAlreadyInstantiatedError.
-                        # On stocke donc la demande de chargement et on la traite tout en
-                        # haut de show(), AVANT la création de ces widgets, au prochain run.
-                        st.session_state['_pending_pv_load'] = {
-                            'info_prelevement': copy.deepcopy(selected_pv.get('info_prelevement', {})),
-                            'pv_info': copy.deepcopy(selected_pv.get('pv_info', {})),
-                            'data_granulats': copy.deepcopy(selected_pv.get('data_granulats', {})),
-                            'success_msg': f"✅ Le PV N° '{pv_ref_selected}' a été chargé dans les onglets de saisie et de synthèse !"
-                        }
-                        st.rerun()
+            # ------------------------------------------------------------------
+            # SECTION MODIFICATION — rubrique dédiée, visible dans l'historique
+            # ------------------------------------------------------------------
+            if can_edit:
+                st.markdown("---")
+                st.markdown("##### ✏️ Modification du PV")
+                st.caption(
+                    "Charge ce PV dans les onglets 1️⃣ et 2️⃣ pour en modifier les valeurs. "
+                    "Une fois vos modifications faites, retournez dans l'onglet 1️⃣ et cliquez sur "
+                    "« ✅ Valider et enregistrer l'ensemble des essais » : comme le N° Rapport est "
+                    "identique, la fiche existante sera mise à jour (pas de doublon créé)."
+                )
+                if st.button("✏️ Modifier ce PV", use_container_width=True, key=f"{prefix}_btn_load_pv_active_main"):
+                    # IMPORTANT : on ne peut pas réassigner ici les clés de
+                    # session_state déjà liées à des widgets (ex: {prefix}_common_client)
+                    # car ces widgets ont déjà été instanciés plus haut dans CE MÊME
+                    # run (l'onglet 1 s'exécute avant l'onglet 3, même s'il n'est pas
+                    # affiché). Cela déclenche StreamlitWidgetAlreadyInstantiatedError.
+                    # On stocke donc la demande de chargement et on la traite tout en
+                    # haut de show(), AVANT la création de ces widgets, au prochain run.
+                    st.session_state['_pending_pv_load'] = {
+                        'info_prelevement': copy.deepcopy(selected_pv.get('info_prelevement', {})),
+                        'pv_info': copy.deepcopy(selected_pv.get('pv_info', {})),
+                        'data_granulats': copy.deepcopy(selected_pv.get('data_granulats', {})),
+                        'success_msg': f"✅ Le PV N° '{pv_ref_selected}' a été chargé dans les onglets 1️⃣ et 2️⃣ pour modification. Éditez les valeurs puis validez à nouveau pour enregistrer."
+                    }
+                    st.rerun()
 
             # ------------------------------------------------------------------
             # SECTION SUPPRESSION — Accessible aux administrateurs
