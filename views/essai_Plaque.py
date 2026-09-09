@@ -127,8 +127,6 @@ def generer_pdf_pv(essai):
         elements.append(Paragraph(header_text, org_style))
 
     elements.append(Spacer(1, 6))
-    elements.append(Paragraph("PROCÈS-VERBAL D'ESSAI À LA PLAQUE (NF P 94-117-1)", title_style))
-    elements.append(Paragraph(f"Référence : <b>{essai.get('reference', '-')}</b> | Date : {essai.get('date_essai', '-')}", subtitle_style))
     elements.append(Spacer(1, 4))
 
     # Informations Générales
@@ -231,6 +229,10 @@ def generer_pdf_pv(essai):
         ('TOPPADDING', (0,0), (-1,-1), 10),
     ]))
     elements.append(t_sig)
+
+    elements.append(Spacer(1, 15))
+    elements.append(Paragraph("PROCÈS-VERBAL D'ESSAI À LA PLAQUE (NF P 94-117-1)", title_style))
+    elements.append(Paragraph(f"Référence : <b>{essai.get('reference', '-')}</b> | Date : {essai.get('date_essai', '-')}", subtitle_style))
 
     doc.build(elements)
     buffer.seek(0)
