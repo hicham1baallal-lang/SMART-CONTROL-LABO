@@ -527,13 +527,32 @@ def create_curve_image_buffer(data_granulats, ref_b, fig_width=8, fig_height=3.2
     ax.set_ylabel("% Passants Cumulés", fontsize=8, fontweight='bold')
     ax.set_ylim(-2, 105)
     ax.grid(True, which="both", ls="--", lw=0.4, alpha=0.7)
-    ax.legend(loc='lower left', fontsize=7, framealpha=0.9)
     ax.tick_params(axis='both', which='major', labelsize=7)
     ax.set_title("COURBE GRANULOMETRIQUE GLOBALE", fontsize=9, fontweight='bold', pad=6)
-    plt.tight_layout()
-    
+
+    # Légende compacte, placée SOUS le graphique (hors de la zone de tracé)
+    # pour ne jamais coller/chevaucher les courbes, quelle que soit leur forme.
+    ax.legend(
+        loc='upper center',
+        bbox_to_anchor=(0.5, -0.22),
+        ncol=2,
+        fontsize=6.5,
+        handlelength=1.3,
+        handletextpad=0.35,
+        columnspacing=1.2,
+        labelspacing=0.35,
+        borderpad=0.4,
+        frameon=True,
+        framealpha=0.95
+    )
+
+    # Marges fixes (au lieu de tight_layout) pour réserver l'espace du titre
+    # en haut et de la légende en bas, et garder un rendu prévisible quelle
+    # que soit la hauteur demandée pour le graphique.
+    fig.subplots_adjust(top=0.88, bottom=0.30, left=0.09, right=0.97)
+
     buf = io.BytesIO()
-    plt.savefig(buf, format='png', bbox_inches='tight', dpi=200)
+    plt.savefig(buf, format='png', dpi=200)
     plt.close(fig)
     buf.seek(0)
     return buf
