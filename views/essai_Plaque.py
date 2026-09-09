@@ -30,8 +30,7 @@ def show(supabase):
     # Autoriser l'édition pour tous les utilisateurs connectés à l'application
     can_edit = True
 
-    # Projet actif : toutes les lectures/écritures de cette page sont
-    # limitées à ce projet, pour garantir l'étanchéité entre chantiers.
+    # Projet actif
     user_info_projet = st.session_state.get("user") or {}
     projet_id_actif = projets_config.projet_actif(user_info_projet)
     if not projet_id_actif:
@@ -140,22 +139,21 @@ def show(supabase):
             }
 
             try:
-                sample_query = supabase.table("essai_plaque").select("*").limit(1).execute()
+                sample_query = supabase.table("essais_plaque").select("*").limit(1).execute()
                 if sample_query.data and len(sample_query.data) > 0:
                     valid_columns = set(sample_query.data[0].keys())
                     safe_payload = {k: v for k, v in payload.items() if k in valid_columns}
                 else:
                     safe_payload = payload
-                # Toujours inclus, même si absent des colonnes déjà vues par
-                # l'échantillon ci-dessus (table encore vide par exemple).
+
                 safe_payload["projet_id"] = projet_id_actif
 
                 if editing_item:
                     anciennes_valeurs_plaque = {k: editing_item.get(k) for k in safe_payload}
-                    supabase.table("essai_plaque").update(safe_payload).eq("id", editing_item["id"]).eq("projet_id", projet_id_actif).execute()
+                    supabase.table("essais_plaque").update(safe_payload).eq("id", editing_item["id"]).eq("projet_id", projet_id_actif).execute()
                     enregistrer_modification(
                         supabase,
-                        table_concernee="essai_plaque",
+                        table_concernee="essais_plaque",
                         enregistrement_id=editing_item["id"],
                         action="MODIFICATION",
                         anciennes_valeurs=anciennes_valeurs_plaque,
@@ -164,12 +162,12 @@ def show(supabase):
                     st.success(f"✅ Essai #{editing_item['id']} mis à jour avec succès !")
                     st.session_state["edit_plaque_item"] = None
                 else:
-                    res_ins_plaque = supabase.table("essai_plaque").insert(safe_payload).execute()
+                    res_ins_plaque = supabase.table("essais_plaque").insert(safe_payload).execute()
                     if res_ins_plaque.data:
                         nouvel_id_plaque = res_ins_plaque.data[0].get("id")
                         enregistrer_modification(
                             supabase,
-                            table_concernee="essai_plaque",
+                            table_concernee="essais_plaque",
                             enregistrement_id=nouvel_id_plaque,
                             action="CREATION",
                             nouvelles_valeurs=safe_payload,
@@ -194,7 +192,7 @@ def show(supabase):
     st.subheader("📋 Historique des Essais Enregistrés")
 
     try:
-        res = supabase.table("essai_plaque").select("*").eq("projet_id", projet_id_actif).order("id", desc=True).execute()
+        res = supabase.table("essais_plaque").select("*").eq("projet_id", projet_id_actif).order("id", desc=True).execute()
         if res.data and len(res.data) > 0:
             
             clean_rows = []
@@ -232,7 +230,7 @@ def show(supabase):
             )
 
             if is_baallal_admin:
-                afficher_historique_modifications(supabase, "essai_plaque", selected_id)
+                afficher_historique_modifications(supabase, "essais_plaque", selected_id)
 
             if is_admin:
                 act_col1, act_col2 = st.columns(2)
@@ -249,19 +247,18 @@ def show(supabase):
                             item_a_supprimer = next((item for item in res.data if item["id"] == selected_id), None)
                             enregistrer_modification(
                                 supabase,
-                                table_concernee="essai_plaque",
+                                table_concernee="essais_plaque",
                                 enregistrement_id=selected_id,
                                 action="SUPPRESSION",
                                 anciennes_valeurs={k: v for k, v in (item_a_supprimer or {}).items() if k != "id"},
                                 commentaire="Suppression définitive de l'essai",
                             )
-                            supabase.table("essai_plaque").delete().eq("id", selected_id).eq("projet_id", projet_id_actif).execute()
+                            supabase.table("essais_plaque").delete().eq("id", selected_id).eq("projet_id", projet_id_actif).execute()
                             st.success(f"🗑️ Essai #{selected_id} supprimé avec succès.")
                             st.rerun()
                         except Exception as e:
                             st.error(f"Erreur lors de la suppression : {e}")
             else:
-                # Bouton de modification disponible pour les techniciens
                 if st.button("✏️ Modifier cet essai", type="secondary", use_container_width=True):
                     selected_item = next((item for item in res.data if item["id"] == selected_id), None)
                     if selected_item:
