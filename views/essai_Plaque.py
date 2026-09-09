@@ -119,7 +119,7 @@ def generer_pdf_pv(essai):
     elements.append(Spacer(1, 8))
 
     # Observations / Commentaires (Largeur totale : 525 pt)
-    elements.append(Paragraph("Observations :", section_style))
+    elements.append(Paragraph("Observations et Avis technique :", section_style))
     obs_text = str(essai.get('observations', 'Aucune observation particulière.'))
     t_obs = Table([[Paragraph(obs_text, normal_style)]], colWidths=[525])
     t_obs.setStyle(TableStyle([
@@ -141,8 +141,8 @@ def generer_pdf_pv(essai):
             Paragraph("<b>Chef du laboratoire</b><br/>H. BAALLAL", sig_style)
         ],
         [
-            Paragraph("<br/><br/>____________________________<br/><i></i>", sig_style), 
-            Paragraph("<br/><br/>____________________________<br/><i></i>", sig_style)
+            Paragraph("<br/><br/>____________________________<br/><i>(Visa et Signature)</i>", sig_style), 
+            Paragraph("<br/><br/>____________________________<br/><i>(Visa et Signature)</i>", sig_style)
         ]
     ]
     t_sig = Table(data_sig, colWidths=[262.5, 262.5])
@@ -208,7 +208,7 @@ def show(supabase):
             default_couche = editing_item.get("couche", "Sous-couche et Couche de forme ferroviaire (LGV)")
             default_mat = editing_item.get("nature_materiau", "")
             default_tech = editing_item.get("technicien", current_user)
-            default_obs = editing_item.get("Commentaire", "")
+            default_obs = editing_item.get("observations", "")
             
             saved_points = editing_item.get("points_mesure")
             if not saved_points or not isinstance(saved_points, list):
@@ -327,7 +327,7 @@ def show(supabase):
         elif editing_item and not default_obs:
             default_obs = default_obs_systematique
 
-        Commentaire = st.text_area("Commentaire / Remarques", value=default_obs, key="plaque_obs")
+        observations = st.text_area("Commentaire / Remarques", value=default_obs, key="plaque_obs")
 
         btn_col1, btn_col2 = st.columns([3, 1])
         with btn_col1:
