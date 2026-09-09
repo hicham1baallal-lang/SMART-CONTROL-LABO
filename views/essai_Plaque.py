@@ -27,9 +27,6 @@ def show(supabase):
     is_admin = st.session_state.get("is_admin", False) or user_role == "ADMIN"
     is_baallal_admin = current_user.strip() == "BAALLAL" and is_admin
 
-    # Autoriser l'édition pour tous les utilisateurs connectés à l'application
-    can_edit = True
-
     # Projet actif
     user_info_projet = st.session_state.get("user") or {}
     projet_id_actif = projets_config.projet_actif(user_info_projet)
@@ -53,10 +50,15 @@ def show(supabase):
         default_pk = editing_item.get("pk_profil", editing_item.get("pkl", ""))
         default_couche = editing_item.get("couche", "Assise")
         default_mat = editing_item.get("nature_materiau", "")
-        default_z1 = float(editing_item.get("z1", 0.53))
-        default_z2 = float(editing_item.get("z2", 0.52))
         default_tech = editing_item.get("technicien", current_user)
         default_obs = editing_item.get("observations", "")
+        
+        # Gestion des points de mesure (supporte un historique sous forme de liste ou de valeurs uniques)
+        saved_points = editing_item.get("points_mesure")
+        if not saved_points or not isinstance(saved_points, list):
+            default_points = [{"z1": float(editing_item.get("z1", 0.53)), "z2": float(editing_item.get("z2", 0.52))}]
+        else:
+            default_points = saved_points
     else:
         default_date = date.today()
         default_client = "TGCC"
@@ -65,44 +67,79 @@ def show(supabase):
         default_pk = "PK 1+200"
         default_couche = "Assise"
         default_mat = "GNT 0/31.5 Classée B2"
-        default_z1 = 0.53
-        default_z2 = 0.52
         default_tech = current_user
         default_obs = "Portance conforme aux exigences du CPT."
+        default_points = [{"z1": 0.53, "z2": 0.52}]
 
     # ---------------------------------------------------------
     # 2. FORMULAIRE DE SAISIE / ÉDITION
     # ---------------------------------------------------------
     st.subheader("📝 " + ("Modifier l'essai" if editing_item else "Saisie d'un nouvel essai"))
 
-    col1, col2, col3 = st.columns(3)
+    # --- SECTION 1 : INFORMATIONS GÉNÉRALES ---
+    st.markdown("### 1. Informations Générales d'essai")
+    col1, col2 = st.columns(2)
 
     with col1:
         date_essai = st.date_input("Date de l'essai", value=default_date, key="plaque_date")
         client = st.text_input("Client / Organisme", value=default_client, key="plaque_client")
         projet = st.text_input("Chantier / Projet", value=default_projet, key="plaque_projet")
+        couche_options = ["Arase", "Assise", "Remblai", "PST", "Couche de forme", "Autre"]
+        couche_idx = couche_options.index(default_couche) if default_couche in couche_options else 0
+        couche = st.selectbox("Couche testée", couche_options, index=couche_idx, key="plaque_couche")
         
     with col2:
         emplacement = st.text_input("Emplacement / Zone", value=default_empl, key="plaque_empl")
         pk_profil = st.text_input("PK / Profil", value=default_pk, key="plaque_pk")
-        couche_options = ["Arase", "Assise", "Remblai", "PST", "Couche de forme", "Autre"]
-        couche_idx = couche_options.index(default_couche) if default_couche in couche_options else 0
-        couche = st.selectbox("Couche testée", couche_options, index=couche_idx, key="plaque_couche")
         nature_materiau = st.text_input("Nature du matériau", value=default_mat, key="plaque_mat")
-
-    with col3:
-        st.markdown("##### 📏 Données de Chargement (Enfoncements)")
-        z1 = st.number_input("Z1 - 1er chargement (mm)", min_value=0.01, max_value=10.0, value=default_z1, step=0.01, format="%.2f", key="plaque_z1")
-        z2 = st.number_input("Z2 - 2ème chargement (mm)", min_value=0.01, max_value=10.0, value=default_z2, step=0.01, format="%.2f", key="plaque_z2")
         technicien = st.text_input("Technicien LPEE", value=default_tech, key="plaque_tech")
 
-    # Calculs automatiques (NF P 94-117-1)
-    ev1 = round(112.5 / (z1 * 2), 2) if z1 > 0 else 0.0
-    ev2 = round(90.0 / (z2 * 2), 2) if z2 > 0 else 0.0
+    st.markdown("---")
+
+    # --- SECTION 2 : POINTS DE MESURE D'ESSAI À LA PLAQUE ---
+    st.markdown("### 2. Points de Mesure d'essai à la plaque")
+    st.caption("Vous pouvez ajouter un ou plusieurs points de mesure pour cet essai.")
+
+    if "plaque_points_count" not in st.session_state or editing_item:
+        st.session_state["plaque_points_count"] = len(default_points)
+
+    # Gestion dynamique du nombre de points via Streamlit state
+    col_add, col_rem, _ = st.columns([1, 1, 3])
+    with col_add:
+        if st.button("➕ Ajouter un point"):
+            st.session_state["plaque_points_count"] += 1
+    with col_rem:
+        if st.session_state["plaque_points_count"] > 1:
+            if st.button("➖ Supprimer un point"):
+                st.session_state["plaque_points_count"] -= 1
+
+    points_data = []
+    for i in range(st.session_state["plaque_points_count"]):
+        st.markdown(f"**Point de mesure N° {i+1}**")
+        p_col1, p_col2 = st.columns(2)
+        
+        default_z1_val = default_points[i]["z1"] if i < len(default_points) else 0.53
+        default_z2_val = default_points[i]["z2"] if i < len(default_points) else 0.52
+
+        with p_col1:
+            z1 = st.number_input(f"Z1 - 1er chargement (mm) [Point {i+1}]", min_value=0.01, max_value=10.0, value=float(default_z1_val), step=0.01, format="%.2f", key=f"plaque_z1_{i}")
+        with p_col2:
+            z2 = st.number_input(f"Z2 - 2ème chargement (mm) [Point {i+1}]", min_value=0.01, max_value=10.0, value=float(default_z2_val), step=0.01, format="%.2f", key=f"plaque_z2_{i}")
+        
+        points_data.append({"z1": z1, "z2": z2})
+
+    # Utilisation du premier point pour l'affichage des métriques principales ou calcul moyen si multi-points
+    # Par défaut, on prend le premier point ou le dernier saisi pour les indicateurs visuels immédiats
+    active_z1 = points_data[0]["z1"]
+    active_z2 = points_data[0]["z2"]
+
+    # Calculs automatiques (NF P 94-117-1) basés sur le point actif
+    ev1 = round(112.5 / (active_z1 * 2), 2) if active_z1 > 0 else 0.0
+    ev2 = round(90.0 / (active_z2 * 2), 2) if active_z2 > 0 else 0.0
     k_ratio = round(ev2 / ev1, 2) if ev1 > 0 else 0.0
 
     st.markdown("---")
-    st.subheader("📈 Résultats Calculés Automatiquement")
+    st.subheader("📈 Résultats Calculés Automatiquement (Point 1)")
     
     res_col1, res_col2, res_col3 = st.columns(3)
     res_col1.metric("EV1 (MPa)", f"{ev1:.2f}")
@@ -129,8 +166,9 @@ def show(supabase):
                 "pk_profil": pk_profil,
                 "couche": couche,
                 "nature_materiau": nature_materiau,
-                "z1": float(z1),
-                "z2": float(z2),
+                "z1": float(active_z1),
+                "z2": float(active_z2),
+                "points_mesure": points_data, # Sauvegarde de la liste complète des points
                 "ev1": float(ev1),
                 "ev2": float(ev2),
                 "k_ratio": float(k_ratio),
@@ -209,8 +247,7 @@ def show(supabase):
                     "PK/profil": pk_val,
                     "Couche": row.get("couche"),
                     "Nature de matériaux": row.get("nature_materiau"),
-                    "Z1": row.get("z1"),
-                    "Z2": row.get("z2"),
+                    "Nb Points": len(row.get("points_mesure")) if isinstance(row.get("points_mesure"), list) else 1,
                     "EV1": row.get("ev1"),
                     "EV2": row.get("ev2"),
                     "K": k_val,
