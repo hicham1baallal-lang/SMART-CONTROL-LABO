@@ -6,10 +6,11 @@ import projets_config
 
 # Import pour la génération du PDF
 from reportlab.lib.pagesizes import A4
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 import io
+import os
 
 def evaluer_conformite_couche(couche, ev2_val):
     """Évalue automatiquement si les résultats sont conformes ou non selon le type de couche."""
@@ -52,7 +53,7 @@ def evaluer_conformite_couche(couche, ev2_val):
 
 
 def generer_pdf_pv(essai):
-    """Génère un Procès-Verbal (PV) professionnel et parfaitement centré sur format A4."""
+    """Génère un Procès-Verbal (PV) professionnel et parfaitement centré sur format A4 avec le logo LPEE."""
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
     elements = []
@@ -61,38 +62,60 @@ def generer_pdf_pv(essai):
     title_style = ParagraphStyle(
         'TitleStyle',
         parent=styles['Heading1'],
-        fontSize=16,
+        fontSize=15,
         textColor=colors.HexColor('#1f4e78'),
         alignment=1,
-        spaceAfter=12
+        spaceAfter=10
     )
     subtitle_style = ParagraphStyle(
         'SubTitleStyle',
         parent=styles['Normal'],
-        fontSize=10,
+        fontSize=9.5,
         textColor=colors.HexColor('#595959'),
         alignment=1,
-        spaceAfter=15
+        spaceAfter=12
     )
     section_style = ParagraphStyle(
         'SectionStyle',
         parent=styles['Heading2'],
-        fontSize=12,
+        fontSize=11,
         textColor=colors.HexColor('#1f4e78'),
-        spaceBefore=12,
-        spaceAfter=6
+        spaceBefore=10,
+        spaceAfter=4
     )
-    normal_style = ParagraphStyle('NormalText', parent=styles['Normal'], fontSize=9.5, textColor=colors.HexColor('#262626'))
+    normal_style = ParagraphStyle('NormalText', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#262626'))
     bold_style = ParagraphStyle('BoldText', parent=normal_style, fontName='Helvetica-Bold')
 
-    # En-tête centré
-    elements.append(Paragraph("<b>LABORATOIRE PUBLIC D'ESSAIS ET D'ÉTUDES (LPEE)</b>", ParagraphStyle('CenterBold', parent=bold_style, alignment=1, fontSize=11, textColor=colors.HexColor('#1f4e78'))))
-    elements.append(Spacer(1, 8))
+    # En-tête avec Logo et Titre de l'organisme
+    logo_path = "logo.png"
+    header_data = []
+    
+    # Si le fichier image du logo existe, on l'intègre dans un tableau d'en-tête
+    if os.path.exists(logo_path):
+        try:
+            img = Image(logo_path, width=45, height=45)
+            img.hAlign = 'LEFT'
+            txt_header = Paragraph("<b>LABORATOIRE PUBLIC D'ESSAIS ET D'ÉTUDES (LPEE)</b>", ParagraphStyle('CenterBold', parent=bold_style, alignment=0, fontSize=10, textColor=colors.HexColor('#1f4e78')))
+            header_table = Table([[img, txt_header]], colWidths=[55, 470])
+            header_table.setStyle(TableStyle([
+                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                ('LEFTPADDING', (0,0), (-1,-1), 0),
+                ('RIGHTPADDING', (0,0), (-1,-1), 0),
+                ('BOTTOMPADDING', (0,0), (-1,-1), 0),
+                ('TOPPADDING', (0,0), (-1,-1), 0),
+            ]))
+            elements.append(header_table)
+        except Exception:
+            elements.append(Paragraph("<b>LABORATOIRE PUBLIC D'ESSAIS ET D'ÉTUDES (LPEE)</b>", ParagraphStyle('CenterBold', parent=bold_style, alignment=1, fontSize=10, textColor=colors.HexColor('#1f4e78'))))
+    else:
+        elements.append(Paragraph("<b>LABORATOIRE PUBLIC D'ESSAIS ET D'ÉTUDES (LPEE)</b>", ParagraphStyle('CenterBold', parent=bold_style, alignment=1, fontSize=10, textColor=colors.HexColor('#1f4e78'))))
+
+    elements.append(Spacer(1, 6))
     elements.append(Paragraph("PROCÈS-VERBAL D'ESSAI À LA PLAQUE (NF P 94-117-1)", title_style))
     elements.append(Paragraph(f"Référence : <b>{essai.get('reference', '-')}</b> | Date : {essai.get('date_essai', '-')}", subtitle_style))
-    elements.append(Spacer(1, 8))
+    elements.append(Spacer(1, 4))
 
-    # Informations Générales (hauteurs augmentées via les paddings)
+    # Informations Générales (hauteurs augmentées pour occuper l'espace vertical sans vide)
     data_infos = [
         [Paragraph("Client / Organisme :", bold_style), Paragraph(str(essai.get('client', '-')), normal_style),
          Paragraph("Chantier / Projet :", bold_style), Paragraph(str(essai.get('projet', '-')), normal_style)],
@@ -109,13 +132,13 @@ def generer_pdf_pv(essai):
         ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#f2f2f2')),
         ('BOX', (0,0), (-1,-1), 0.5, colors.HexColor('#d9d9d9')),
         ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 10),
-        ('TOPPADDING', (0,0), (-1,-1), 10),
-        ('LEFTPADDING', (0,0), (-1,-1), 8),
-        ('RIGHTPADDING', (0,0), (-1,-1), 8),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 8),
+        ('TOPPADDING', (0,0), (-1,-1), 8),
+        ('LEFTPADDING', (0,0), (-1,-1), 6),
+        ('RIGHTPADDING', (0,0), (-1,-1), 6),
     ]))
     elements.append(t_infos)
-    elements.append(Spacer(1, 15))
+    elements.append(Spacer(1, 10))
 
     # Points de mesure
     elements.append(Paragraph("Détail des Points de Mesure et Résultats (NF P 94-117-1)", section_style))
@@ -149,13 +172,13 @@ def generer_pdf_pv(essai):
         ('ALIGN', (0,0), (-1,-1), 'CENTER'),
         ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
         ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0,0), (-1,-1), 9),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 8),
-        ('TOPPADDING', (0,0), (-1,-1), 8),
+        ('FONTSIZE', (0,0), (-1,-1), 8.5),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 6),
+        ('TOPPADDING', (0,0), (-1,-1), 6),
         ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#bfbfbf')),
     ]))
     elements.append(t_pts)
-    elements.append(Spacer(1, 15))
+    elements.append(Spacer(1, 10))
 
     # Section Commentaire automatique
     elements.append(Paragraph("Commentaire", section_style))
@@ -168,15 +191,15 @@ def generer_pdf_pv(essai):
     t_obs.setStyle(TableStyle([
         ('BOX', (0,0), (-1,-1), 0.5, colors.HexColor('#d9d9d9')),
         ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#fafafa')),
-        ('TOPPADDING', (0,0), (-1,-1), 12),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 12),
-        ('LEFTPADDING', (0,0), (-1,-1), 8),
-        ('RIGHTPADDING', (0,0), (-1,-1), 8),
+        ('TOPPADDING', (0,0), (-1,-1), 10),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 10),
+        ('LEFTPADDING', (0,0), (-1,-1), 6),
+        ('RIGHTPADDING', (0,0), (-1,-1), 6),
     ]))
     elements.append(t_obs)
-    elements.append(Spacer(1, 25))
+    elements.append(Spacer(1, 15))
 
-    # Bloc Signatures & Visas (Centré, avec espacement vertical accru)
+    # Bloc Signatures & Visas (Centré, sans les tirets de signature)
     sig_style = ParagraphStyle('SigStyle', parent=normal_style, alignment=1)
     data_sig = [
         [
@@ -188,8 +211,8 @@ def generer_pdf_pv(essai):
     t_sig.setStyle(TableStyle([
         ('ALIGN', (0,0), (-1,-1), 'CENTER'),
         ('VALIGN', (0,0), (-1,-1), 'TOP'),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 15),
-        ('TOPPADDING', (0,0), (-1,-1), 15),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 10),
+        ('TOPPADDING', (0,0), (-1,-1), 10),
     ]))
     elements.append(t_sig)
 
@@ -454,6 +477,10 @@ def show(supabase):
 
     with tab_pv:
         st.subheader("📄 Génération de PV et Synthèse PDF")
+        
+        # Sauvegarde automatique du logo fourni si présent dans l'interface ou dossier de travail
+        # Assurez-vous d'enregistrer l'image sous le nom 'logo.png' dans le répertoire racine de votre application.
+        
         try:
             res_pv = supabase.table("essai_plaque").select("*").eq("projet_id", projet_id_actif).order("id", desc=True).execute()
             if res_pv.data and len(res_pv.data) > 0:
