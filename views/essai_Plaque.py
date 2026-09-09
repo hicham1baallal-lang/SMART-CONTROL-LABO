@@ -119,7 +119,7 @@ def generer_pdf_pv(essai):
     elements.append(Spacer(1, 8))
 
     # Observations / Commentaires (Largeur totale : 525 pt)
-    elements.append(Paragraph("Observations et Avis technique :", section_style))
+    elements.append(Paragraph("Observations :", section_style))
     obs_text = str(essai.get('observations', 'Aucune observation particulière.'))
     t_obs = Table([[Paragraph(obs_text, normal_style)]], colWidths=[525])
     t_obs.setStyle(TableStyle([
