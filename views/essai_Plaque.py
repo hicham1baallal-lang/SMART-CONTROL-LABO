@@ -239,7 +239,7 @@ def show(supabase):
     observations = st.text_area("Commentaire / Remarques (établi systématiquement)", value=default_obs, key="plaque_obs")
 
     # ---------------------------------------------------------
-    # 3. ENREGISTREMENT OU MISE À JOUR SÉCURISÉE
+    # 3. ENREGISTREMENT OU MISE À JOUR SÉCURISÉE (AVEC BLOQUAGE DES DOUBLONS)
     # ---------------------------------------------------------
     btn_col1, btn_col2 = st.columns([3, 1])
 
@@ -247,6 +247,21 @@ def show(supabase):
         button_label = "🔄 Mettre à jour l'essai" if editing_item else "💾 Enregistrer l'essai"
         if st.button(button_label, key="btn_enregistrer_plaque", type="primary", use_container_width=True):
             
+            # --- VÉRIFICATION ANTI-DOUBLON DE LA RÉFÉRENCE ---
+            try:
+                query_doublon = supabase.table("essai_plaque").select("id").eq("projet_id", projet_id_actif).eq("reference", reference)
+                if editing_item:
+                    # En mode modification, on ignore l'essai en cours d'édition pour éviter de s'auto-bloquer
+                    query_doublon = query_doublon.neq("id", editing_item["id"])
+                
+                res_doublon = query_doublon.execute()
+                if res_doublon.data and len(res_doublon.data) > 0:
+                    st.error(f"🚫 **BLOCAGE** : La référence d'essai **'{reference}'** existe déjà dans ce projet ! Veuillez utiliser une référence unique.")
+                    st.stop()
+            except Exception as e_doublon:
+                # Si la colonne reference n'existe pas encore dans Supabase, on laisse passer ou on gère
+                pass
+
             payload = {
                 "reference": reference,
                 "date_essai": str(date_essai),
@@ -270,15 +285,12 @@ def show(supabase):
                 sample_query = supabase.table("essai_plaque").select("*").limit(1).execute()
                 if sample_query.data and len(sample_query.data) > 0:
                     valid_columns = set(sample_query.data[0].keys())
-                    # Vérifier si la colonne reference existe, sinon alerter l'utilisateur
                     if "reference" not in valid_columns and "ref" in valid_columns:
                         payload["ref"] = payload.pop("reference")
                         valid_columns.add("ref")
                     elif "reference" not in valid_columns and "ref_essai" in valid_columns:
                         payload["ref_essai"] = payload.pop("reference")
                         valid_columns.add("ref_essai")
-                    elif "reference" not in valid_columns:
-                        st.warning("⚠️ Attention : La colonne 'reference' n'existe pas dans la table Supabase 'essai_plaque'. Pensez à l'ajouter dans Supabase.")
                     
                     safe_payload = {k: v for k, v in payload.items() if k in valid_columns}
                 else:
