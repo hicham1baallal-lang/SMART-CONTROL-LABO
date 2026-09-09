@@ -53,7 +53,7 @@ def evaluer_conformite_couche(couche, ev2_val):
 
 
 def generer_pdf_pv(essai):
-    """Génère un Procès-Verbal (PV) professionnel sur format A4 avec l'espace de 4 lignes demandé."""
+    """Génère un Procès-Verbal (PV) professionnel sur format A4 avec la hiérarchie et l'espacement demandés."""
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
     elements = []
@@ -63,7 +63,7 @@ def generer_pdf_pv(essai):
     title_style = ParagraphStyle(
         'TitleStyle',
         parent=styles['Heading1'],
-        fontSize=12,
+        fontSize=12,  # Plus petit que LPEE
         textColor=colors.HexColor('#1f4e78'),
         alignment=1,
         spaceAfter=10
@@ -90,25 +90,19 @@ def generer_pdf_pv(essai):
     normal_style = ParagraphStyle('NormalText', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#262626'))
     bold_style = ParagraphStyle('BoldText', parent=normal_style, fontName='Helvetica-Bold')
 
-    # En-tête avec Logo (logo.png.jpg) et Nom du Centre Régional
+    # En-tête avec Logo (logo.png.jpg), LPEE (plus grand) et Centre Technique (taille normale)
     logo_path = "logo.png.jpg"
     
-    org_style = ParagraphStyle(
-        'OrgStyle',
-        parent=bold_style,
-        alignment=0,
-        fontSize=13,
-        textColor=colors.HexColor('#1f4e78')
-    )
+    p_lpee = Paragraph("<b>LABORATOIRE PUBLIC D'ESSAIS ET D'ÉTUDES (LPEE)</b>", ParagraphStyle('LpeeStyle', parent=bold_style, fontSize=15, textColor=colors.HexColor('#1f4e78')))
+    p_centre = Paragraph("CENTRE TECHNIQUE RÉGIONAL DE CASABLANCA - SETTAT BENIMELLAL", ParagraphStyle('CentreStyle', parent=normal_style, fontSize=9, textColor=colors.HexColor('#595959')))
     
-    texte_entete = "CENTRE TECHNIQUE RÉGIONAL DE CASABLANCA - SETTAT BENIMELLAL"
+    header_text_elements = [p_lpee, Spacer(1, 2), p_centre]
     
     if os.path.exists(logo_path):
         try:
             img = Image(logo_path, width=45, height=45)
             img.hAlign = 'LEFT'
-            txt_header = Paragraph(f"<b>{texte_entete}</b>", org_style)
-            header_table = Table([[img, txt_header]], colWidths=[55, 470])
+            header_table = Table([[img, header_text_elements]], colWidths=[55, 470])
             header_table.setStyle(TableStyle([
                 ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
                 ('LEFTPADDING', (0,0), (-1,-1), 0),
@@ -118,11 +112,11 @@ def generer_pdf_pv(essai):
             ]))
             elements.append(header_table)
         except Exception:
-            elements.append(Paragraph(f"<b>{texte_entete}</b>", org_style))
+            elements.append(header_text_elements)
     else:
-        elements.append(Paragraph(f"<b>{texte_entete}</b>", org_style))
+        elements.append(header_text_elements)
 
-    # Espace d'environ 4 lignes vides (4 * ~10pt = 40pt)
+    # Espace d'environ 4 lignes vides (40pt) entre l'en-tête et le titre du PV
     elements.append(Spacer(1, 40))
     
     elements.append(Paragraph("PROCÈS-VERBAL D'ESSAI À LA PLAQUE (NF P 94-117-1)", title_style))
