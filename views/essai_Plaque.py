@@ -141,8 +141,8 @@ def generer_pdf_pv(essai):
             Paragraph("<b>Chef du laboratoire</b><br/>H. BAALLAL", sig_style)
         ],
         [
-            Paragraph("<br/><br/>____________________________<br/><i>(Visa et Signature)</i>", sig_style), 
-            Paragraph("<br/><br/>____________________________<br/><i>(Visa et Signature)</i>", sig_style)
+            Paragraph("<br/><br/>____________________________<br/><i>()</i>", sig_style), 
+            Paragraph("<br/><br/>____________________________<br/><i>()</i>", sig_style)
         ]
     ]
     t_sig = Table(data_sig, colWidths=[262.5, 262.5])
