@@ -53,7 +53,7 @@ def evaluer_conformite_couche(couche, ev2_val):
 
 
 def generer_pdf_pv(essai):
-    """Génère un Procès-Verbal (PV) professionnel et parfaitement centré sur format A4 avec le logo LPEE."""
+    """Génère un Procès-Verbal (PV) professionnel et parfaitement centré sur format A4 avec le logo et une taille de titre augmentée."""
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
     elements = []
@@ -62,7 +62,7 @@ def generer_pdf_pv(essai):
     title_style = ParagraphStyle(
         'TitleStyle',
         parent=styles['Heading1'],
-        fontSize=15,
+        fontSize=18,  # Taille augmentée de plus de 2 points (passée de 15/16 à 18)
         textColor=colors.HexColor('#1f4e78'),
         alignment=1,
         spaceAfter=10
@@ -86,11 +86,9 @@ def generer_pdf_pv(essai):
     normal_style = ParagraphStyle('NormalText', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#262626'))
     bold_style = ParagraphStyle('BoldText', parent=normal_style, fontName='Helvetica-Bold')
 
-    # En-tête avec Logo et Titre de l'organisme
+    # En-tête avec Logo (logo.png.jpg) et Titre de l'organisme
     logo_path = "logo.png.jpg"
-    header_data = []
     
-    # Si le fichier image du logo existe, on l'intègre dans un tableau d'en-tête
     if os.path.exists(logo_path):
         try:
             img = Image(logo_path, width=45, height=45)
@@ -115,7 +113,7 @@ def generer_pdf_pv(essai):
     elements.append(Paragraph(f"Référence : <b>{essai.get('reference', '-')}</b> | Date : {essai.get('date_essai', '-')}", subtitle_style))
     elements.append(Spacer(1, 4))
 
-    # Informations Générales (hauteurs augmentées pour occuper l'espace vertical sans vide)
+    # Informations Générales (hauteurs de lignes augmentées pour éviter les vides en bas)
     data_infos = [
         [Paragraph("Client / Organisme :", bold_style), Paragraph(str(essai.get('client', '-')), normal_style),
          Paragraph("Chantier / Projet :", bold_style), Paragraph(str(essai.get('projet', '-')), normal_style)],
@@ -199,7 +197,7 @@ def generer_pdf_pv(essai):
     elements.append(t_obs)
     elements.append(Spacer(1, 15))
 
-    # Bloc Signatures & Visas (Centré, sans les tirets de signature)
+    # Bloc Signatures & Visas (Centré)
     sig_style = ParagraphStyle('SigStyle', parent=normal_style, alignment=1)
     data_sig = [
         [
@@ -477,10 +475,6 @@ def show(supabase):
 
     with tab_pv:
         st.subheader("📄 Génération de PV et Synthèse PDF")
-        
-        # Sauvegarde automatique du logo fourni si présent dans l'interface ou dossier de travail
-        # Assurez-vous d'enregistrer l'image sous le nom 'logo.png' dans le répertoire racine de votre application.
-        
         try:
             res_pv = supabase.table("essai_plaque").select("*").eq("projet_id", projet_id_actif).order("id", desc=True).execute()
             if res_pv.data and len(res_pv.data) > 0:
