@@ -208,7 +208,7 @@ def show(supabase):
             default_couche = editing_item.get("couche", "Sous-couche et Couche de forme ferroviaire (LGV)")
             default_mat = editing_item.get("nature_materiau", "")
             default_tech = editing_item.get("technicien", current_user)
-            default_obs = editing_item.get("observations", "")
+            default_obs = editing_item.get("Commentaire", "")
             
             saved_points = editing_item.get("points_mesure")
             if not saved_points or not isinstance(saved_points, list):
