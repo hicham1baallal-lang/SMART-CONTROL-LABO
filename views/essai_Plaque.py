@@ -12,9 +12,9 @@ from reportlab.lib import colors
 import io
 
 def generer_pdf_pv(essai):
-    """Génère un Procès-Verbal (PV) professionnel au format PDF pour l'essai à la plaque (centré sur la page)."""
+    """Génère un Procès-Verbal (PV) professionnel et parfaitement centré sur format A4."""
     buffer = io.BytesIO()
-    # Marges équilibrées (36 points / 0.5 pouce) pour un centrage parfait et harmonieux sur A4
+    # Marges symétriques de 36 pt (0.5 pouce) garantissant un centrage géométrique optimal sur A4 (595.27 x 841.89 pt)
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
     elements = []
     
@@ -25,7 +25,7 @@ def generer_pdf_pv(essai):
         fontSize=15,
         textColor=colors.HexColor('#1f4e78'),
         alignment=1, # Centré
-        spaceAfter=12
+        spaceAfter=10
     )
     subtitle_style = ParagraphStyle(
         'SubTitleStyle',
@@ -33,7 +33,7 @@ def generer_pdf_pv(essai):
         fontSize=9.5,
         textColor=colors.HexColor('#595959'),
         alignment=1,
-        spaceAfter=15
+        spaceAfter=12
     )
     section_style = ParagraphStyle(
         'SectionStyle',
@@ -51,9 +51,9 @@ def generer_pdf_pv(essai):
     elements.append(Spacer(1, 4))
     elements.append(Paragraph("PROCÈS-VERBAL D'ESSAI À LA PLAQUE (NF P 94-117-1)", title_style))
     elements.append(Paragraph(f"Référence : <b>{essai.get('reference', '-')}</b> | Date : {essai.get('date_essai', '-')}", subtitle_style))
-    elements.append(Spacer(1, 6))
+    elements.append(Spacer(1, 4))
 
-    # Informations Générales sous forme de tableau (largeur totale adaptée aux marges de 525 pt)
+    # Informations Générales (Largeur totale exacte : 525 pt)
     data_infos = [
         [Paragraph("Client / Organisme :", bold_style), Paragraph(str(essai.get('client', '-')), normal_style),
          Paragraph("Chantier / Projet :", bold_style), Paragraph(str(essai.get('projet', '-')), normal_style)],
@@ -65,7 +65,7 @@ def generer_pdf_pv(essai):
          Paragraph("", normal_style), Paragraph("", normal_style)]
     ]
     
-    t_infos = Table(data_infos, colWidths=[115, 147, 115, 148])
+    t_infos = Table(data_infos, colWidths=[115, 147.5, 115, 147.5])
     t_infos.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#f2f2f2')),
         ('BOX', (0,0), (-1,-1), 0.5, colors.HexColor('#d9d9d9')),
@@ -76,9 +76,9 @@ def generer_pdf_pv(essai):
         ('RIGHTPADDING', (0,0), (-1,-1), 6),
     ]))
     elements.append(t_infos)
-    elements.append(Spacer(1, 10))
+    elements.append(Spacer(1, 8))
 
-    # Points de mesure
+    # Points de mesure (Largeur totale : 525 pt)
     elements.append(Paragraph("Détail des Points de Mesure et Résultats (NF P 94-117-1)", section_style))
     
     points = essai.get('points_mesure', [])
@@ -116,9 +116,9 @@ def generer_pdf_pv(essai):
         ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#bfbfbf')),
     ]))
     elements.append(t_pts)
-    elements.append(Spacer(1, 10))
+    elements.append(Spacer(1, 8))
 
-    # Observations / Commentaires
+    # Observations / Commentaires (Largeur totale : 525 pt)
     elements.append(Paragraph("Observations et Avis technique :", section_style))
     obs_text = str(essai.get('observations', 'Aucune observation particulière.'))
     t_obs = Table([[Paragraph(obs_text, normal_style)]], colWidths=[525])
@@ -131,10 +131,10 @@ def generer_pdf_pv(essai):
         ('RIGHTPADDING', (0,0), (-1,-1), 6),
     ]))
     elements.append(t_obs)
-    elements.append(Spacer(1, 20))
+    elements.append(Spacer(1, 15))
 
-    # Bloc Signatures & Visas (Centré, avec les noms demandés)
-    sig_style = ParagraphStyle('SigStyle', parent=normal_style, alignment=1) # Centré
+    # Bloc Signatures & Visas (Centré avec largeurs égales, total 525 pt)
+    sig_style = ParagraphStyle('SigStyle', parent=normal_style, alignment=1) # Centré horizontalement
     data_sig = [
         [
             Paragraph("<b>Responsable d'essai</b><br/>O. IKKEN", sig_style), 
