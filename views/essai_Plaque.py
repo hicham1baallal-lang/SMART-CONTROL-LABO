@@ -126,23 +126,38 @@ def show(supabase):
         
         points_data.append({"z1": z1, "z2": z2})
 
+    # Calculs automatiques pour tous les points (NF P 94-117-1)
+    st.markdown("---")
+    st.subheader("📈 Résultats Calculés Automatiquement pour tous les points")
+
+    points_results = []
+    for i, p in enumerate(points_data):
+        z1_val = p["z1"]
+        z2_val = p["z2"]
+        ev1_i = round(112.5 / (z1_val * 2), 2) if z1_val > 0 else 0.0
+        ev2_i = round(90.0 / (z2_val * 2), 2) if z2_val > 0 else 0.0
+        k_ratio_i = round(ev2_i / ev1_i, 2) if ev1_i > 0 else 0.0
+
+        points_results.append({
+            "ev1": ev1_i,
+            "ev2": ev2_i,
+            "k_ratio": k_ratio_i
+        })
+
+        st.markdown(f"**Point de mesure N° {i+1}**")
+        res_col1, res_col2, res_col3 = st.columns(3)
+        res_col1.metric(f"EV1 (MPa) [Point {i+1}]", f"{ev1_i:.2f}")
+        res_col2.metric(f"EV2 (MPa) [Point {i+1}]", f"{ev2_i:.2f}")
+        
+        k_delta = "Conforme (K ≤ 2.0)" if k_ratio_i <= 2.0 else "Attention (K > 2.0)"
+        res_col3.metric(f"Coefficient K [Point {i+1}]", f"{k_ratio_i:.2f}", delta=k_delta, delta_color="normal" if k_ratio_i <= 2.0 else "inverse")
+
+    # Valeurs de référence principales (premier point ou moyennes)
     active_z1 = points_data[0]["z1"]
     active_z2 = points_data[0]["z2"]
-
-    # Calculs automatiques (NF P 94-117-1)
-    ev1 = round(112.5 / (active_z1 * 2), 2) if active_z1 > 0 else 0.0
-    ev2 = round(90.0 / (active_z2 * 2), 2) if active_z2 > 0 else 0.0
-    k_ratio = round(ev2 / ev1, 2) if ev1 > 0 else 0.0
-
-    st.markdown("---")
-    st.subheader("📈 Résultats Calculés Automatiquement (Point 1)")
-    
-    res_col1, res_col2, res_col3 = st.columns(3)
-    res_col1.metric("EV1 (MPa)", f"{ev1:.2f}")
-    res_col2.metric("EV2 (MPa)", f"{ev2:.2f}")
-    
-    k_delta = "Conforme (K ≤ 2.0)" if k_ratio <= 2.0 else "Attention (K > 2.0)"
-    res_col3.metric("Coefficient K (EV2/EV1)", f"{k_ratio:.2f}", delta=k_delta, delta_color="normal" if k_ratio <= 2.0 else "inverse")
+    ev1 = points_results[0]["ev1"]
+    ev2 = points_results[0]["ev2"]
+    k_ratio = points_results[0]["k_ratio"]
 
     observations = st.text_area("Observations / Remarques", value=default_obs, key="plaque_obs")
 
@@ -247,6 +262,7 @@ def show(supabase):
                     "EV1": row.get("ev1"),
                     "EV2": row.get("ev2"),
                     "K": k_val,
+                    "Remarques": row.get("observations"),
                     "Technicien": row.get("technicien")
                 })
 
