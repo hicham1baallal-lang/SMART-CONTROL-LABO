@@ -43,6 +43,7 @@ def show(supabase):
     if editing_item:
         st.info(f"✏️ **Mode Modification** - Essai ID #{editing_item['id']}")
         
+        default_ref = editing_item.get("reference", "260/26/PLQ/01")
         default_date = datetime.strptime(editing_item["date_essai"], "%Y-%m-%d").date() if isinstance(editing_item.get("date_essai"), str) else date.today()
         default_client = editing_item.get("client", "TGCC")
         default_projet = editing_item.get("projet", "LGV CASA SUD")
@@ -55,10 +56,11 @@ def show(supabase):
         
         saved_points = editing_item.get("points_mesure")
         if not saved_points or not isinstance(saved_points, list):
-            default_points = [{"z1": float(editing_item.get("z1", 0.53)), "z2": float(editing_item.get("z2", 0.52))}]
+            default_points = [{"z1": float(editing_item.get("z1", 0.53)), "z2": float(editing_item.get("z2", 0.52)), "pk_point": default_pk}]
         else:
             default_points = saved_points
     else:
+        default_ref = "260/26/PLQ/01"
         default_date = date.today()
         default_client = "TGCC"
         default_projet = "LGV CASA SUD"
@@ -68,7 +70,7 @@ def show(supabase):
         default_mat = "GNT 0/31.5 Classée B2"
         default_tech = current_user
         default_obs = "Portance conforme aux exigences du CPT."
-        default_points = [{"z1": 0.53, "z2": 0.52}]
+        default_points = [{"z1": 0.53, "z2": 0.52, "pk_point": "PK 1+200"}]
 
     # ---------------------------------------------------------
     # 2. FORMULAIRE DE SAISIE / ÉDITION
@@ -77,27 +79,32 @@ def show(supabase):
 
     # --- SECTION 1 : INFORMATIONS GÉNÉRALES ---
     st.markdown("### 1. Informations Générales d'essai")
-    col1, col2 = st.columns(2)
+    col0, col1, col2 = st.columns(3)
 
+    with col0:
+        reference = st.text_input("Référence de l'essai", value=default_ref, key="plaque_reference")
     with col1:
         date_essai = st.date_input("Date de l'essai", value=default_date, key="plaque_date")
         client = st.text_input("Client / Organisme", value=default_client, key="plaque_client")
         projet = st.text_input("Chantier / Projet", value=default_projet, key="plaque_projet")
+    with col2:
         couche_options = ["Arase", "Assise", "Remblai", "PST", "Couche de forme", "Autre"]
         couche_idx = couche_options.index(default_couche) if default_couche in couche_options else 0
         couche = st.selectbox("Couche testée", couche_options, index=couche_idx, key="plaque_couche")
-        
-    with col2:
         emplacement = st.text_input("Emplacement / Zone", value=default_empl, key="plaque_empl")
-        pk_profil = st.text_input("PK / Profil", value=default_pk, key="plaque_pk")
+        pk_profil = st.text_input("PK / Profil Global", value=default_pk, key="plaque_pk")
+
+    col_m1, col_m2 = st.columns(2)
+    with col_m1:
         nature_materiau = st.text_input("Nature du matériau", value=default_mat, key="plaque_mat")
+    with col_m2:
         technicien = st.text_input("Technicien LPEE", value=default_tech, key="plaque_tech")
 
     st.markdown("---")
 
     # --- SECTION 2 : POINTS DE MESURE D'ESSAI À LA PLAQUE ---
     st.markdown("### 2. Points de Mesure d'essai à la plaque")
-    st.caption("Vous pouvez ajouter un ou plusieurs points de mesure pour cet essai.")
+    st.caption("Vous pouvez ajouter un ou plusieurs points de mesure pour cet essai, avec un Num/PK/Profil spécifique pour chaque point.")
 
     if "plaque_points_count" not in st.session_state or editing_item:
         st.session_state["plaque_points_count"] = len(default_points)
@@ -114,17 +121,20 @@ def show(supabase):
     points_data = []
     for i in range(st.session_state["plaque_points_count"]):
         st.markdown(f"**Point de mesure N° {i+1}**")
-        p_col1, p_col2 = st.columns(2)
+        p_col0, p_col1, p_col2 = st.columns([1, 1, 1])
         
+        default_pk_point = default_points[i].get("pk_point", default_pk) if i < len(default_points) else default_pk
         default_z1_val = default_points[i]["z1"] if i < len(default_points) else 0.53
         default_z2_val = default_points[i]["z2"] if i < len(default_points) else 0.52
 
+        with p_col0:
+            pk_point = st.text_input(f"Num/PK/Profil [Point {i+1}]", value=str(default_pk_point), key=f"plaque_pk_point_{i}")
         with p_col1:
-            z1 = st.number_input(f"Z1 - 1er chargement (mm) [Point {i+1}]", min_value=0.01, max_value=10.0, value=float(default_z1_val), step=0.01, format="%.2f", key=f"plaque_z1_{i}")
+            z1 = st.number_input(f"Z1 - 1er chrg (mm) [Point {i+1}]", min_value=0.01, max_value=10.0, value=float(default_z1_val), step=0.01, format="%.2f", key=f"plaque_z1_{i}")
         with p_col2:
-            z2 = st.number_input(f"Z2 - 2ème chargement (mm) [Point {i+1}]", min_value=0.01, max_value=10.0, value=float(default_z2_val), step=0.01, format="%.2f", key=f"plaque_z2_{i}")
+            z2 = st.number_input(f"Z2 - 2ème chrg (mm) [Point {i+1}]", min_value=0.01, max_value=10.0, value=float(default_z2_val), step=0.01, format="%.2f", key=f"plaque_z2_{i}")
         
-        points_data.append({"z1": z1, "z2": z2})
+        points_data.append({"z1": z1, "z2": z2, "pk_point": pk_point})
 
     # Calculs automatiques pour tous les points (NF P 94-117-1)
     st.markdown("---")
@@ -144,7 +154,7 @@ def show(supabase):
             "k_ratio": k_ratio_i
         })
 
-        st.markdown(f"**Point de mesure N° {i+1}**")
+        st.markdown(f"**Point de mesure N° {i+1} ({p['pk_point']})**")
         res_col1, res_col2, res_col3 = st.columns(3)
         res_col1.metric(f"EV1 (MPa) [Point {i+1}]", f"{ev1_i:.2f}")
         res_col2.metric(f"EV2 (MPa) [Point {i+1}]", f"{ev2_i:.2f}")
@@ -169,7 +179,23 @@ def show(supabase):
     with btn_col1:
         button_label = "🔄 Mettre à jour l'essai" if editing_item else "💾 Enregistrer l'essai"
         if st.button(button_label, key="btn_enregistrer_plaque", type="primary", use_container_width=True):
+            
+            # --- VÉRIFICATION DU DOUBLON DE RÉFÉRENCE ---
+            try:
+                ref_query = supabase.table("essai_plaque").select("id").eq("projet_id", projet_id_actif).eq("reference", reference)
+                if editing_item:
+                    ref_query = ref_query.neq("id", editing_item["id"])
+                ref_res = ref_query.execute()
+                
+                if ref_res.data and len(ref_res.data) > 0:
+                    st.error(f"⚠️ Erreur : La référence d'essai '{reference}' existe déjà dans ce projet. Double bloqué.")
+                    st.stop()
+            except Exception as ref_err:
+                # Si la table n'a pas encore la colonne reference, on laisse passer ou on gère l'exception
+                pass
+
             payload = {
+                "reference": reference,
                 "date_essai": str(date_essai),
                 "client": client,
                 "projet": projet,
@@ -246,12 +272,13 @@ def show(supabase):
             
             clean_rows = []
             for row in res.data:
+                ref_val = row.get("reference", "-")
                 pk_val = row.get("pk_profil") if row.get("pk_profil") is not None else row.get("pkl")
                 points = row.get("points_mesure")
                 if not isinstance(points, list) or len(points) == 0:
                     z1_fallback = float(row.get("z1", 0.53))
                     z2_fallback = float(row.get("z2", 0.52))
-                    points = [{"z1": z1_fallback, "z2": z2_fallback}]
+                    points = [{"z1": z1_fallback, "z2": z2_fallback, "pk_point": pk_val}]
 
                 ev1_list = []
                 ev2_list = []
@@ -259,16 +286,18 @@ def show(supabase):
                 for idx, pt in enumerate(points):
                     z1_val = float(pt.get("z1", 0.53))
                     z2_val = float(pt.get("z2", 0.52))
+                    pt_pk = pt.get("pk_point", f"P{idx+1}")
                     ev1_pt = round(112.5 / (z1_val * 2), 2) if z1_val > 0 else 0.0
                     ev2_pt = round(90.0 / (z2_val * 2), 2) if z2_val > 0 else 0.0
                     k_pt = round(ev2_pt / ev1_pt, 2) if ev1_pt > 0 else 0.0
                     
-                    ev1_list.append(f"P{idx+1}: {ev1_pt:.2f}")
-                    ev2_list.append(f"P{idx+1}: {ev2_pt:.2f}")
-                    k_list.append(f"P{idx+1}: {k_pt:.2f}")
+                    ev1_list.append(f"{pt_pk}: {ev1_pt:.2f}")
+                    ev2_list.append(f"{pt_pk}: {ev2_pt:.2f}")
+                    k_list.append(f"{pt_pk}: {k_pt:.2f}")
 
                 clean_rows.append({
                     "ID": row.get("id"),
+                    "Référence": ref_val,
                     "Date d'essai": row.get("date_essai"),
                     "Client": row.get("client"),
                     "Projet": row.get("projet"),
