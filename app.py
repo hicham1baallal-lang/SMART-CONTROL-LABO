@@ -482,6 +482,7 @@ with st.sidebar:
     st.markdown("---")
     available_pages = [
         "Accueil",
+      "Gestion Utilisateurs",
         "Suivi Contrôle Béton",
         "Historique Complet & PVs",
         "Suivi de Bétonnage",
