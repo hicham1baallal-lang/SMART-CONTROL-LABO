@@ -606,45 +606,37 @@ def show(supabase_client):
             button_label = "🔄 Mettre à jour l'essai" if editing_item else "💾 Enregistrer l'essai"
             if st.button(button_label, key="btn_enregistrer_plaque", type="primary", use_container_width=True):
                 
-                try:
-                    query_doublon = supabase.table("essai_plaque").select("id").eq("projet_id", projet_id_actif).eq("reference", reference)
-                    if editing_item:
-                        query_doublon = query_doublon.neq("id", editing_item["id"])
-                    res_doublon = query_doublon.execute()
-                    if res_doublon.data and len(res_doublon.data) > 0:
-                        st.error(f"🚫 **BLOCAGE** : La référence d'essai **'{reference}'** existe déjà dans ce projet !")
-                        st.stop()
-                except Exception:
-                    pass
+                safe_payload = {
+                    "reference": str(reference),
+                    "date_essai": str(date_essai),
+                    "client": str(client),
+                    "projet": str(projet),
+                    "emplacement": str(emplacement),
+                    "pk_profil": str(pk_profil),
+                    "couche": str(couche),
+                    "nature_materiau": str(nature_materiau),
+                    "z1": float(active_z1),
+                    "z2": float(active_z2),
+                    "ev1": float(ev1),
+                    "ev2": float(ev2),
+                    "k_ratio": float(k_ratio),
+                    "technicien": str(technicien),
+                    "observations": str(observations),
+                    "projet_id": projet_id_actif,
+                    "points_mesure": [
+                        {"z1": float(pt["z1"]), "z2": float(pt["z2"]), "pk_point": str(pt["pk_point"])}
+                        for pt in points_data
+                    ]
+                }
 
                 try:
-                    safe_payload = {
-                        "reference": str(reference),
-                        "date_essai": str(date_essai),
-                        "client": str(client),
-                        "projet": str(projet),
-                        "emplacement": str(emplacement),
-                        "pk_profil": str(pk_profil),
-                        "couche": str(couche),
-                        "nature_materiau": str(nature_materiau),
-                        "z1": float(active_z1),
-                        "z2": float(active_z2),
-                        "ev1": float(ev1),
-                        "ev2": float(ev2),
-                        "k_ratio": float(k_ratio),
-                        "technicien": str(technicien),
-                        "observations": str(observations),
-                        "projet_id": projet_id_actif,
-                        "points_mesure": [
-                            {"z1": float(pt["z1"]), "z2": float(pt["z2"]), "pk_point": str(pt["pk_point"])}
-                            for pt in points_data
-                        ]
-                    }
-
                     if editing_item:
                         anciennes_valeurs_plaque = {k: editing_item.get(k) for k in safe_payload}
-                        supabase.table("essai_plaque").update(safe_payload).eq("id", editing_item["id"]).eq("projet_id", projet_id_actif).execute()
-                        enregistrer_modification(supabase, "essai_plaque", editing_item["id"], "MODIFICATION", anciennes_valeurs_plaque, safe_payload)
+                        supabase.table("essai_plaque").update(safe_payload).eq("id", editing_item["id"]).execute()
+                        try:
+                            enregistrer_modification(supabase, "essai_plaque", editing_item["id"], "MODIFICATION", anciennes_valeurs_plaque, safe_payload)
+                        except Exception:
+                            pass
                         st.success(f"✅ Essai #{editing_item['id']} mis à jour avec succès !")
                         st.session_state["edit_plaque_item"] = None
                     else:
@@ -652,6 +644,7 @@ def show(supabase_client):
                         st.success("✅ Essai enregistré avec succès ! Vous pouvez consulter l'historique ci-dessous.")
                     
                     st.cache_data.clear()
+                    st.rerun()
                 except Exception as e:
                     st.error(f"Erreur lors de l'enregistrement : {e}")
 
