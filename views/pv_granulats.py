@@ -163,6 +163,32 @@ def calculate_characteristic_data(mat_data, tamis_D=None):
 
     return sieves_dict, passants_dict
 
+def _blank_data_granulats():
+    """Structure vierge des 4 fractions (GII/GI/SC/SD), pour le bouton
+    'Ajouter un autre prélèvement' : conserve les grilles de tamis normatives
+    (structurelles) mais remet à zéro/None toutes les valeurs mesurées."""
+    sieves_gii = [40, 31.5, 25, 20, 16, 14, 12.5, 10, 8, 6.3, 5, 4, 3.15, 2.5, 2, 1.6, 1.25, 1, 0.8, 0.63, 0.5, 0.4, 0.315, 0.25, 0.2, 0.16, 0.125, 0.1, 0.08, 0.063]
+    sieves_gi  = [20, 16, 14, 12.5, 10, 8, 6.3, 5, 4, 3.15, 2.5, 2, 1.6, 1.25, 1, 0.8, 0.63, 0.5, 0.4, 0.315, 0.25, 0.2, 0.16, 0.125, 0.1, 0.08, 0.063]
+    sieves_sable = [6.3, 5, 4, 3.15, 2.5, 2, 1.6, 1.25, 1, 0.8, 0.63, 0.5, 0.4, 0.315, 0.25, 0.2, 0.16, 0.125, 0.1, 0.08, 0.063]
+
+    def _blank_mat(nom, classe, sieves, fi=None, la=None, mb=None, mf=None, se=None):
+        return {
+            'nom': nom, 'classe': classe,
+            'ref_client': '', 'date_prelevement': '', 'lieu_prelevement': '',
+            'sieves': list(sieves),
+            'refus': [0.0] * len(sieves),
+            'M1': 0.0, 'M2': 0.0, 'P': 0.0,
+            'passants': [],
+            'fi': fi, 'la': la, 'mb': mb, 'mf': mf, 'se': se
+        }
+
+    return {
+        'GII': _blank_mat('Gravillons GII', '10/20', sieves_gii),
+        'GI':  _blank_mat('Gravillons GI', '4/10', sieves_gi),
+        'SD':  _blank_mat('Sable fin', '0/0,63', sieves_sable),
+        'SC':  _blank_mat('Sable grossier', '0/4', sieves_sable)
+    }
+
 def compute_MF(sieves, passings):
     """Calcule le Module de Finesse (MF) selon NF EN 12620"""
     if not sieves or not passings:
@@ -970,6 +996,48 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
 
         st.session_state['success_msg'] = _pending.get('success_msg', "✅ PV chargé.")
 
+    # ------------------------------------------------------------------------
+    # RÉINITIALISATION POUR UN NOUVEAU PRÉLÈVEMENT (bouton "➕ Ajouter un autre
+    # prélèvement") — même contrainte que ci-dessus : DOIT s'exécuter avant la
+    # création de tout widget.
+    # ------------------------------------------------------------------------
+    if st.session_state.pop('_pending_pv_reset', False):
+        _kept_chantier = st.session_state.get('info_prelevement', {}).get('chantier', '')
+        _kept_client = st.session_state.get('info_prelevement', {}).get('client', '')
+        _kept_coord = st.session_state.get('pv_info', {}).get('coord_essais', 'O.IKEN')
+        _kept_chef = st.session_state.get('pv_info', {}).get('chef_labo', 'H.BAALLAL')
+
+        st.session_state['info_prelevement'] = {
+            'chantier': _kept_chantier,
+            'client': _kept_client,
+            'dossier_no': '',
+            'date_prelevement': '',
+            'lieu_prelevement': '',
+            'provenance': '',
+            'num_rapport': '',
+            'ref_base': ''
+        }
+        st.session_state['pv_info'] = {
+            'projet': _kept_chantier,
+            'client': _kept_client,
+            'ref_pv': '',
+            'date': '',
+            'commentaires': "Les essais d'identifications des granulats pour béton sont conformes aux exigences de la norme NF EN 12620 et NF P 18-545",
+            'coord_essais': _kept_coord,
+            'chef_labo': _kept_chef
+        }
+        st.session_state['data_granulats'] = _blank_data_granulats()
+
+        # Purge de tous les widgets de saisie de CE module (préfixés par
+        # `prefix`) pour qu'ils se réinitialisent proprement à partir des
+        # données vierges ci-dessus au lieu de garder d'anciennes valeurs
+        # tapées par l'utilisateur.
+        for _wk in list(st.session_state.keys()):
+            if _wk.startswith(f"{prefix}_"):
+                del st.session_state[_wk]
+
+        st.session_state['success_msg'] = "🆕 Nouveau prélèvement prêt — Client et Chantier conservés, le reste a été vidé."
+
     if 'info_prelevement' not in st.session_state:
         st.session_state['info_prelevement'] = {}
 
@@ -1121,7 +1189,24 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
     # ------------------------------------------------------------------------------
     with tabs[0]:
         st.header("Feuilles d'Analyse Granulométrique et Caractéristiques")
-        
+
+        if can_edit:
+            col_new1, col_new2 = st.columns([1, 3])
+            with col_new1:
+                if st.button("➕ Ajouter un autre prélèvement", use_container_width=True, key=f"{prefix}_btn_new_prelevement"):
+                    # Même contrainte que pour le chargement d'un PV : on ne peut
+                    # pas réassigner ici les clés de session_state déjà liées à
+                    # des widgets déjà instanciés dans ce run. On stocke donc la
+                    # demande de réinitialisation et on la traite tout en haut de
+                    # show(), avant la création des widgets, au prochain run.
+                    st.session_state['_pending_pv_reset'] = True
+                    st.rerun()
+            with col_new2:
+                st.caption(
+                    "Garde le Client et le Chantier actuels, mais vide le N° Rapport, la date de "
+                    "prélèvement et toutes les valeurs de pesée/tamisage pour saisir un nouveau prélèvement."
+                )
+
         st.markdown("##### 📍 Informations de prélèvement (Communes à tous les matériaux)")
         c1, c2, c3 = st.columns(3)
         c4, c5, c6 = st.columns(3)
@@ -1137,6 +1222,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         
         new_num_rapport  = st.text_input("N° RAPPORT D'ESSAI N°", value=info_p.get('num_rapport', default_num_rapport), disabled=not can_edit, key=f"{prefix}_common_num_rapport")
         new_ref_base     = new_num_rapport.strip()
+
 
         st.text_input(
             "Référence labo (Base) - Identique au N° Rapport", 
