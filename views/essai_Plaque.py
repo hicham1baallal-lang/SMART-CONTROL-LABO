@@ -617,51 +617,39 @@ def show(supabase_client):
                 except Exception:
                     pass
 
-                payload = {
-                    "reference": reference,
-                    "date_essai": str(date_essai),
-                    "client": client,
-                    "projet": projet,
-                    "emplacement": emplacement,
-                    "pk_profil": pk_profil,
-                    "couche": couche,
-                    "nature_materiau": nature_materiau,
-                    "z1": float(active_z1),
-                    "z2": float(active_z2),
-                    "points_mesure": points_data,
-                    "ev1": float(ev1),
-                    "ev2": float(ev2),
-                    "k_ratio": float(k_ratio),
-                    "technicien": technicien,
-                    "observations": observations
-                }
-
                 try:
-                    sample_query = supabase.table("essai_plaque").select("*").limit(1).execute()
-                    if sample_query.data and len(sample_query.data) > 0:
-                        valid_columns = set(sample_query.data[0].keys())
-                        safe_payload = {k: v for k, v in payload.items() if k in valid_columns}
-                    else:
-                        safe_payload = payload
-
-                    safe_payload["projet_id"] = projet_id_actif
-                    if "points_mesure" in safe_payload:
-                        safe_payload["points_mesure"] = [
+                    safe_payload = {
+                        "reference": str(reference),
+                        "date_essai": str(date_essai),
+                        "client": str(client),
+                        "projet": str(projet),
+                        "emplacement": str(emplacement),
+                        "pk_profil": str(pk_profil),
+                        "couche": str(couche),
+                        "nature_materiau": str(nature_materiau),
+                        "z1": float(active_z1),
+                        "z2": float(active_z2),
+                        "ev1": float(ev1),
+                        "ev2": float(ev2),
+                        "k_ratio": float(k_ratio),
+                        "technicien": str(technicien),
+                        "observations": str(observations),
+                        "projet_id": projet_id_actif,
+                        "points_mesure": [
                             {"z1": float(pt["z1"]), "z2": float(pt["z2"]), "pk_point": str(pt["pk_point"])}
-                            for pt in safe_payload["points_mesure"]
+                            for pt in points_data
                         ]
+                    }
 
                     if editing_item:
                         anciennes_valeurs_plaque = {k: editing_item.get(k) for k in safe_payload}
-                        supabase.table("essai_plaque").update(safe_payload).eq("id", editing_item["id"]).eq("projet_id", projet_id_actif).select("id").execute()
+                        supabase.table("essai_plaque").update(safe_payload).eq("id", editing_item["id"]).eq("projet_id", projet_id_actif).execute()
                         enregistrer_modification(supabase, "essai_plaque", editing_item["id"], "MODIFICATION", anciennes_valeurs_plaque, safe_payload)
                         st.success(f"✅ Essai #{editing_item['id']} mis à jour avec succès !")
                         st.session_state["edit_plaque_item"] = None
                     else:
-                        res_ins_plaque = supabase.table("essai_plaque").insert(safe_payload).select("id").execute()
-                        if res_ins_plaque.data:
-                            nouvel_id_plaque = res_ins_plaque.data[0].get("id")
-                            enregistrer_modification(supabase, "essai_plaque", nouvel_id_plaque, "CREATION", nouvelles_valeurs=safe_payload)
+                        # Insertion directe sans select pour éliminer le timeout 504 de passerelle réseau
+                        supabase.table("essai_plaque").insert(safe_payload).execute()
                         st.success("✅ Essai enregistré avec succès !")
                     
                     st.cache_data.clear()
