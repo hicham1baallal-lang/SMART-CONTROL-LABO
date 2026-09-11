@@ -127,8 +127,6 @@ def generer_pdf_pv(essai):
         elements.append(Paragraph(header_text, org_style))
 
     elements.append(Spacer(1, 6))
-    elements.append(Paragraph("PROCÈS-VERBAL D'ESSAI À LA PLAQUE (NF P 94-117-1)", title_style))
-    elements.append(Paragraph(f"Référence : <b>{essai.get('reference', '-')}</b> | Date : {essai.get('date_essai', '-')}", subtitle_style))
     elements.append(Spacer(1, 4))
 
     # Informations Générales
@@ -232,6 +230,10 @@ def generer_pdf_pv(essai):
     ]))
     elements.append(t_sig)
 
+    elements.append(Spacer(1, 15))
+    elements.append(Paragraph("PROCÈS-VERBAL D'ESSAI À LA PLAQUE (NF P 94-117-1)", title_style))
+    elements.append(Paragraph(f"Référence : <b>{essai.get('reference', '-')}</b> | Date : {essai.get('date_essai', '-')}", subtitle_style))
+
     doc.build(elements)
     buffer.seek(0)
     return buffer.getvalue()
@@ -263,7 +265,7 @@ def show(supabase):
         return
     st.caption(f"📁 Projet actif : **{projets_config.nom_projet(projet_id_actif)}**")
 
-    tab_saisie, tab_pv = st.tabs(["📝 Saisie & Historique", "📄 PV / Synthèse & PDF"])
+    tab_saisie, tab_pv, tab_synthese = st.tabs(["📝 Saisie & Historique", "PV/PDF", "Synthèse"])
 
     with tab_saisie:
         editing_item = st.session_state.get("edit_plaque_item", None)
@@ -529,3 +531,56 @@ def show(supabase):
                 st.info("Aucun essai disponible pour générer un PV.")
         except Exception as e:
             st.warning(f"Erreur lors du chargement des PV : {e}")
+
+    with tab_synthese:
+        st.subheader("📊 Synthèse & Filtres Avancés")
+        try:
+            res_synth = supabase.table("essai_plaque").select("*").eq("projet_id", projet_id_actif).order("id", desc=True).execute()
+            if res_synth.data and len(res_synth.data) > 0:
+                df_synth = pd.DataFrame(res_synth.data)
+                df_synth['date_datetime'] = pd.to_datetime(df_synth['date_essai'], errors='coerce')
+                df_synth['mois'] = df_synth['date_datetime'].dt.strftime('%Y-%m')
+
+                f_col1, f_col2, f_col3 = st.columns(3)
+                with f_col1:
+                    mois_options = ["Tous"] + sorted([m for m in df_synth['mois'].dropna().unique().tolist()], reverse=True)
+                    choix_mois = st.selectbox("Période (Mois)", mois_options, key="filtre_mois")
+                with f_col2:
+                    empl_options = ["Tous"] + sorted([str(e) for e in df_synth['emplacement'].dropna().unique().tolist()])
+                    choix_empl = st.selectbox("Emplacement", empl_options, key="filtre_emplacement")
+                with f_col3:
+                    couche_options_filt = ["Tous"] + sorted([str(c) for c in df_synth['couche'].dropna().unique().tolist()])
+                    choix_couche = st.selectbox("Type de couche", couche_options_filt, key="filtre_couche")
+
+                df_filtered = df_synth.copy()
+                if choix_mois != "Tous":
+                    df_filtered = df_filtered[df_filtered['mois'] == choix_mois]
+                if choix_empl != "Tous":
+                    df_filtered = df_filtered[df_filtered['emplacement'] == choix_empl]
+                if choix_couche != "Tous":
+                    df_filtered = df_filtered[df_filtered['couche'] == choix_couche]
+
+                st.markdown("---")
+                st.metric("Nombre d'essais correspondants", len(df_filtered))
+
+                if not df_filtered.empty:
+                    clean_synth_rows = []
+                    for _, row in df_filtered.iterrows():
+                        ref_val = row.get("reference") or row.get("ref_essai") or row.get("ref") or "-"
+                        clean_synth_rows.append({
+                            "ID": row.get("id"),
+                            "Référence": ref_val,
+                            "Date": row.get("date_essai"),
+                            "Client": row.get("client"),
+                            "Emplacement": row.get("emplacement"),
+                            "Couche": row.get("couche"),
+                            "EV2 (MPa)": row.get("ev2"),
+                            "Technicien": row.get("technicien")
+                        })
+                    st.dataframe(pd.DataFrame(clean_synth_rows), use_container_width=True, hide_index=True)
+                else:
+                    st.info("Aucun essai ne correspond aux critères de filtre sélectionnés.")
+            else:
+                st.info("Aucun essai enregistré pour ce projet.")
+        except Exception as e:
+            st.warning(f"Erreur lors du chargement de la synthèse : {e}")
