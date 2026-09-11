@@ -435,7 +435,6 @@ try:
       suivi_Betonnage,
       suivi_controle_beton,
       synthese_Beton,
-      synthese_plaque,
   )
 except ImportError as e:
   st.error(f"❌ Erreur lors de l'importation des vues de base : {e}")
@@ -452,7 +451,6 @@ try:
 except ImportError:
   essai_compacite = None
 
-# 👉 CORRECTION ICI : Importation du fichier pv_granulats au lieu de essai_granulats_beton
 try:
   from views import pv_granulats
 except ImportError:
@@ -492,7 +490,6 @@ with st.sidebar:
         "Granulats pour Béton",
         "Identification Matériau",
         "Synthèse Béton",
-        "Synthèse Plaque",
     ]
   elif current_role == "restricted_betonnage":
     st.info("Rôle : **OPÉRATEUR BÉTONNAGE**")
@@ -509,7 +506,6 @@ with st.sidebar:
         "Contrôle de Compacité",
         "Granulats pour Béton",
         "Identification Matériau",
-        "Synthèse Plaque",
         "Suivi de Bétonnage",
         "Suivi Contrôle Béton",
         "Historique Complet & PVs",
@@ -522,7 +518,6 @@ with st.sidebar:
         "Accueil",
         "Synthèse Béton",
         "Historique Complet & PVs",
-        "Synthèse Plaque",
         "Teneur en Eau",
         "Contrôle de Compacité",
         "Granulats pour Béton",
@@ -535,7 +530,6 @@ with st.sidebar:
         "Accueil",
         "Synthèse Béton",
         "Historique Complet & PVs",
-        "Synthèse Plaque",
     ]
 
   if OFFLINE_SUPPORT:
@@ -849,13 +843,10 @@ elif page == "Teneur en Eau":
   render_view(essai_teneur_eau, supabase)
 elif page == "Contrôle de Compacité":
   render_view(essai_compacite, supabase)
-# 👉 CORRECTION ICI : Appel du bon module
 elif page == "Granulats pour Béton":
   render_view(pv_granulats, supabase)
 elif page == "Identification Matériau":
   render_view(essai_identification_materiaux, supabase)
-elif page == "Synthèse Plaque":
-  render_view(synthese_plaque, supabase)
 elif page == "Suivi de Bétonnage":
   render_view(suivi_Betonnage, supabase)
 elif page == "Suivi Contrôle Béton":
