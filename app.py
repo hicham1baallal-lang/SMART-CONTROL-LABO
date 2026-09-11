@@ -6,6 +6,7 @@ from fpdf import FPDF
 from PIL import Image
 import streamlit as st
 import streamlit.components.v1 as components
+import extra_streamlit_components as stx
 from supabase import Client, create_client
 
 # Importation sécurisée du gestionnaire Hors-Ligne SQLite
@@ -50,6 +51,31 @@ if _qr_rec or _qr_bid:
 
     st.session_state["qr_page_applied"] = False
     st.query_params.clear()
+
+# ==========================================
+# 1ter. "SE SOUVENIR DE MOI" — COOKIE VIA COMPOSANT
+# ==========================================
+REMEMBER_SECRET_KEY = os.environ.get(
+    "REMEMBER_SECRET_KEY", "lpee_ctr_csb_remember_me_2026_a_changer"
+)
+REMEMBER_SESSION_DUREE = datetime.timedelta(hours=4)
+REMEMBER_COOKIE_NAME = "remember_data"
+
+
+def _generer_jeton_souvenir(username, role, can_edit, issued_at_iso):
+    import hashlib
+    import hmac as hmac_lib
+    payload = f"{username}:{role}:{bool(can_edit)}:{issued_at_iso}"
+    return hmac_lib.new(
+        REMEMBER_SECRET_KEY.encode(), payload.encode(), hashlib.sha256
+    ).hexdigest()
+
+
+cookie_manager = stx.CookieManager(key="lpee_ctr_csb_cookie_manager")
+
+if "_cookies_bootstrap_ok" not in st.session_state:
+    st.session_state["_cookies_bootstrap_ok"] = True
+    st.rerun()
 
 pwa_code = """
 <script>
@@ -276,7 +302,41 @@ if "can_edit" not in st.session_state:
   st.session_state["can_edit"] = False
 
 # ==========================================
-# 4. ÉCRAN DE CONNEXION (Instantané & Fluide)
+# 3bis. AUTO-CONNEXION VIA COOKIE
+# ==========================================
+if st.session_state["user"] is None:
+  _cookie_brut = cookie_manager.get(REMEMBER_COOKIE_NAME)
+  if _cookie_brut:
+    try:
+      payload = json.loads(_cookie_brut)
+      remembered_user = payload.get("u")
+      remembered_role = payload.get("r")
+      remembered_can_edit = bool(payload.get("e"))
+      remembered_issued_at = payload.get("t")
+      remembered_token = payload.get("k")
+
+      jeton_valide = bool(remembered_token) and _generer_jeton_souvenir(
+          remembered_user, remembered_role, remembered_can_edit, remembered_issued_at
+      ) == remembered_token
+      session_expiree = True
+      if jeton_valide:
+        issued_at_dt = datetime.datetime.fromisoformat(remembered_issued_at)
+        session_expiree = (datetime.datetime.utcnow() - issued_at_dt) > REMEMBER_SESSION_DUREE
+
+      if jeton_valide and not session_expiree:
+        st.session_state["user"] = {
+            "username": remembered_user,
+            "role": remembered_role,
+            "can_edit": remembered_can_edit,
+        }
+        st.session_state["role"] = remembered_role
+        st.session_state["can_edit"] = remembered_can_edit
+        st.session_state["users_db"] = load_users()
+    except (ValueError, TypeError, AttributeError, KeyError):
+      pass
+
+# ==========================================
+# 4. ÉCRAN DE CONNEXION
 # ==========================================
 if st.session_state["user"] is None:
   col1, col2, col3 = st.columns([1, 2, 1])
@@ -288,22 +348,39 @@ if st.session_state["user"] is None:
     if st.session_state.get("pending_qr_rec") or st.session_state.get("pending_qr_bid"):
       st.info(
           "🎯 **Scan QR Code détecté !** Connectez-vous pour accéder"
-          " directement à la fiche de contrôle scannée."
+          " directement à la fiche de contrôle scannée (Phase 2)."
       )
 
     with st.form("login_form", clear_on_submit=False):
       username_input = st.text_input("Nom d'utilisateur").strip().upper()
       password_input = st.text_input("Mot de passe", type="password")
+      se_souvenir = st.checkbox(
+          "🔒 Remember me (4h)",
+          value=True,
+      )
       submit_btn = st.form_submit_button(
           "Se connecter", use_container_width=True, type="primary"
       )
 
-      def _connecter_utilisateur(username, role, can_edit):
+      def _connecter_et_memoriser(username, role, can_edit):
         st.session_state["user"] = {
             "username": username, "role": role, "can_edit": can_edit,
         }
         st.session_state["role"] = role
         st.session_state["can_edit"] = can_edit
+        if se_souvenir:
+          issued_at_iso = datetime.datetime.utcnow().isoformat()
+          token = _generer_jeton_souvenir(username, role, can_edit, issued_at_iso)
+          payload_json = json.dumps({
+              "u": username, "r": role, "e": bool(can_edit),
+              "t": issued_at_iso, "k": token,
+          })
+          expiration = datetime.datetime.now() + REMEMBER_SESSION_DUREE
+          cookie_manager.set(
+              REMEMBER_COOKIE_NAME, payload_json,
+              key="set_remember_data", expires_at=expiration,
+          )
+          time.sleep(0.4)
         st.rerun()
 
       if submit_btn:
@@ -316,13 +393,13 @@ if st.session_state["user"] is None:
         ):
           user_role = fresh_users[username_input]["role"]
           can_edit = fresh_users[username_input]["can_edit"]
-          _connecter_utilisateur(username_input, user_role, can_edit)
+          _connecter_et_memoriser(username_input, user_role, can_edit)
         elif password_input == "admin2026":
           username = username_input if username_input else "ADMIN"
-          _connecter_utilisateur(username, "admin", True)
+          _connecter_et_memoriser(username, "admin", True)
         elif password_input == "ctr2026":
           username = username_input if username_input else "USER"
-          _connecter_utilisateur(username, "user", False)
+          _connecter_et_memoriser(username, "user", False)
         else:
           st.error("❌ Nom d'utilisateur ou mot de passe incorrect.")
   st.stop()
@@ -358,6 +435,7 @@ try:
       suivi_Betonnage,
       suivi_controle_beton,
       synthese_Beton,
+      synthese_plaque,
   )
 except ImportError as e:
   st.error(f"❌ Erreur lors de l'importation des vues de base : {e}")
@@ -374,6 +452,7 @@ try:
 except ImportError:
   essai_compacite = None
 
+# 👉 CORRECTION ICI : Importation du fichier pv_granulats au lieu de essai_granulats_beton
 try:
   from views import pv_granulats
 except ImportError:
@@ -403,16 +482,17 @@ with st.sidebar:
     st.markdown("---")
     available_pages = [
         "Accueil",
-        "Gestion Utilisateurs",
+      "Gestion Utilisateurs",
+        "Suivi Contrôle Béton",
+        "Historique Complet & PVs",
+        "Suivi de Bétonnage",
         "Essai à la Plaque",
         "Teneur en Eau",
         "Contrôle de Compacité",
         "Granulats pour Béton",
         "Identification Matériau",
-        "Suivi de Bétonnage",
-        "Suivi Contrôle Béton",
-        "Historique Complet & PVs",
         "Synthèse Béton",
+        "Synthèse Plaque",
     ]
   elif current_role == "restricted_betonnage":
     st.info("Rôle : **OPÉRATEUR BÉTONNAGE**")
@@ -429,6 +509,7 @@ with st.sidebar:
         "Contrôle de Compacité",
         "Granulats pour Béton",
         "Identification Matériau",
+        "Synthèse Plaque",
         "Suivi de Bétonnage",
         "Suivi Contrôle Béton",
         "Historique Complet & PVs",
@@ -441,6 +522,7 @@ with st.sidebar:
         "Accueil",
         "Synthèse Béton",
         "Historique Complet & PVs",
+        "Synthèse Plaque",
         "Teneur en Eau",
         "Contrôle de Compacité",
         "Granulats pour Béton",
@@ -453,6 +535,7 @@ with st.sidebar:
         "Accueil",
         "Synthèse Béton",
         "Historique Complet & PVs",
+        "Synthèse Plaque",
     ]
 
   if OFFLINE_SUPPORT:
@@ -485,24 +568,34 @@ with st.sidebar:
 
   st.markdown("---")
 
-  st.session_state.setdefault("selected_page", available_pages[0])
+  st.session_state.setdefault("page_widget_seed", 0)
+  st.session_state.setdefault("selected_page", None)
 
   qr_en_attente = bool(
       st.session_state.get("pending_qr_rec") or st.session_state.get("pending_qr_bid")
   )
-  if qr_en_attente and not st.session_state.get("qr_page_applied", False):
+  forcer_page_qr = qr_en_attente and not st.session_state.get("qr_page_applied", False)
+  if forcer_page_qr:
     if "Suivi Contrôle Béton" in available_pages:
       st.session_state["selected_page"] = "Suivi Contrôle Béton"
+      st.session_state["page_widget_seed"] += 1
+    else:
+      st.warning(
+          "⚠️ Le scan QR pointe vers 'Suivi Contrôle Béton', mais votre rôle"
+          " n'a pas accès à cette page."
+      )
     st.session_state["qr_page_applied"] = True
 
-  if st.session_state["selected_page"] not in available_pages:
-    st.session_state["selected_page"] = available_pages[0]
+  page_par_defaut = st.session_state.get("selected_page")
+  if page_par_defaut not in available_pages:
+    page_par_defaut = available_pages[0]
+  index_par_defaut = available_pages.index(page_par_defaut)
 
   page = st.radio(
       "Menu Principal",
       available_pages,
-      index=available_pages.index(st.session_state["selected_page"]),
-      key="menu_radio_principal",
+      index=index_par_defaut,
+      key=f"menu_radio_{st.session_state['page_widget_seed']}",
   )
   st.session_state["selected_page"] = page
   st.markdown("---")
@@ -562,7 +655,7 @@ def render_view(module, supabase_client):
 
 
 # ==========================================
-# 6. ROUTAGE DES VUES (SYNCHRONISÉ AVEC LE MENU)
+# 6. ROUTAGE DES VUES
 # ==========================================
 if page == "Accueil":
   st.title("🚄 Accueil - LGV CASA SUD")
@@ -756,10 +849,13 @@ elif page == "Teneur en Eau":
   render_view(essai_teneur_eau, supabase)
 elif page == "Contrôle de Compacité":
   render_view(essai_compacite, supabase)
+# 👉 CORRECTION ICI : Appel du bon module
 elif page == "Granulats pour Béton":
   render_view(pv_granulats, supabase)
 elif page == "Identification Matériau":
   render_view(essai_identification_materiaux, supabase)
+elif page == "Synthèse Plaque":
+  render_view(synthese_plaque, supabase)
 elif page == "Suivi de Bétonnage":
   render_view(suivi_Betonnage, supabase)
 elif page == "Suivi Contrôle Béton":
