@@ -73,10 +73,6 @@ def _generer_jeton_souvenir(username, role, can_edit, issued_at_iso):
 
 cookie_manager = stx.CookieManager(key="lpee_ctr_csb_cookie_manager")
 
-if "_cookies_bootstrap_ok" not in st.session_state:
-    st.session_state["_cookies_bootstrap_ok"] = True
-    st.rerun()
-
 pwa_code = """
 <script>
 const parentDoc = window.parent.document;
@@ -380,7 +376,6 @@ if st.session_state["user"] is None:
               REMEMBER_COOKIE_NAME, payload_json,
               key="set_remember_data", expires_at=expiration,
           )
-          time.sleep(0.4)
         st.rerun()
 
       if submit_btn:
@@ -480,7 +475,7 @@ with st.sidebar:
     st.markdown("---")
     available_pages = [
         "Accueil",
-      "Gestion Utilisateurs",
+        "Gestion Utilisateurs",
         "Suivi Contrôle Béton",
         "Historique Complet & PVs",
         "Suivi de Bétonnage",
@@ -562,34 +557,25 @@ with st.sidebar:
 
   st.markdown("---")
 
-  st.session_state.setdefault("page_widget_seed", 0)
-  st.session_state.setdefault("selected_page", None)
+  # Gestion optimisée et fluide de la page active pour éviter les décalages d'affichage
+  st.session_state.setdefault("selected_page", available_pages[0])
 
   qr_en_attente = bool(
       st.session_state.get("pending_qr_rec") or st.session_state.get("pending_qr_bid")
   )
-  forcer_page_qr = qr_en_attente and not st.session_state.get("qr_page_applied", False)
-  if forcer_page_qr:
+  if qr_en_attente and not st.session_state.get("qr_page_applied", False):
     if "Suivi Contrôle Béton" in available_pages:
       st.session_state["selected_page"] = "Suivi Contrôle Béton"
-      st.session_state["page_widget_seed"] += 1
-    else:
-      st.warning(
-          "⚠️ Le scan QR pointe vers 'Suivi Contrôle Béton', mais votre rôle"
-          " n'a pas accès à cette page."
-      )
     st.session_state["qr_page_applied"] = True
 
-  page_par_defaut = st.session_state.get("selected_page")
-  if page_par_defaut not in available_pages:
-    page_par_defaut = available_pages[0]
-  index_par_defaut = available_pages.index(page_par_defaut)
+  if st.session_state["selected_page"] not in available_pages:
+    st.session_state["selected_page"] = available_pages[0]
 
   page = st.radio(
       "Menu Principal",
       available_pages,
-      index=index_par_defaut,
-      key=f"menu_radio_{st.session_state['page_widget_seed']}",
+      index=available_pages.index(st.session_state["selected_page"]),
+      key="menu_radio_principal",
   )
   st.session_state["selected_page"] = page
   st.markdown("---")
