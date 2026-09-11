@@ -18,14 +18,14 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
 @st.cache_data(ttl=300)
 def charger_essais_plaque(projet_id):
-    """Charge uniquement les colonnes indispensables des essais de plaque avec un filtre strict et rapide."""
+    """Charge les essais de plaque en limitant le nombre de lignes pour éviter le timeout 504."""
     try:
         response = (
             supabase.table("essai_plaque")
-            .select("id, reference, date_essai, client, projet, emplacement, pk_profil, couche, nature_materiau, ev1, ev2, k_ratio, technicien, observations, points_mesure")
+            .select("id, reference, date_essai, client, projet, emplacement, pk_profil, couche, nature_materiau, z1, z2, ev1, ev2, k_ratio, technicien, observations, points_mesure")
             .eq("projet_id", projet_id)
             .order("id", desc=True)
-            .limit(100)
+            .limit(30)
             .execute()
         )
         return response.data if response.data else []
