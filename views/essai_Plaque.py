@@ -75,48 +75,16 @@ def generer_pdf_pv(essai):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
     elements = []
-    
     styles = getSampleStyleSheet()
     
-    title_style = ParagraphStyle(
-        'TitleStyle',
-        parent=styles['Heading1'],
-        fontSize=12,
-        textColor=colors.HexColor('#1f4e78'),
-        alignment=1,
-        spaceAfter=10
-    )
-    
-    subtitle_style = ParagraphStyle(
-        'SubTitleStyle',
-        parent=styles['Normal'],
-        fontSize=9.5,
-        textColor=colors.HexColor('#595959'),
-        alignment=1,
-        spaceAfter=12
-    )
-    
-    section_style = ParagraphStyle(
-        'SectionStyle',
-        parent=styles['Heading2'],
-        fontSize=11,
-        textColor=colors.HexColor('#1f4e78'),
-        spaceBefore=10,
-        spaceAfter=4
-    )
-    
+    title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=12, textColor=colors.HexColor('#1f4e78'), alignment=1, spaceAfter=10)
+    subtitle_style = ParagraphStyle('SubTitleStyle', parent=styles['Normal'], fontSize=9.5, textColor=colors.HexColor('#595959'), alignment=1, spaceAfter=12)
+    section_style = ParagraphStyle('SectionStyle', parent=styles['Heading2'], fontSize=11, textColor=colors.HexColor('#1f4e78'), spaceBefore=10, spaceAfter=4)
     normal_style = ParagraphStyle('NormalText', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#262626'))
     bold_style = ParagraphStyle('BoldText', parent=normal_style, fontName='Helvetica-Bold')
 
     logo_path = "logo.png.jpg"
-    
-    org_style = ParagraphStyle(
-        'OrgStyle',
-        parent=bold_style,
-        alignment=0,
-        fontSize=14,
-        textColor=colors.HexColor('#1f4e78')
-    )
+    org_style = ParagraphStyle('OrgStyle', parent=bold_style, alignment=0, fontSize=14, textColor=colors.HexColor('#1f4e78'))
     
     header_text = (
         "<b>LABORATOIRE PUBLIC D'ESSAIS ET D'ÉTUDES (LPEE)</b><br/>"
@@ -208,7 +176,6 @@ def generer_pdf_pv(essai):
     elements.append(Spacer(1, 10))
 
     elements.append(Paragraph("Commentaire", section_style))
-    
     couche_nom = essai.get('couche', '')
     ev2_principal = float(essai.get('ev2', 0))
     commentaire_automatique = evaluer_conformite_couche(couche_nom, ev2_principal)
@@ -276,14 +243,8 @@ def generer_excel_synthese(df, mois_str, empl_str, couche_str, nom_projet):
         top=Side(style='thin', color='D9D9D9'),
         bottom=Side(style='thin', color='D9D9D9')
     )
-    double_bottom_border = Border(
-        left=Side(style='thin', color='D9D9D9'),
-        right=Side(style='thin', color='D9D9D9'),
-        top=Side(style='thin', color='D9D9D9'),
-        bottom=Side(style='double', color='1F4E78')
-    )
 
-    ws['A1'] = "LABORATOIRE LPEE — CENTRE TECHNIQUE RÉGIONAL"
+    ws['A1'] = "LABORATOIRE PUBLIC D'ESSAIS ET D'ÉTUDES — CENTRE TECHNIQUE RÉGIONAL"
     ws['A1'].font = title_font
     ws.merge_cells('A1:G1')
     ws['A1'].alignment = Alignment(horizontal='center')
@@ -313,119 +274,22 @@ def generer_excel_synthese(df, mois_str, empl_str, couche_str, nom_projet):
         cell.border = thin_border
 
     row_idx = 7
-    ev1_vals, ev2_vals, k_vals = [], [], []
-
     for _, row in df.iterrows():
-        ws.cell(row=row_idx, column=1, value=str(row.get('date_essai', ''))).alignment = Alignment(horizontal='center', vertical='center')
-        ws.cell(row=row_idx, column=2, value=str(row.get('couche', ''))).alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
-        ws.cell(row=row_idx, column=3, value=str(row.get('emplacement', ''))).alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
-        ws.cell(row=row_idx, column=4, value=str(row.get('pk_profil', ''))).alignment = Alignment(horizontal='center', vertical='center')
-
-        ev1_v = float(row.get('ev1', 0) or 0)
-        ev2_v = float(row.get('ev2', 0) or 0)
-        k_v = float(row.get('k_ratio', 0) or 0)
-
-        ev1_vals.append(ev1_v)
-        ev2_vals.append(ev2_v)
-        k_vals.append(k_v)
-
-        c_ev1 = ws.cell(row=row_idx, column=5, value=ev1_v)
-        c_ev1.number_format = '#,##0.00'
-        c_ev1.alignment = Alignment(horizontal='right', vertical='center')
-
-        c_ev2 = ws.cell(row=row_idx, column=6, value=ev2_v)
-        c_ev2.number_format = '#,##0.00'
-        c_ev2.alignment = Alignment(horizontal='right', vertical='center')
-
-        c_k = ws.cell(row=row_idx, column=7, value=k_v)
-        c_k.number_format = '#,##0.00'
-        c_k.alignment = Alignment(horizontal='right', vertical='center')
-        c_k.fill = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
-
+        ws.cell(row=row_idx, column=1, value=str(row.get('date_essai', ''))).alignment = Alignment(horizontal='center')
+        ws.cell(row=row_idx, column=2, value=str(row.get('couche', ''))).alignment = Alignment(horizontal='left')
+        ws.cell(row=row_idx, column=3, value=str(row.get('emplacement', ''))).alignment = Alignment(horizontal='left')
+        ws.cell(row=row_idx, column=4, value=str(row.get('pk_profil', ''))).alignment = Alignment(horizontal='center')
+        
+        ws.cell(row=row_idx, column=5, value=float(row.get('ev1', 0) or 0)).number_format = '#,##0.00'
+        ws.cell(row=row_idx, column=6, value=float(row.get('ev2', 0) or 0)).number_format = '#,##0.00'
+        ws.cell(row=row_idx, column=7, value=float(row.get('k_ratio', 0) or 0)).number_format = '#,##0.00'
+        
         for c in range(1, 8):
             ws.cell(row=row_idx, column=c).font = normal_font
             ws.cell(row=row_idx, column=c).border = thin_border
-
         row_idx += 1
 
-    if len(df) > 0:
-        avg_ev1 = sum(ev1_vals) / len(ev1_vals)
-        avg_ev2 = sum(ev2_vals) / len(ev2_vals)
-        avg_k = sum(k_vals) / len(k_vals)
-
-        ws.merge_cells(start_row=row_idx, start_column=1, end_row=row_idx, end_column=4)
-        m_cell = ws.cell(row=row_idx, column=1, value="MOYENNE DES ESSAIS")
-        m_cell.font = bold_font
-        m_cell.alignment = Alignment(horizontal='right', vertical='center')
-
-        for c in range(1, 5):
-            ws.cell(row=row_idx, column=c).border = double_bottom_border
-
-        c_avg1 = ws.cell(row=row_idx, column=5, value=avg_ev1)
-        c_avg1.font = bold_font
-        c_avg1.number_format = '#,##0.00'
-        c_avg1.alignment = Alignment(horizontal='right', vertical='center')
-        c_avg1.border = double_bottom_border
-
-        c_avg2 = ws.cell(row=row_idx, column=6, value=avg_ev2)
-        c_avg2.font = bold_font
-        c_avg2.number_format = '#,##0.00'
-        c_avg2.alignment = Alignment(horizontal='right', vertical='center')
-        c_avg2.border = double_bottom_border
-
-        c_avgk = ws.cell(row=row_idx, column=7, value=avg_k)
-        c_avgk.font = bold_font
-        c_avgk.number_format = '#,##0.00'
-        c_avgk.alignment = Alignment(horizontal='right', vertical='center')
-        c_avgk.border = double_bottom_border
-
-        row_idx += 2
-
-        ws.cell(row=row_idx, column=1, value="RÉSUMÉ STATISTIQUE QUALITÉ").font = bold_font
-        row_idx += 1
-
-        stat_headers = ["Indicateur", "EV1 (MPa)", "EV2 (MPa)", "Ratio K (EV2/EV1)"]
-        for col_num, sh in enumerate(stat_headers, 1):
-            cell = ws.cell(row=row_idx, column=col_num)
-            cell.value = sh
-            cell.font = header_font
-            cell.fill = header_fill
-            cell.alignment = Alignment(horizontal='center', vertical='center')
-            cell.border = thin_border
-        row_idx += 1
-
-        stats_data = [
-            ("Valeur Minimale", min(ev1_vals), min(ev2_vals), min(k_vals)),
-            ("Valeur Maximale", max(ev1_vals), max(ev2_vals), max(k_vals)),
-            ("Moyenne Générale", avg_ev1, avg_ev2, avg_k),
-            ("Nombre d'essais", len(ev1_vals), len(ev2_vals), len(k_vals))
-        ]
-
-        for label, v1, v2, vk in stats_data:
-            ws.cell(row=row_idx, column=1, value=label).font = bold_font
-            ws.cell(row=row_idx, column=1).border = thin_border
-            
-            for col_idx, val in enumerate([v1, v2, vk], 2):
-                c = ws.cell(row=row_idx, column=col_idx, value=val)
-                c.font = normal_font
-                c.number_format = '#,##0.00' if label != "Nombre d'essais" else '#,##0'
-                c.alignment = Alignment(horizontal='right', vertical='center')
-                c.border = thin_border
-            row_idx += 1
-
-        row_idx += 3
-        ws.cell(row=row_idx, column=1, value="Responsable d'essai").font = bold_font
-        ws.cell(row=row_idx, column=6, value="Chef du Laboratoire").font = bold_font
-
-    col_dimensions = {
-        'A': 13,
-        'B': 24,
-        'C': 16,
-        'D': 14,
-        'E': 12,
-        'F': 12,
-        'G': 15
-    }
+    col_dimensions = {'A': 13, 'B': 24, 'C': 16, 'D': 14, 'E': 12, 'F': 12, 'G': 15}
     for col_letter, width in col_dimensions.items():
         ws.column_dimensions[col_letter].width = width
 
@@ -452,10 +316,6 @@ def show(supabase_client):
 
     current_user = str(user_raw).upper()
 
-    user_role = str(st.session_state.get("role", "")).upper()
-    is_admin = st.session_state.get("is_admin", False) or user_role == "ADMIN"
-    is_baallal_admin = current_user.strip() == "BAALLAL" and is_admin
-
     user_info_projet = st.session_state.get("user") or {}
     projet_id_actif = projets_config.projet_actif(user_info_projet)
     if not projet_id_actif:
@@ -470,23 +330,18 @@ def show(supabase_client):
 
         if editing_item:
             st.info(f"✏️ **Mode Modification** - Essai ID #{editing_item['id']}")
-            
-            default_ref = editing_item.get("reference") or editing_item.get("ref_essai") or editing_item.get("ref") or "260/26/PLQ/01"
+            default_ref = editing_item.get("reference") or "260/26/PLQ/01"
             default_date = datetime.strptime(editing_item["date_essai"], "%Y-%m-%d").date() if isinstance(editing_item.get("date_essai"), str) else date.today()
             default_client = editing_item.get("client", "TGCC")
             default_projet = editing_item.get("projet", "LGV CASA SUD")
             default_empl = editing_item.get("emplacement", "")
-            default_pk = editing_item.get("pk_profil", editing_item.get("pkl", ""))
+            default_pk = editing_item.get("pk_profil", "")
             default_couche = editing_item.get("couche", "Sous-couche et Couche de forme ferroviaire (LGV)")
             default_mat = editing_item.get("nature_materiau", "")
             default_tech = editing_item.get("technicien", current_user)
             default_obs = editing_item.get("observations", "")
-            
-            saved_points = editing_item.get("points_mesure")
-            if not saved_points or not isinstance(saved_points, list):
-                default_points = [{"z1": float(editing_item.get("z1", 0.53)), "z2": float(editing_item.get("z2", 0.52)), "pk_point": default_pk}]
-            else:
-                default_points = saved_points
+            saved_points = editing_item.get("points_mesure") or [{"z1": float(editing_item.get("z1", 0.53)), "z2": float(editing_item.get("z2", 0.52)), "pk_point": default_pk}]
+            default_points = saved_points
         else:
             default_ref = "260/26/PLQ/01"
             default_date = date.today()
@@ -503,7 +358,6 @@ def show(supabase_client):
         st.subheader("📝 " + ("Modifier l'essai" if editing_item else "Saisie d'un nouvel essai"))
 
         col0, col1, col2 = st.columns(3)
-
         with col0:
             reference = st.text_input("Référence de l'essai", value=default_ref, key="plaque_reference")
         with col1:
@@ -551,7 +405,6 @@ def show(supabase_client):
         for i in range(st.session_state["plaque_points_count"]):
             st.markdown(f"**Point de mesure N° {i+1}**")
             p_col0, p_col1, p_col2 = st.columns([1, 1, 1])
-            
             default_pk_point = default_points[i].get("pk_point", default_pk) if i < len(default_points) else default_pk
             default_z1_val = default_points[i]["z1"] if i < len(default_points) else 0.53
             default_z2_val = default_points[i]["z2"] if i < len(default_points) else 0.52
@@ -578,8 +431,7 @@ def show(supabase_client):
             ev2_i = round(90.0 / (z2_val * 2), 2) if z2_val > 0 else 0.0
             k_ratio_i = round(ev2_i / ev1_i, 2) if ev1_i > 0 else 0.0
 
-            comm_pt = f"Point {p['pk_point']} : EV2 = {ev2_i} MPa, K = {k_ratio_i}."
-            commentaires_points.append(comm_pt)
+            commentaires_points.append(f"Point {p['pk_point']} : EV2 = {ev2_i} MPa, K = {k_ratio_i}.")
             points_results.append({"ev1": ev1_i, "ev2": ev2_i, "k_ratio": k_ratio_i})
 
             res_col1, res_col2, res_col3 = st.columns(3)
@@ -594,9 +446,7 @@ def show(supabase_client):
         k_ratio = points_results[0]["k_ratio"]
 
         default_obs_systematique = "\n".join(commentaires_points)
-        if not default_obs and not editing_item:
-            default_obs = default_obs_systematique
-        elif editing_item and not default_obs:
+        if not default_obs:
             default_obs = default_obs_systematique
 
         observations = st.text_area("Commentaire / Remarques", value=default_obs, key="plaque_obs")
@@ -641,7 +491,7 @@ def show(supabase_client):
                         st.session_state["edit_plaque_item"] = None
                     else:
                         supabase.table("essai_plaque").insert(safe_payload).execute()
-                        st.success("✅ Essai enregistré avec succès ! Vous pouvez consulter l'historique ci-dessous.")
+                        st.success("✅ Essai enregistré avec succès !")
                     
                     st.cache_data.clear()
                     st.rerun()
@@ -657,20 +507,20 @@ def show(supabase_client):
         st.subheader("📋 Historique des Essais Enregistrés")
         try:
             data_plaque = charger_essais_plaque(projet_id_actif)
-            if data_plaque and len(data_plaque) > 0:
-                clean_rows = []
-                for row in data_plaque:
-                    ref_val = row.get("reference") or row.get("ref_essai") or row.get("ref") or "-"
-                    clean_rows.append({
+            if data_plaque:
+                clean_rows = [
+                    {
                         "ID": row.get("id"),
-                        "Référence": ref_val,
+                        "Référence": row.get("reference") or "-",
                         "Date": row.get("date_essai"),
                         "Client": row.get("client"),
                         "Emplacement": row.get("emplacement"),
                         "Couche": row.get("couche"),
                         "EV2 (MPa)": row.get("ev2"),
                         "Technicien": row.get("technicien")
-                    })
+                    }
+                    for row in data_plaque
+                ]
                 st.dataframe(pd.DataFrame(clean_rows), use_container_width=True, hide_index=True)
             else:
                 st.info("Aucun essai enregistré.")
@@ -681,25 +531,12 @@ def show(supabase_client):
         st.subheader("📄 Génération de PV et Synthèse PDF")
         try:
             data_plaque = charger_essais_plaque(projet_id_actif)
-            if data_plaque and len(data_plaque) > 0:
+            if data_plaque:
                 options_essais = {f"ID #{item['id']} - Réf: {item.get('reference', 'Sans réf')} ({item.get('date_essai', '')})": item for item in data_plaque}
                 choix_essai_str = st.selectbox("Sélectionner l'essai à éditer en PV :", options=list(options_essais.keys()))
                 essai_selectionne = options_essais[choix_essai_str]
 
                 st.markdown("---")
-                st.markdown("### 🔍 Aperçu rapide des données")
-                col_p1, col_p2 = st.columns(2)
-                with col_p1:
-                    st.write(f"**Référence :** {essai_selectionne.get('reference', '-')}")
-                    st.write(f"**Date :** {essai_selectionne.get('date_essai', '-')}")
-                    st.write(f"**Client :** {essai_selectionne.get('client', '-')}")
-                    st.write(f"**Projet :** {essai_selectionne.get('projet', '-')}")
-                with col_p2:
-                    st.write(f"**Emplacement :** {essai_selectionne.get('emplacement', '-')}")
-                    st.write(f"**Couche :** {essai_selectionne.get('couche', '-')}")
-                    st.write(f"**Technicien :** {essai_selectionne.get('technicien', '-')}")
-
-                st.markdown("### 📥 Téléchargement du PV")
                 pdf_bytes = generer_pdf_pv(essai_selectionne)
                 nom_fichier = f"PV_Essai_Plaque_{str(essai_selectionne.get('reference', essai_selectionne.get('id'))).replace('/', '_')}.pdf"
                 
@@ -717,10 +554,10 @@ def show(supabase_client):
             st.warning(f"Erreur lors du chargement des PV : {e}")
 
     with tab_synthese:
-        st.subheader("📊 Synthèse & Filtres Avancés (Téléchargement Excel)")
+        st.subheader("📊 Synthèse & Filtres Avancés")
         try:
             data_plaque = charger_essais_plaque(projet_id_actif)
-            if data_plaque and len(data_plaque) > 0:
+            if data_plaque:
                 df_synth = pd.DataFrame(data_plaque)
                 df_synth['date_datetime'] = pd.to_datetime(df_synth['date_essai'], errors='coerce')
                 df_synth['mois'] = df_synth['date_datetime'].dt.strftime('%Y-%m')
@@ -745,37 +582,18 @@ def show(supabase_client):
                     df_filtered = df_filtered[df_filtered['couche'] == choix_couche]
 
                 st.markdown("---")
-                col_m, col_btn = st.columns([2, 1])
-                with col_m:
-                    st.metric("Nombre d'essais correspondants", len(df_filtered))
-                with col_btn:
-                    if not df_filtered.empty:
-                        nom_projet_actif = projets_config.nom_projet(projet_id_actif)
-                        excel_bytes = generer_excel_synthese(df_filtered, choix_mois, choix_empl, choix_couche, nom_projet_actif)
-                        st.download_button(
-                            label="📥 Télécharger la Synthèse Excel",
-                            data=excel_bytes,
-                            file_name=f"Synthese_Essais_Plaque_{choix_mois}.xlsx",
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                            type="primary",
-                            use_container_width=True
-                        )
-
                 if not df_filtered.empty:
-                    clean_synth_rows = []
-                    for _, row in df_filtered.iterrows():
-                        ref_val = row.get("reference") or row.get("ref_essai") or row.get("ref")  or "-"
-                        clean_synth_rows.append({
-                            "ID": row.get("id"),
-                            "Référence": ref_val,
-                            "Date": row.get("date_essai"),
-                            "Client": row.get("client"),
-                            "Emplacement": row.get("emplacement"),
-                            "Couche": row.get("couche"),
-                            "EV2 (MPa)": row.get("ev2"),
-                            "Technicien": row.get("technicien")
-                        })
-                    st.dataframe(pd.DataFrame(clean_synth_rows), use_container_width=True, hide_index=True)
+                    nom_projet_actif = projets_config.nom_projet(projet_id_actif)
+                    excel_bytes = generer_excel_synthese(df_filtered, choix_mois, choix_empl, choix_couche, nom_projet_actif)
+                    st.download_button(
+                        label="📥 Télécharger la Synthèse Excel",
+                        data=excel_bytes,
+                        file_name=f"Synthese_Essais_Plaque_{choix_mois}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        type="primary",
+                        use_container_width=True
+                    )
+                    st.dataframe(df_filtered, use_container_width=True, hide_index=True)
                 else:
                     st.info("Aucun essai ne correspond aux critères de filtre sélectionnés.")
             else:
