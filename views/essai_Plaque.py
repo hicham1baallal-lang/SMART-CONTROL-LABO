@@ -16,6 +16,15 @@ import os
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
+@st.cache_data(ttl=300)
+def charger_essais_plaque(projet_id):
+    """Charge les essais de plaque avec mise en cache et limitation pour éviter les timeouts 504."""
+    try:
+        response = supabase.table("essai_plaque").select("*").eq("projet_id", projet_id).order("id", desc=True).limit(200).execute()
+        return response.data if response.data else []
+    except Exception:
+        return []
+
 def evaluer_conformite_couche(couche, ev2_val):
     conforme = True
     motif = []
@@ -234,19 +243,17 @@ def generer_pdf_pv(essai):
 
 
 def generer_excel_synthese(df, mois_str, empl_str, couche_str, nom_projet):
-    """Génère un classeur Excel formaté avec mise en page A4 Portrait ajustée pour remplir idéalement la page."""
     output = io.BytesIO()
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Synthèse Plaque"
     ws.views.sheetView[0].showGridLines = True
 
-    # Configuration de la mise en page A4 Portrait ajustée pour remplir la largeur de la page
     ws.page_setup.orientation = ws.ORIENTATION_PORTRAIT
     ws.page_setup.paperSize = ws.PAPERSIZE_A4
     ws.sheet_properties.pageSetUpPr.fitToPage = True
     ws.page_setup.fitToWidth = 1
-    ws.page_setup.fitToHeight = 0  # S'adapte en largeur sur 1 page
+    ws.page_setup.fitToHeight = 0
 
     header_fill = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
     header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
@@ -402,15 +409,14 @@ def generer_excel_synthese(df, mois_str, empl_str, couche_str, nom_projet):
         ws.cell(row=row_idx, column=1, value="Responsable d\'essai").font = bold_font
         ws.cell(row=row_idx, column=6, value="Chef du Laboratoire").font = bold_font
 
-    # Ajustement professionnel et optimisé des largeurs de colonnes pour A4 Portrait (largeur totale idéale ~75-80)
     col_dimensions = {
-        'A': 13,  # Date Essai
-        'B': 24,  # Couche
-        'C': 16,  # Emplacement
-        'D': 14,  # PK / Profil
-        'E': 12,  # EV1 (MPa)
-        'F': 12,  # EV2 (MPa)
-        'G': 15   # K (EV2/EV1)
+        'A': 13,
+        'B': 24,
+        'C': 16,
+        'D': 14,
+        'E': 12,
+        'F': 12,
+        'G': 15
     }
     for col_letter, width in col_dimensions.items():
         ws.column_dimensions[col_letter].width = width
@@ -420,7 +426,10 @@ def generer_excel_synthese(df, mois_str, empl_str, couche_str, nom_projet):
     return output.getvalue()
 
 
-def show(supabase):
+def show(supabase_client):
+    global supabase
+    supabase = supabase_client
+
     st.title("🚜 Essai à la Plaque (NF P 94-117-1)")
 
     user_raw = (
@@ -641,6 +650,8 @@ def show(supabase):
                             nouvel_id_plaque = res_ins_plaque.data[0].get("id")
                             enregistrer_modification(supabase, "essai_plaque", nouvel_id_plaque, "CREATION", nouvelles_valeurs=safe_payload)
                         st.success("✅ Essai enregistré avec succès !")
+                    
+                    st.cache_data.clear()
                     st.rerun()
                 except Exception as e:
                     st.error(f"Erreur lors de l\'enregistrement : {e}")
@@ -653,10 +664,10 @@ def show(supabase):
         st.markdown("---")
         st.subheader("📋 Historique des Essais Enregistrés")
         try:
-            res = supabase.table("essai_plaque").select("*").eq("projet_id", projet_id_actif).order("id", desc=True).execute()
-            if res.data and len(res.data) > 0:
+            data_plaque = charger_essais_plaque(projet_id_actif)
+            if data_plaque and len(data_plaque) > 0:
                 clean_rows = []
-                for row in res.data:
+                for row in data_plaque:
                     ref_val = row.get("reference") or row.get("ref_essai") or row.get("ref") or "-"
                     clean_rows.append({
                         "ID": row.get("id"),
@@ -677,9 +688,9 @@ def show(supabase):
     with tab_pv:
         st.subheader("📄 Génération de PV et Synthèse PDF")
         try:
-            res_pv = supabase.table("essai_plaque").select("*").eq("projet_id", projet_id_actif).order("id", desc=True).execute()
-            if res_pv.data and len(res_pv.data) > 0:
-                options_essais = {f"ID #{item['id']} - Réf: {item.get('reference', 'Sans réf')} ({item.get('date_essai', '')})": item for item in res_pv.data}
+            data_plaque = charger_essais_plaque(projet_id_actif)
+            if data_plaque and len(data_plaque) > 0:
+                options_essais = {f"ID #{item['id']} - Réf: {item.get('reference', 'Sans réf')} ({item.get('date_essai', '')})": item for item in data_plaque}
                 choix_essai_str = st.selectbox("Sélectionner l\'essai à éditer en PV :", options=list(options_essais.keys()))
                 essai_selectionne = options_essais[choix_essai_str]
 
@@ -716,9 +727,9 @@ def show(supabase):
     with tab_synthese:
         st.subheader("📊 Synthèse & Filtres Avancés (Téléchargement Excel)")
         try:
-            res_synth = supabase.table("essai_plaque").select("*").eq("projet_id", projet_id_actif).order("id", desc=True).execute()
-            if res_synth.data and len(res_synth.data) > 0:
-                df_synth = pd.DataFrame(res_synth.data)
+            data_plaque = charger_essais_plaque(projet_id_actif)
+            if data_plaque and len(data_plaque) > 0:
+                df_synth = pd.DataFrame(data_plaque)
                 df_synth['date_datetime'] = pd.to_datetime(df_synth['date_essai'], errors='coerce')
                 df_synth['mois'] = df_synth['date_datetime'].dt.strftime('%Y-%m')
 
