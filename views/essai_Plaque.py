@@ -17,15 +17,13 @@ import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
 def evaluer_conformite_couche(couche, ev2_val):
-    """Évalue automatiquement si les résultats sont conformes ou non selon le type de couche."""
     conforme = True
     motif = []
-
     if couche == "Sous-couche et Couche de forme ferroviaire (LGV)":
         if ev2_val < 80.0:
             conforme = False
             motif.append(f"EV2 = {ev2_val} MPa < 80 MPa requis")
-    elif couche == "Remblais contigus aux Ouvrages d'Art (PRO)":
+    elif couche == "Remblais contigus aux Ouvrages d\'Art (PRO)":
         if ev2_val < 80.0:
             conforme = False
             motif.append(f"EV2 = {ev2_val} MPa < 80 MPa requis")
@@ -37,7 +35,7 @@ def evaluer_conformite_couche(couche, ev2_val):
         if ev2_val < 30.0:
             conforme = False
             motif.append(f"EV2 = {ev2_val} MPa < 30 MPa requis")
-    elif couche == "Remblais de fouilles d'ouvrages d'art":
+    elif couche == "Remblais de fouilles d\'ouvrages d\'art":
         if ev2_val < 80.0:
             conforme = False
             motif.append(f"EV2 = {ev2_val} MPa < 80 MPa requis")
@@ -45,7 +43,7 @@ def evaluer_conformite_couche(couche, ev2_val):
         if ev2_val <= 50.0:
             conforme = False
             motif.append(f"EV2 = {ev2_val} MPa non supérieur à 50 MPa requis")
-    elif couche == "Plateforme support d'étaiements / cintres":
+    elif couche == "Plateforme support d\'étaiements / cintres":
         if ev2_val <= 80.0:
             conforme = False
             motif.append(f"EV2 = {ev2_val} MPa non supérieur à 80 MPa requis")
@@ -57,7 +55,6 @@ def evaluer_conformite_couche(couche, ev2_val):
 
 
 def generer_pdf_pv(essai):
-    """Génère un Procès-Verbal (PV) professionnel sur format A4 avec le logo, le centre régional et la hiérarchie des titres."""
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
     elements = []
@@ -105,8 +102,8 @@ def generer_pdf_pv(essai):
     )
     
     header_text = (
-        "<b>LABORATOIRE PUBLIC D'ESSAIS ET D'ÉTUDES (LPEE)</b><br/>"
-        "<font size=8.5 color='#595959'>CENTRE TECHNIQUE REGIONALE DE CASABLANCA -SETTAT BENIMELLAL</font>"
+        "<b>LABORATOIRE PUBLIC D\'ESSAIS ET D\'ÉTUDES (LPEE)</b><br/>"
+        "<font size=8.5 color=\'#595959\'>CENTRE TECHNIQUE REGIONALE DE CASABLANCA -SETTAT BENIMELLAL</font>"
     )
     
     if os.path.exists(logo_path):
@@ -129,7 +126,6 @@ def generer_pdf_pv(essai):
         elements.append(Paragraph(header_text, org_style))
 
     elements.append(Spacer(1, 6))
-    elements.append(Spacer(1, 4))
 
     data_infos = [
         [Paragraph("Client / Organisme :", bold_style), Paragraph(str(essai.get('client', '-')), normal_style),
@@ -215,7 +211,7 @@ def generer_pdf_pv(essai):
     sig_style = ParagraphStyle('SigStyle', parent=normal_style, alignment=1)
     data_sig = [
         [
-            Paragraph("<b>Responsable d'essai</b><br/><br/>O. IKKEN", sig_style), 
+            Paragraph("<b>Responsable d\'essai</b><br/><br/>O. IKKEN", sig_style), 
             Paragraph("<b>Chef du laboratoire</b><br/><br/>H. BAALLAL", sig_style)
         ]
     ]
@@ -229,7 +225,7 @@ def generer_pdf_pv(essai):
     elements.append(t_sig)
 
     elements.append(Spacer(1, 15))
-    elements.append(Paragraph("PROCÈS-VERBAL D'ESSAI À LA PLAQUE (NF P 94-117-1)", title_style))
+    elements.append(Paragraph("PROCÈS-VERBAL D\'ESSAI À LA PLAQUE (NF P 94-117-1)", title_style))
     elements.append(Paragraph(f"Référence : <b>{essai.get('reference', '-')}</b> | Date : {essai.get('date_essai', '-')}", subtitle_style))
 
     doc.build(elements)
@@ -238,12 +234,19 @@ def generer_pdf_pv(essai):
 
 
 def generer_excel_synthese(df, mois_str, empl_str, couche_str, nom_projet):
-    """Génère un classeur Excel formaté simulant le modèle de synthèse demandé."""
+    """Génère un classeur Excel formaté avec mise en page A4 Portrait ajustée pour remplir idéalement la page."""
     output = io.BytesIO()
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Synthèse Plaque"
     ws.views.sheetView[0].showGridLines = True
+
+    # Configuration de la mise en page A4 Portrait ajustée pour remplir la largeur de la page
+    ws.page_setup.orientation = ws.ORIENTATION_PORTRAIT
+    ws.page_setup.paperSize = ws.PAPERSIZE_A4
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 0  # S'adapte en largeur sur 1 page
 
     header_fill = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
     header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
@@ -291,17 +294,17 @@ def generer_excel_synthese(df, mois_str, empl_str, couche_str, nom_projet):
         cell.value = header_title
         cell.font = header_font
         cell.fill = header_fill
-        cell.alignment = Alignment(horizontal='center', vertical='center')
+        cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
         cell.border = thin_border
 
     row_idx = 7
     ev1_vals, ev2_vals, k_vals = [], [], []
 
     for _, row in df.iterrows():
-        ws.cell(row=row_idx, column=1, value=str(row.get('date_essai', ''))).alignment = Alignment(horizontal='center')
-        ws.cell(row=row_idx, column=2, value=str(row.get('couche', ''))).alignment = Alignment(horizontal='left')
-        ws.cell(row=row_idx, column=3, value=str(row.get('emplacement', ''))).alignment = Alignment(horizontal='left')
-        ws.cell(row=row_idx, column=4, value=str(row.get('pk_profil', ''))).alignment = Alignment(horizontal='center')
+        ws.cell(row=row_idx, column=1, value=str(row.get('date_essai', ''))).alignment = Alignment(horizontal='center', vertical='center')
+        ws.cell(row=row_idx, column=2, value=str(row.get('couche', ''))).alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+        ws.cell(row=row_idx, column=3, value=str(row.get('emplacement', ''))).alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+        ws.cell(row=row_idx, column=4, value=str(row.get('pk_profil', ''))).alignment = Alignment(horizontal='center', vertical='center')
 
         ev1_v = float(row.get('ev1', 0) or 0)
         ev2_v = float(row.get('ev2', 0) or 0)
@@ -313,15 +316,15 @@ def generer_excel_synthese(df, mois_str, empl_str, couche_str, nom_projet):
 
         c_ev1 = ws.cell(row=row_idx, column=5, value=ev1_v)
         c_ev1.number_format = '#,##0.00'
-        c_ev1.alignment = Alignment(horizontal='right')
+        c_ev1.alignment = Alignment(horizontal='right', vertical='center')
 
         c_ev2 = ws.cell(row=row_idx, column=6, value=ev2_v)
         c_ev2.number_format = '#,##0.00'
-        c_ev2.alignment = Alignment(horizontal='right')
+        c_ev2.alignment = Alignment(horizontal='right', vertical='center')
 
         c_k = ws.cell(row=row_idx, column=7, value=k_v)
         c_k.number_format = '#,##0.00'
-        c_k.alignment = Alignment(horizontal='right')
+        c_k.alignment = Alignment(horizontal='right', vertical='center')
         c_k.fill = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
 
         for c in range(1, 8):
@@ -346,19 +349,19 @@ def generer_excel_synthese(df, mois_str, empl_str, couche_str, nom_projet):
         c_avg1 = ws.cell(row=row_idx, column=5, value=avg_ev1)
         c_avg1.font = bold_font
         c_avg1.number_format = '#,##0.00'
-        c_avg1.alignment = Alignment(horizontal='right')
+        c_avg1.alignment = Alignment(horizontal='right', vertical='center')
         c_avg1.border = double_bottom_border
 
         c_avg2 = ws.cell(row=row_idx, column=6, value=avg_ev2)
         c_avg2.font = bold_font
         c_avg2.number_format = '#,##0.00'
-        c_avg2.alignment = Alignment(horizontal='right')
+        c_avg2.alignment = Alignment(horizontal='right', vertical='center')
         c_avg2.border = double_bottom_border
 
         c_avgk = ws.cell(row=row_idx, column=7, value=avg_k)
         c_avgk.font = bold_font
         c_avgk.number_format = '#,##0.00'
-        c_avgk.alignment = Alignment(horizontal='right')
+        c_avgk.alignment = Alignment(horizontal='right', vertical='center')
         c_avgk.border = double_bottom_border
 
         row_idx += 2
@@ -372,7 +375,7 @@ def generer_excel_synthese(df, mois_str, empl_str, couche_str, nom_projet):
             cell.value = sh
             cell.font = header_font
             cell.fill = header_fill
-            cell.alignment = Alignment(horizontal='center')
+            cell.alignment = Alignment(horizontal='center', vertical='center')
             cell.border = thin_border
         row_idx += 1
 
@@ -380,7 +383,7 @@ def generer_excel_synthese(df, mois_str, empl_str, couche_str, nom_projet):
             ("Valeur Minimale", min(ev1_vals), min(ev2_vals), min(k_vals)),
             ("Valeur Maximale", max(ev1_vals), max(ev2_vals), max(k_vals)),
             ("Moyenne Générale", avg_ev1, avg_ev2, avg_k),
-            ("Nombre d'essais", len(ev1_vals), len(ev2_vals), len(k_vals))
+            ("Nombre d\'essais", len(ev1_vals), len(ev2_vals), len(k_vals))
         ]
 
         for label, v1, v2, vk in stats_data:
@@ -390,14 +393,27 @@ def generer_excel_synthese(df, mois_str, empl_str, couche_str, nom_projet):
             for col_idx, val in enumerate([v1, v2, vk], 2):
                 c = ws.cell(row=row_idx, column=col_idx, value=val)
                 c.font = normal_font
-                c.number_format = '#,##0.00' if label != "Nombre d'essais" else '#,##0'
-                c.alignment = Alignment(horizontal='right')
+                c.number_format = '#,##0.00' if label != "Nombre d\'essais" else '#,##0'
+                c.alignment = Alignment(horizontal='right', vertical='center')
                 c.border = thin_border
             row_idx += 1
 
         row_idx += 3
-        ws.cell(row=row_idx, column=1, value="Responsable d'essai").font = bold_font
+        ws.cell(row=row_idx, column=1, value="Responsable d\'essai").font = bold_font
         ws.cell(row=row_idx, column=6, value="Chef du Laboratoire").font = bold_font
+
+    # Ajustement professionnel et optimisé des largeurs de colonnes pour A4 Portrait (largeur totale idéale ~75-80)
+    col_dimensions = {
+        'A': 13,  # Date Essai
+        'B': 24,  # Couche
+        'C': 16,  # Emplacement
+        'D': 14,  # PK / Profil
+        'E': 12,  # EV1 (MPa)
+        'F': 12,  # EV2 (MPa)
+        'G': 15   # K (EV2/EV1)
+    }
+    for col_letter, width in col_dimensions.items():
+        ws.column_dimensions[col_letter].width = width
 
     wb.save(output)
     output.seek(0)
@@ -467,25 +483,25 @@ def show(supabase):
             default_obs = ""
             default_points = [{"z1": 0.53, "z2": 0.52, "pk_point": "PK 1+200"}]
 
-        st.subheader("📝 " + ("Modifier l'essai" if editing_item else "Saisie d'un nouvel essai"))
+        st.subheader("📝 " + ("Modifier l\'essai" if editing_item else "Saisie d\'un nouvel essai"))
 
         col0, col1, col2 = st.columns(3)
 
         with col0:
-            reference = st.text_input("Référence de l'essai", value=default_ref, key="plaque_reference")
+            reference = st.text_input("Référence de l\'essai", value=default_ref, key="plaque_reference")
         with col1:
-            date_essai = st.date_input("Date de l'essai", value=default_date, key="plaque_date")
+            date_essai = st.date_input("Date de l\'essai", value=default_date, key="plaque_date")
             client = st.text_input("Client / Organisme", value=default_client, key="plaque_client")
             projet = st.text_input("Chantier / Projet", value=default_projet, key="plaque_projet")
         with col2:
             couche_options = [
                 "Sous-couche et Couche de forme ferroviaire (LGV)",
-                "Remblais contigus aux Ouvrages d'Art (PRO)",
+                "Remblais contigus aux Ouvrages d\'Art (PRO)",
                 "Arase des terrassements / PST",
                 "Corps de remblai courant (avant PST)",
-                "Remblais de fouilles d'ouvrages d'art",
+                "Remblais de fouilles d\'ouvrages d\'art",
                 "Couche de forme des rétablissements / accès",
-                "Plateforme support d'étaiements / cintres",
+                "Plateforme support d\'étaiements / cintres",
                 "Autre"
             ]
             couche_idx = couche_options.index(default_couche) if default_couche in couche_options else 0
@@ -500,7 +516,7 @@ def show(supabase):
             technicien = st.text_input("Technicien LPEE", value=default_tech, key="plaque_tech")
 
         st.markdown("---")
-        st.subheader("2. Points de Mesure d'essai à la plaque")
+        st.subheader("2. Points de Mesure d\'essai à la plaque")
 
         if "plaque_points_count" not in st.session_state or editing_item:
             st.session_state["plaque_points_count"] = len(default_points)
@@ -570,7 +586,7 @@ def show(supabase):
 
         btn_col1, btn_col2 = st.columns([3, 1])
         with btn_col1:
-            button_label = "🔄 Mettre à jour l'essai" if editing_item else "💾 Enregistrer l'essai"
+            button_label = "🔄 Mettre à jour l\'essai" if editing_item else "💾 Enregistrer l\'essai"
             if st.button(button_label, key="btn_enregistrer_plaque", type="primary", use_container_width=True):
                 
                 try:
@@ -579,7 +595,7 @@ def show(supabase):
                         query_doublon = query_doublon.neq("id", editing_item["id"])
                     res_doublon = query_doublon.execute()
                     if res_doublon.data and len(res_doublon.data) > 0:
-                        st.error(f"🚫 **BLOCAGE** : La référence d'essai **'{reference}'** existe déjà dans ce projet !")
+                        st.error(f"🚫 **BLOCAGE** : La référence d\'essai **'{reference}'** existe déjà dans ce projet !")
                         st.stop()
                 except Exception:
                     pass
@@ -627,7 +643,7 @@ def show(supabase):
                         st.success("✅ Essai enregistré avec succès !")
                     st.rerun()
                 except Exception as e:
-                    st.error(f"Erreur lors de l'enregistrement : {e}")
+                    st.error(f"Erreur lors de l\'enregistrement : {e}")
 
         with btn_col2:
             if editing_item and st.button("❌ Annuler", use_container_width=True):
@@ -664,7 +680,7 @@ def show(supabase):
             res_pv = supabase.table("essai_plaque").select("*").eq("projet_id", projet_id_actif).order("id", desc=True).execute()
             if res_pv.data and len(res_pv.data) > 0:
                 options_essais = {f"ID #{item['id']} - Réf: {item.get('reference', 'Sans réf')} ({item.get('date_essai', '')})": item for item in res_pv.data}
-                choix_essai_str = st.selectbox("Sélectionner l'essai à éditer en PV :", options=list(options_essais.keys()))
+                choix_essai_str = st.selectbox("Sélectionner l\'essai à éditer en PV :", options=list(options_essais.keys()))
                 essai_selectionne = options_essais[choix_essai_str]
 
                 st.markdown("---")
@@ -728,7 +744,7 @@ def show(supabase):
                 st.markdown("---")
                 col_m, col_btn = st.columns([2, 1])
                 with col_m:
-                    st.metric("Nombre d'essais correspondants", len(df_filtered))
+                    st.metric("Nombre d\'essais correspondants", len(df_filtered))
                 with col_btn:
                     if not df_filtered.empty:
                         nom_projet_actif = projets_config.nom_projet(projet_id_actif)
@@ -745,7 +761,7 @@ def show(supabase):
                 if not df_filtered.empty:
                     clean_synth_rows = []
                     for _, row in df_filtered.iterrows():
-                        ref_val = row.get("reference") or row.get("ref_essai") or row.get("ref") or "-"
+                        ref_val = row.get("reference") or row.get("ref_essai") or row.get("ref")  or "-"
                         clean_synth_rows.append({
                             "ID": row.get("id"),
                             "Référence": ref_val,
