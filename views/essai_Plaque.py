@@ -12,6 +12,10 @@ from reportlab.lib import colors
 import io
 import os
 
+# Import pour la génération Excel avancée
+import openpyxl
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+
 def evaluer_conformite_couche(couche, ev2_val):
     """Évalue automatiquement si les résultats sont conformes ou non selon le type de couche."""
     conforme = True
@@ -60,7 +64,6 @@ def generer_pdf_pv(essai):
     
     styles = getSampleStyleSheet()
     
-    # Titre du PV
     title_style = ParagraphStyle(
         'TitleStyle',
         parent=styles['Heading1'],
@@ -91,14 +94,13 @@ def generer_pdf_pv(essai):
     normal_style = ParagraphStyle('NormalText', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#262626'))
     bold_style = ParagraphStyle('BoldText', parent=normal_style, fontName='Helvetica-Bold')
 
-    # En-tête avec Logo (logo.png.jpg), Nom du Laboratoire et Centre Régional
     logo_path = "logo.png.jpg"
     
     org_style = ParagraphStyle(
         'OrgStyle',
         parent=bold_style,
         alignment=0,
-        fontSize=14,  # Plus grand que le titre du PV (14pt vs 12pt)
+        fontSize=14,
         textColor=colors.HexColor('#1f4e78')
     )
     
@@ -129,7 +131,6 @@ def generer_pdf_pv(essai):
     elements.append(Spacer(1, 6))
     elements.append(Spacer(1, 4))
 
-    # Informations Générales
     data_infos = [
         [Paragraph("Client / Organisme :", bold_style), Paragraph(str(essai.get('client', '-')), normal_style),
          Paragraph("Chantier / Projet :", bold_style), Paragraph(str(essai.get('projet', '-')), normal_style)],
@@ -154,7 +155,6 @@ def generer_pdf_pv(essai):
     elements.append(t_infos)
     elements.append(Spacer(1, 10))
 
-    # Points de mesure
     elements.append(Paragraph("Détail des Points de Mesure et Résultats (NF P 94-117-1)", section_style))
     
     points = essai.get('points_mesure', [])
@@ -194,7 +194,6 @@ def generer_pdf_pv(essai):
     elements.append(t_pts)
     elements.append(Spacer(1, 10))
 
-    # Section Commentaire automatique
     elements.append(Paragraph("Commentaire", section_style))
     
     couche_nom = essai.get('couche', '')
@@ -213,7 +212,6 @@ def generer_pdf_pv(essai):
     elements.append(t_obs)
     elements.append(Spacer(1, 15))
 
-    # Bloc Signatures & Visas (Centré)
     sig_style = ParagraphStyle('SigStyle', parent=normal_style, alignment=1)
     data_sig = [
         [
@@ -237,6 +235,173 @@ def generer_pdf_pv(essai):
     doc.build(elements)
     buffer.seek(0)
     return buffer.getvalue()
+
+
+def generer_excel_synthese(df, mois_str, empl_str, couche_str, nom_projet):
+    """Génère un classeur Excel formaté simulant le modèle de synthèse demandé."""
+    output = io.BytesIO()
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Synthèse Plaque"
+    ws.views.sheetView[0].showGridLines = True
+
+    header_fill = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
+    header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+    title_font = Font(name="Calibri", size=13, bold=True, color="1F4E78")
+    subtitle_font = Font(name="Calibri", size=10, italic=True, color="595959")
+    bold_font = Font(name="Calibri", size=10, bold=True)
+    normal_font = Font(name="Calibri", size=10)
+    
+    thin_border = Border(
+        left=Side(style='thin', color='D9D9D9'),
+        right=Side(style='thin', color='D9D9D9'),
+        top=Side(style='thin', color='D9D9D9'),
+        bottom=Side(style='thin', color='D9D9D9')
+    )
+    double_bottom_border = Border(
+        left=Side(style='thin', color='D9D9D9'),
+        right=Side(style='thin', color='D9D9D9'),
+        top=Side(style='thin', color='D9D9D9'),
+        bottom=Side(style='double', color='1F4E78')
+    )
+
+    ws['A1'] = "LABORATOIRE LPEE — CENTRE TECHNIQUE RÉGIONAL"
+    ws['A1'].font = title_font
+    ws.merge_cells('A1:G1')
+    ws['A1'].alignment = Alignment(horizontal='center')
+
+    ws['A2'] = "Norme : NF P 94-117-1 (Plaque Ø 600 mm)"
+    ws['A2'].font = bold_font
+    ws.merge_cells('A2:G2')
+    ws['A2'].alignment = Alignment(horizontal='center')
+
+    ws['A3'] = f"Projet : {nom_projet} | Filtres -> Mois: {mois_str} | Emplacement: {empl_str} | Couche: {couche_str}"
+    ws['A3'].font = subtitle_font
+    ws.merge_cells('A3:G3')
+    ws['A3'].alignment = Alignment(horizontal='center')
+
+    ws['A4'] = f"SYNTHÈSE DES ESSAIS DE PORTANCE À LA PLAQUE — MENSUEL - {mois_str}"
+    ws['A4'].font = bold_font
+    ws.merge_cells('A4:G4')
+    ws['A4'].alignment = Alignment(horizontal='center')
+
+    headers = ["Date Essai", "Couche", "Emplacement", "PK / Profil", "EV1 (MPa)", "EV2 (MPa)", "K (EV2/EV1)"]
+    for col_num, header_title in enumerate(headers, 1):
+        cell = ws.cell(row=6, column=col_num)
+        cell.value = header_title
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal='center', vertical='center')
+        cell.border = thin_border
+
+    row_idx = 7
+    ev1_vals, ev2_vals, k_vals = [], [], []
+
+    for _, row in df.iterrows():
+        ws.cell(row=row_idx, column=1, value=str(row.get('date_essai', ''))).alignment = Alignment(horizontal='center')
+        ws.cell(row=row_idx, column=2, value=str(row.get('couche', ''))).alignment = Alignment(horizontal='left')
+        ws.cell(row=row_idx, column=3, value=str(row.get('emplacement', ''))).alignment = Alignment(horizontal='left')
+        ws.cell(row=row_idx, column=4, value=str(row.get('pk_profil', ''))).alignment = Alignment(horizontal='center')
+
+        ev1_v = float(row.get('ev1', 0) or 0)
+        ev2_v = float(row.get('ev2', 0) or 0)
+        k_v = float(row.get('k_ratio', 0) or 0)
+
+        ev1_vals.append(ev1_v)
+        ev2_vals.append(ev2_v)
+        k_vals.append(k_v)
+
+        c_ev1 = ws.cell(row=row_idx, column=5, value=ev1_v)
+        c_ev1.number_format = '#,##0.00'
+        c_ev1.alignment = Alignment(horizontal='right')
+
+        c_ev2 = ws.cell(row=row_idx, column=6, value=ev2_v)
+        c_ev2.number_format = '#,##0.00'
+        c_ev2.alignment = Alignment(horizontal='right')
+
+        c_k = ws.cell(row=row_idx, column=7, value=k_v)
+        c_k.number_format = '#,##0.00'
+        c_k.alignment = Alignment(horizontal='right')
+        c_k.fill = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
+
+        for c in range(1, 8):
+            ws.cell(row=row_idx, column=c).font = normal_font
+            ws.cell(row=row_idx, column=c).border = thin_border
+
+        row_idx += 1
+
+    if len(df) > 0:
+        avg_ev1 = sum(ev1_vals) / len(ev1_vals)
+        avg_ev2 = sum(ev2_vals) / len(ev2_vals)
+        avg_k = sum(k_vals) / len(k_vals)
+
+        ws.merge_cells(start_row=row_idx, start_column=1, end_row=row_idx, end_column=4)
+        m_cell = ws.cell(row=row_idx, column=1, value="MOYENNE DES ESSAIS")
+        m_cell.font = bold_font
+        m_cell.alignment = Alignment(horizontal='right', vertical='center')
+
+        for c in range(1, 5):
+            ws.cell(row=row_idx, column=c).border = double_bottom_border
+
+        c_avg1 = ws.cell(row=row_idx, column=5, value=avg_ev1)
+        c_avg1.font = bold_font
+        c_avg1.number_format = '#,##0.00'
+        c_avg1.alignment = Alignment(horizontal='right')
+        c_avg1.border = double_bottom_border
+
+        c_avg2 = ws.cell(row=row_idx, column=6, value=avg_ev2)
+        c_avg2.font = bold_font
+        c_avg2.number_format = '#,##0.00'
+        c_avg2.alignment = Alignment(horizontal='right')
+        c_avg2.border = double_bottom_border
+
+        c_avgk = ws.cell(row=row_idx, column=7, value=avg_k)
+        c_avgk.font = bold_font
+        c_avgk.number_format = '#,##0.00'
+        c_avgk.alignment = Alignment(horizontal='right')
+        c_avgk.border = double_bottom_border
+
+        row_idx += 2
+
+        ws.cell(row=row_idx, column=1, value="RÉSUMÉ STATISTIQUE QUALITÉ").font = bold_font
+        row_idx += 1
+
+        stat_headers = ["Indicateur", "EV1 (MPa)", "EV2 (MPa)", "Ratio K (EV2/EV1)"]
+        for col_num, sh in enumerate(stat_headers, 1):
+            cell = ws.cell(row=row_idx, column=col_num)
+            cell.value = sh
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = Alignment(horizontal='center')
+            cell.border = thin_border
+        row_idx += 1
+
+        stats_data = [
+            ("Valeur Minimale", min(ev1_vals), min(ev2_vals), min(k_vals)),
+            ("Valeur Maximale", max(ev1_vals), max(ev2_vals), max(k_vals)),
+            ("Moyenne Générale", avg_ev1, avg_ev2, avg_k),
+            ("Nombre d'essais", len(ev1_vals), len(ev2_vals), len(k_vals))
+        ]
+
+        for label, v1, v2, vk in stats_data:
+            ws.cell(row=row_idx, column=1, value=label).font = bold_font
+            ws.cell(row=row_idx, column=1).border = thin_border
+            
+            for col_idx, val in enumerate([v1, v2, vk], 2):
+                c = ws.cell(row=row_idx, column=col_idx, value=val)
+                c.font = normal_font
+                c.number_format = '#,##0.00' if label != "Nombre d'essais" else '#,##0'
+                c.alignment = Alignment(horizontal='right')
+                c.border = thin_border
+            row_idx += 1
+
+        row_idx += 3
+        ws.cell(row=row_idx, column=1, value="Responsable d'essai").font = bold_font
+        ws.cell(row=row_idx, column=6, value="Chef du Laboratoire").font = bold_font
+
+    wb.save(output)
+    output.seek(0)
+    return output.getvalue()
 
 
 def show(supabase):
@@ -533,7 +698,7 @@ def show(supabase):
             st.warning(f"Erreur lors du chargement des PV : {e}")
 
     with tab_synthese:
-        st.subheader("📊 Synthèse & Filtres Avancés")
+        st.subheader("📊 Synthèse & Filtres Avancés (Téléchargement Excel)")
         try:
             res_synth = supabase.table("essai_plaque").select("*").eq("projet_id", projet_id_actif).order("id", desc=True).execute()
             if res_synth.data and len(res_synth.data) > 0:
@@ -561,7 +726,21 @@ def show(supabase):
                     df_filtered = df_filtered[df_filtered['couche'] == choix_couche]
 
                 st.markdown("---")
-                st.metric("Nombre d'essais correspondants", len(df_filtered))
+                col_m, col_btn = st.columns([2, 1])
+                with col_m:
+                    st.metric("Nombre d'essais correspondants", len(df_filtered))
+                with col_btn:
+                    if not df_filtered.empty:
+                        nom_projet_actif = projets_config.nom_projet(projet_id_actif)
+                        excel_bytes = generer_excel_synthese(df_filtered, choix_mois, choix_empl, choix_couche, nom_projet_actif)
+                        st.download_button(
+                            label="📥 Télécharger la Synthèse Excel",
+                            data=excel_bytes,
+                            file_name=f"Synthese_Essais_Plaque_{choix_mois}.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            type="primary",
+                            use_container_width=True
+                        )
 
                 if not df_filtered.empty:
                     clean_synth_rows = []
