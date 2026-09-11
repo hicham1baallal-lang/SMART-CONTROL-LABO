@@ -204,16 +204,6 @@ except ImportError:
     essai_Plaque = None
 
 try:
-    from views import suivi_Betonnage
-except ImportError:
-    suivi_Betonnage = None
-
-try:
-    from views import suivi_controle_beton
-except ImportError:
-    suivi_controle_beton = None
-
-try:
     from views import essai_teneur_eau
 except ImportError:
     essai_teneur_eau = None
@@ -222,11 +212,6 @@ try:
     from views import essai_compacite
 except ImportError:
     essai_compacite = None
-
-try:
-    from views import synthese_plaque
-except ImportError:
-    synthese_plaque = None
 
 try:
     from views import historique_pvs
@@ -256,16 +241,13 @@ with st.sidebar:
     st.caption(f"👤 Connecté : **{current_username}**")
     st.markdown("---")
 
-    # Dictionnaire associant les libellés aux modules
+    # Dictionnaire des modules conservés (sans suivi bétonnage, contrôle béton, ni synthèse plaque)
     menu_options = {
         "🚜 Essai à la Plaque": essai_Plaque,
-        "📊 Suivi Bétonnage": suivi_Betonnage,
-        "🧪 Contrôle Béton": suivi_controle_beton,
         "💧 Teneur en Eau": essai_teneur_eau,
         "🏗️ Compacité": essai_compacite,
         "🪨 Granulats pour Béton": pv_granulats,
         "🔬 Identification Matériau": essai_identification_materiaux,
-        "📈 Synthèse Plaque": synthese_plaque,
         "📜 Historique & Audit": historique_pvs,
     }
 
@@ -294,7 +276,7 @@ with st.sidebar:
     st.caption("LPEE - CTR Casablanca | LGV CASA SUD")
 
 # ==========================================
-# 5. RENDU DE LA VUE SELECTIONNEE
+# 5. RENDU DE LA VUE SÉLECTIONNÉE
 # ==========================================
 def render_view(module, supabase_client):
     if module is None:
