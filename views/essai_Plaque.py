@@ -649,10 +649,9 @@ def show(supabase_client):
                         st.session_state["edit_plaque_item"] = None
                     else:
                         supabase.table("essai_plaque").insert(safe_payload).execute()
-                        st.success("✅ Essai enregistré avec succès !")
+                        st.success("✅ Essai enregistré avec succès ! Vous pouvez consulter l'historique ci-dessous.")
                     
                     st.cache_data.clear()
-                    st.rerun()
                 except Exception as e:
                     st.error(f"Erreur lors de l'enregistrement : {e}")
 
