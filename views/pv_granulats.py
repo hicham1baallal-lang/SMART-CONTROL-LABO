@@ -995,6 +995,10 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         st.session_state[f"{prefix}_pv_comm_input"] = _pv_info_ld.get('commentaires', '')
 
         st.session_state['success_msg'] = _pending.get('success_msg', "✅ PV chargé.")
+        # Active le mode modification uniquement si ce chargement provient bien
+        # du bouton "✏️ Modifier ce PV" (edit_ref renseigné) — sert à autoriser
+        # la re-validation sous le même N° Rapport sans être bloqué comme doublon.
+        st.session_state['_pv_edit_mode'] = _pending.get('edit_ref')
 
     # ------------------------------------------------------------------------
     # RÉINITIALISATION POUR UN NOUVEAU PRÉLÈVEMENT (bouton "➕ Ajouter un autre
@@ -1027,6 +1031,11 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
             'chef_labo': _kept_chef
         }
         st.session_state['data_granulats'] = _blank_data_granulats()
+
+        # Quitte le mode modification : ce nouveau prélèvement n'est PAS une
+        # édition d'un PV existant, donc un N° Rapport en double doit être
+        # bloqué normalement (voir vérification is_blocked_duplicate).
+        st.session_state['_pv_edit_mode'] = None
 
         # Purge de tous les widgets de saisie de CE module (préfixés par
         # `prefix`) pour qu'ils se réinitialisent proprement à partir des
@@ -1233,8 +1242,19 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         )
 
         is_duplicate = new_num_rapport.strip().lower() in saved_num_rapports if new_num_rapport.strip() else False
-        if is_duplicate:
-            st.warning(f"ℹ️ **Information :** Le N° Rapport d'essai `{new_num_rapport}` est déjà présent dans l'historique. Une re-validation mettra à jour sa fiche.")
+        _edit_mode_ref = (st.session_state.get('_pv_edit_mode') or '').strip().lower()
+        _new_num_norm = new_num_rapport.strip().lower()
+        is_authorized_edit = is_duplicate and bool(_edit_mode_ref) and _edit_mode_ref == _new_num_norm
+        is_blocked_duplicate = is_duplicate and not is_authorized_edit
+
+        if is_authorized_edit:
+            st.info(f"✏️ **Mode modification :** vous éditez le PV existant N° `{new_num_rapport}`. Valider mettra à jour sa fiche (pas de doublon créé).")
+        elif is_blocked_duplicate:
+            st.error(
+                f"⛔ **Numéro de rapport en double !** Le N° `{new_num_rapport}` existe déjà dans l'historique "
+                "pour un autre prélèvement. Changez le N° Rapport d'essai pour ce nouveau prélèvement, ou, si "
+                "vous vouliez modifier ce PV existant, chargez-le depuis l'onglet 3️⃣ Historique via « ✏️ Modifier ce PV »."
+            )
 
         if can_edit:
             st.session_state['info_prelevement']['chantier'] = new_chantier
@@ -1460,7 +1480,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
             )
 
         if can_edit:
-            if st.button("✅ Valider et enregistrer l'ensemble des essais", type="primary", use_container_width=True, key=f"{prefix}_btn_validate_all"):
+            if st.button("✅ Valider et enregistrer l'ensemble des essais", type="primary", use_container_width=True, key=f"{prefix}_btn_validate_all", disabled=is_blocked_duplicate):
                 for mat_k in st.session_state['data_granulats'].keys():
                     update_passants(st.session_state['data_granulats'][mat_k])
                     if mat_k in ["SC", "SD"]:
@@ -1715,6 +1735,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                         'info_prelevement': copy.deepcopy(selected_pv.get('info_prelevement', {})),
                         'pv_info': copy.deepcopy(selected_pv.get('pv_info', {})),
                         'data_granulats': copy.deepcopy(selected_pv.get('data_granulats', {})),
+                        'edit_ref': pv_ref_selected,
                         'success_msg': f"✅ Le PV N° '{pv_ref_selected}' a été chargé dans les onglets 1️⃣ et 2️⃣ pour modification. Éditez les valeurs puis validez à nouveau pour enregistrer."
                     }
                     st.rerun()
