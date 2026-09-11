@@ -404,14 +404,14 @@ with st.sidebar:
     available_pages = [
         "Accueil",
         "Gestion Utilisateurs",
-        "Suivi Contrôle Béton",
-        "Historique Complet & PVs",
-        "Suivi de Bétonnage",
         "Essai à la Plaque",
         "Teneur en Eau",
         "Contrôle de Compacité",
         "Granulats pour Béton",
         "Identification Matériau",
+        "Suivi de Bétonnage",
+        "Suivi Contrôle Béton",
+        "Historique Complet & PVs",
         "Synthèse Béton",
     ]
   elif current_role == "restricted_betonnage":
@@ -562,7 +562,7 @@ def render_view(module, supabase_client):
 
 
 # ==========================================
-# 6. ROUTAGE DES VUES
+# 6. ROUTAGE DES VUES (SYNCHRONISÉ AVEC LE MENU)
 # ==========================================
 if page == "Accueil":
   st.title("🚄 Accueil - LGV CASA SUD")
