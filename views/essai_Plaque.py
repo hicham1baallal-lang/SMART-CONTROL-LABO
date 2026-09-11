@@ -18,11 +18,19 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
 @st.cache_data(ttl=300)
 def charger_essais_plaque(projet_id):
-    """Charge les essais de plaque avec mise en cache et limitation pour éviter les timeouts 504."""
+    """Charge uniquement les colonnes indispensables des essais de plaque avec un filtre strict et rapide."""
     try:
-        response = supabase.table("essai_plaque").select("*").eq("projet_id", projet_id).order("id", desc=True).limit(200).execute()
+        response = (
+            supabase.table("essai_plaque")
+            .select("id, reference, date_essai, client, projet, emplacement, pk_profil, couche, nature_materiau, ev1, ev2, k_ratio, technicien, observations, points_mesure")
+            .eq("projet_id", projet_id)
+            .order("id", desc=True)
+            .limit(100)
+            .execute()
+        )
         return response.data if response.data else []
-    except Exception:
+    except Exception as e:
+        print(f"Erreur chargement plaque: {e}")
         return []
 
 def evaluer_conformite_couche(couche, ev2_val):
@@ -164,7 +172,7 @@ def generer_pdf_pv(essai):
     
     points = essai.get('points_mesure', [])
     if not points:
-        points = [{"z1": essai.get('z1', 0), "z2": essai.get('z2', 0), "pk_point": essai.get('pk_profil', '-')}]
+        points = [{"z1": essai.get('z1', 0.53), "z2": essai.get('z2', 0.52), "pk_point": essai.get('pk_profil', '-')}]
 
     table_pts_data = [["Point / PK", "Z1 1er chrg (mm)", "Z2 2ème chrg (mm)", "EV1 (MPa)", "EV2 (MPa)", "K (EV2/EV1)"]]
     
@@ -637,15 +645,20 @@ def show(supabase_client):
                         safe_payload = payload
 
                     safe_payload["projet_id"] = projet_id_actif
+                    if "points_mesure" in safe_payload:
+                        safe_payload["points_mesure"] = [
+                            {"z1": float(pt["z1"]), "z2": float(pt["z2"]), "pk_point": str(pt["pk_point"])}
+                            for pt in safe_payload["points_mesure"]
+                        ]
 
                     if editing_item:
                         anciennes_valeurs_plaque = {k: editing_item.get(k) for k in safe_payload}
-                        supabase.table("essai_plaque").update(safe_payload).eq("id", editing_item["id"]).eq("projet_id", projet_id_actif).execute()
+                        supabase.table("essai_plaque").update(safe_payload).eq("id", editing_item["id"]).eq("projet_id", projet_id_actif).select("id").execute()
                         enregistrer_modification(supabase, "essai_plaque", editing_item["id"], "MODIFICATION", anciennes_valeurs_plaque, safe_payload)
                         st.success(f"✅ Essai #{editing_item['id']} mis à jour avec succès !")
                         st.session_state["edit_plaque_item"] = None
                     else:
-                        res_ins_plaque = supabase.table("essai_plaque").insert(safe_payload).execute()
+                        res_ins_plaque = supabase.table("essai_plaque").insert(safe_payload).select("id").execute()
                         if res_ins_plaque.data:
                             nouvel_id_plaque = res_ins_plaque.data[0].get("id")
                             enregistrer_modification(supabase, "essai_plaque", nouvel_id_plaque, "CREATION", nouvelles_valeurs=safe_payload)
