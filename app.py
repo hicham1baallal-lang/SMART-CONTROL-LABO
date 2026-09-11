@@ -452,7 +452,6 @@ try:
 except ImportError:
   essai_compacite = None
 
-# 👉 CORRECTION ICI : Importation du fichier pv_granulats au lieu de essai_granulats_beton
 try:
   from views import pv_granulats
 except ImportError:
@@ -471,7 +470,6 @@ with st.sidebar:
 
   st.markdown(f"👤 **{current_username}**")
 
-  # Définition des pages accessibles selon le rôle
   if current_role in ["laboratoire", "technicien"]:
     if current_username == "HANINE":
       st.info("Rôle : **RESPONSABLE DE DOSSIER**")
@@ -482,7 +480,7 @@ with st.sidebar:
     st.markdown("---")
     available_pages = [
         "Accueil",
-      "Gestion Utilisateurs",
+        "Gestion Utilisateurs",
         "Suivi Contrôle Béton",
         "Historique Complet & PVs",
         "Suivi de Bétonnage",
@@ -849,7 +847,6 @@ elif page == "Teneur en Eau":
   render_view(essai_teneur_eau, supabase)
 elif page == "Contrôle de Compacité":
   render_view(essai_compacite, supabase)
-# 👉 CORRECTION ICI : Appel du bon module
 elif page == "Granulats pour Béton":
   render_view(pv_granulats, supabase)
 elif page == "Identification Matériau":
