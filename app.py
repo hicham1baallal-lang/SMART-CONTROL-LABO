@@ -34,7 +34,7 @@ st.set_page_config(
 )
 
 # ==========================================
-# 1bis. CAPTURE DES PARAMÈTRES QR CODE (ex: ?rec=...&beton_id=...)
+# 1bis. CAPTURE DES PARAMÈTRES QR CODE
 # ==========================================
 _query_params = st.query_params
 _qr_rec = _query_params.get("rec") or _query_params.get("num_reception")
@@ -427,21 +427,14 @@ if (
       unsafe_allow_html=True,
   )
 
-# Importation sécurisée des vues principales et des nouveaux essais
+# Importation sécurisée des vues principales
 try:
-  from views import (
-      essai_Plaque,
-      historique_pvs,
-      suivi_Betonnage,
-      suivi_controle_beton,
-      synthese_Beton,
-      synthese_plaque,
-  )
+  from views import essai_Plaque
 except ImportError as e:
   st.error(f"❌ Erreur lors de l'importation des vues de base : {e}")
   st.stop()
 
-# Importation dynamique / sécurisée des modules pour les nouveaux essais
+# Importation dynamique des autres essais
 try:
   from views import essai_teneur_eau
 except ImportError:
@@ -481,21 +474,16 @@ with st.sidebar:
     available_pages = [
         "Accueil",
         "Gestion Utilisateurs",
-        "Suivi Contrôle Béton",
-        "Historique Complet & PVs",
-        "Suivi de Bétonnage",
         "Essai à la Plaque",
         "Teneur en Eau",
         "Contrôle de Compacité",
         "Granulats pour Béton",
         "Identification Matériau",
-        "Synthèse Béton",
-        "Synthèse Plaque",
     ]
   elif current_role == "restricted_betonnage":
-    st.info("Rôle : **OPÉRATEUR BÉTONNAGE**")
+    st.info("Rôle : **OPÉRATEUR**")
     st.markdown("---")
-    available_pages = ["Suivi de Bétonnage"]
+    available_pages = ["Accueil"]
   elif current_role == "admin":
     st.info("Rôle : **ADMINISTRATEUR**")
     st.markdown("---")
@@ -507,20 +495,13 @@ with st.sidebar:
         "Contrôle de Compacité",
         "Granulats pour Béton",
         "Identification Matériau",
-        "Synthèse Plaque",
-        "Suivi de Bétonnage",
-        "Suivi Contrôle Béton",
-        "Historique Complet & PVs",
-        "Synthèse Béton",
     ]
   elif current_role == "user":
     st.info("Rôle : **CONSULTATION (LECTURE SEULE)**")
     st.markdown("---")
     available_pages = [
         "Accueil",
-        "Synthèse Béton",
-        "Historique Complet & PVs",
-        "Synthèse Plaque",
+        "Essai à la Plaque",
         "Teneur en Eau",
         "Contrôle de Compacité",
         "Granulats pour Béton",
@@ -531,9 +512,7 @@ with st.sidebar:
     st.markdown("---")
     available_pages = [
         "Accueil",
-        "Synthèse Béton",
-        "Historique Complet & PVs",
-        "Synthèse Plaque",
+        "Essai à la Plaque",
     ]
 
   if OFFLINE_SUPPORT:
@@ -568,21 +547,6 @@ with st.sidebar:
 
   st.session_state.setdefault("page_widget_seed", 0)
   st.session_state.setdefault("selected_page", None)
-
-  qr_en_attente = bool(
-      st.session_state.get("pending_qr_rec") or st.session_state.get("pending_qr_bid")
-  )
-  forcer_page_qr = qr_en_attente and not st.session_state.get("qr_page_applied", False)
-  if forcer_page_qr:
-    if "Suivi Contrôle Béton" in available_pages:
-      st.session_state["selected_page"] = "Suivi Contrôle Béton"
-      st.session_state["page_widget_seed"] += 1
-    else:
-      st.warning(
-          "⚠️ Le scan QR pointe vers 'Suivi Contrôle Béton', mais votre rôle"
-          " n'a pas accès à cette page."
-      )
-    st.session_state["qr_page_applied"] = True
 
   page_par_defaut = st.session_state.get("selected_page")
   if page_par_defaut not in available_pages:
@@ -851,13 +815,3 @@ elif page == "Granulats pour Béton":
   render_view(pv_granulats, supabase)
 elif page == "Identification Matériau":
   render_view(essai_identification_materiaux, supabase)
-elif page == "Synthèse Plaque":
-  render_view(synthese_plaque, supabase)
-elif page == "Suivi de Bétonnage":
-  render_view(suivi_Betonnage, supabase)
-elif page == "Suivi Contrôle Béton":
-  render_view(suivi_controle_beton, supabase)
-elif page == "Historique Complet & PVs":
-  render_view(historique_pvs, supabase)
-elif page == "Synthèse Béton":
-  render_view(synthese_Beton, supabase)
