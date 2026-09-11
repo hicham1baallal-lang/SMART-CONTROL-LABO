@@ -6,7 +6,6 @@ from fpdf import FPDF
 from PIL import Image
 import streamlit as st
 import streamlit.components.v1 as components
-import extra_streamlit_components as stx
 from supabase import Client, create_client
 
 # Importation sécurisée du gestionnaire Hors-Ligne SQLite
@@ -51,27 +50,6 @@ if _qr_rec or _qr_bid:
 
     st.session_state["qr_page_applied"] = False
     st.query_params.clear()
-
-# ==========================================
-# 1ter. "SE SOUVENIR DE MOI" — COOKIE VIA COMPOSANT
-# ==========================================
-REMEMBER_SECRET_KEY = os.environ.get(
-    "REMEMBER_SECRET_KEY", "lpee_ctr_csb_remember_me_2026_a_changer"
-)
-REMEMBER_SESSION_DUREE = datetime.timedelta(hours=4)
-REMEMBER_COOKIE_NAME = "remember_data"
-
-
-def _generer_jeton_souvenir(username, role, can_edit, issued_at_iso):
-    import hashlib
-    import hmac as hmac_lib
-    payload = f"{username}:{role}:{bool(can_edit)}:{issued_at_iso}"
-    return hmac_lib.new(
-        REMEMBER_SECRET_KEY.encode(), payload.encode(), hashlib.sha256
-    ).hexdigest()
-
-
-cookie_manager = stx.CookieManager(key="lpee_ctr_csb_cookie_manager")
 
 pwa_code = """
 <script>
@@ -298,41 +276,7 @@ if "can_edit" not in st.session_state:
   st.session_state["can_edit"] = False
 
 # ==========================================
-# 3bis. AUTO-CONNEXION VIA COOKIE
-# ==========================================
-if st.session_state["user"] is None:
-  _cookie_brut = cookie_manager.get(REMEMBER_COOKIE_NAME)
-  if _cookie_brut:
-    try:
-      payload = json.loads(_cookie_brut)
-      remembered_user = payload.get("u")
-      remembered_role = payload.get("r")
-      remembered_can_edit = bool(payload.get("e"))
-      remembered_issued_at = payload.get("t")
-      remembered_token = payload.get("k")
-
-      jeton_valide = bool(remembered_token) and _generer_jeton_souvenir(
-          remembered_user, remembered_role, remembered_can_edit, remembered_issued_at
-      ) == remembered_token
-      session_expiree = True
-      if jeton_valide:
-        issued_at_dt = datetime.datetime.fromisoformat(remembered_issued_at)
-        session_expiree = (datetime.datetime.utcnow() - issued_at_dt) > REMEMBER_SESSION_DUREE
-
-      if jeton_valide and not session_expiree:
-        st.session_state["user"] = {
-            "username": remembered_user,
-            "role": remembered_role,
-            "can_edit": remembered_can_edit,
-        }
-        st.session_state["role"] = remembered_role
-        st.session_state["can_edit"] = remembered_can_edit
-        st.session_state["users_db"] = load_users()
-    except (ValueError, TypeError, AttributeError, KeyError):
-      pass
-
-# ==========================================
-# 4. ÉCRAN DE CONNEXION
+# 4. ÉCRAN DE CONNEXION (Instantané & Fluide)
 # ==========================================
 if st.session_state["user"] is None:
   col1, col2, col3 = st.columns([1, 2, 1])
@@ -344,38 +288,22 @@ if st.session_state["user"] is None:
     if st.session_state.get("pending_qr_rec") or st.session_state.get("pending_qr_bid"):
       st.info(
           "🎯 **Scan QR Code détecté !** Connectez-vous pour accéder"
-          " directement à la fiche de contrôle scannée (Phase 2)."
+          " directement à la fiche de contrôle scannée."
       )
 
     with st.form("login_form", clear_on_submit=False):
       username_input = st.text_input("Nom d'utilisateur").strip().upper()
       password_input = st.text_input("Mot de passe", type="password")
-      se_souvenir = st.checkbox(
-          "🔒 Remember me (4h)",
-          value=True,
-      )
       submit_btn = st.form_submit_button(
           "Se connecter", use_container_width=True, type="primary"
       )
 
-      def _connecter_et_memoriser(username, role, can_edit):
+      def _connecter_utilisateur(username, role, can_edit):
         st.session_state["user"] = {
             "username": username, "role": role, "can_edit": can_edit,
         }
         st.session_state["role"] = role
         st.session_state["can_edit"] = can_edit
-        if se_souvenir:
-          issued_at_iso = datetime.datetime.utcnow().isoformat()
-          token = _generer_jeton_souvenir(username, role, can_edit, issued_at_iso)
-          payload_json = json.dumps({
-              "u": username, "r": role, "e": bool(can_edit),
-              "t": issued_at_iso, "k": token,
-          })
-          expiration = datetime.datetime.now() + REMEMBER_SESSION_DUREE
-          cookie_manager.set(
-              REMEMBER_COOKIE_NAME, payload_json,
-              key="set_remember_data", expires_at=expiration,
-          )
         st.rerun()
 
       if submit_btn:
@@ -388,13 +316,13 @@ if st.session_state["user"] is None:
         ):
           user_role = fresh_users[username_input]["role"]
           can_edit = fresh_users[username_input]["can_edit"]
-          _connecter_et_memoriser(username_input, user_role, can_edit)
+          _connecter_utilisateur(username_input, user_role, can_edit)
         elif password_input == "admin2026":
           username = username_input if username_input else "ADMIN"
-          _connecter_et_memoriser(username, "admin", True)
+          _connecter_utilisateur(username, "admin", True)
         elif password_input == "ctr2026":
           username = username_input if username_input else "USER"
-          _connecter_et_memoriser(username, "user", False)
+          _connecter_utilisateur(username, "user", False)
         else:
           st.error("❌ Nom d'utilisateur ou mot de passe incorrect.")
   st.stop()
@@ -557,7 +485,6 @@ with st.sidebar:
 
   st.markdown("---")
 
-  # Gestion optimisée et fluide de la page active pour éviter les décalages d'affichage
   st.session_state.setdefault("selected_page", available_pages[0])
 
   qr_en_attente = bool(
