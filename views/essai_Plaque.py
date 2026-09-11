@@ -40,7 +40,7 @@ def evaluer_conformite_couche(couche, ev2_val):
         if ev2_val < 80.0:
             conforme = False
             motif.append(f"EV2 = {ev2_val} MPa < 80 MPa requis")
-    elif couche == "Remblais contigus aux Ouvrages d\'Art (PRO)":
+    elif couche == "Remblais contigus aux Ouvrages d'Art (PRO)":
         if ev2_val < 80.0:
             conforme = False
             motif.append(f"EV2 = {ev2_val} MPa < 80 MPa requis")
@@ -52,7 +52,7 @@ def evaluer_conformite_couche(couche, ev2_val):
         if ev2_val < 30.0:
             conforme = False
             motif.append(f"EV2 = {ev2_val} MPa < 30 MPa requis")
-    elif couche == "Remblais de fouilles d\'ouvrages d\'art":
+    elif couche == "Remblais de fouilles d'ouvrages d'art":
         if ev2_val < 80.0:
             conforme = False
             motif.append(f"EV2 = {ev2_val} MPa < 80 MPa requis")
@@ -60,7 +60,7 @@ def evaluer_conformite_couche(couche, ev2_val):
         if ev2_val <= 50.0:
             conforme = False
             motif.append(f"EV2 = {ev2_val} MPa non supérieur à 50 MPa requis")
-    elif couche == "Plateforme support d\'étaiements / cintres":
+    elif couche == "Plateforme support d'étaiements / cintres":
         if ev2_val <= 80.0:
             conforme = False
             motif.append(f"EV2 = {ev2_val} MPa non supérieur à 80 MPa requis")
@@ -119,8 +119,8 @@ def generer_pdf_pv(essai):
     )
     
     header_text = (
-        "<b>LABORATOIRE PUBLIC D\'ESSAIS ET D\'ÉTUDES (LPEE)</b><br/>"
-        "<font size=8.5 color=\'#595959\'>CENTRE TECHNIQUE REGIONALE DE CASABLANCA -SETTAT BENIMELLAL</font>"
+        "<b>LABORATOIRE PUBLIC D'ESSAIS ET D'ÉTUDES (LPEE)</b><br/>"
+        "<font size=8.5 color='#595959'>CENTRE TECHNIQUE REGIONALE DE CASABLANCA -SETTAT BENIMELLAL</font>"
     )
     
     if os.path.exists(logo_path):
@@ -228,7 +228,7 @@ def generer_pdf_pv(essai):
     sig_style = ParagraphStyle('SigStyle', parent=normal_style, alignment=1)
     data_sig = [
         [
-            Paragraph("<b>Responsable d\'essai</b><br/><br/>O. IKKEN", sig_style), 
+            Paragraph("<b>Responsable d'essai</b><br/><br/>O. IKKEN", sig_style), 
             Paragraph("<b>Chef du laboratoire</b><br/><br/>H. BAALLAL", sig_style)
         ]
     ]
@@ -242,7 +242,7 @@ def generer_pdf_pv(essai):
     elements.append(t_sig)
 
     elements.append(Spacer(1, 15))
-    elements.append(Paragraph("PROCÈS-VERBAL D\'ESSAI À LA PLAQUE (NF P 94-117-1)", title_style))
+    elements.append(Paragraph("PROCÈS-VERBAL D'ESSAI À LA PLAQUE (NF P 94-117-1)", title_style))
     elements.append(Paragraph(f"Référence : <b>{essai.get('reference', '-')}</b> | Date : {essai.get('date_essai', '-')}", subtitle_style))
 
     doc.build(elements)
@@ -398,7 +398,7 @@ def generer_excel_synthese(df, mois_str, empl_str, couche_str, nom_projet):
             ("Valeur Minimale", min(ev1_vals), min(ev2_vals), min(k_vals)),
             ("Valeur Maximale", max(ev1_vals), max(ev2_vals), max(k_vals)),
             ("Moyenne Générale", avg_ev1, avg_ev2, avg_k),
-            ("Nombre d\'essais", len(ev1_vals), len(ev2_vals), len(k_vals))
+            ("Nombre d'essais", len(ev1_vals), len(ev2_vals), len(k_vals))
         ]
 
         for label, v1, v2, vk in stats_data:
@@ -408,13 +408,13 @@ def generer_excel_synthese(df, mois_str, empl_str, couche_str, nom_projet):
             for col_idx, val in enumerate([v1, v2, vk], 2):
                 c = ws.cell(row=row_idx, column=col_idx, value=val)
                 c.font = normal_font
-                c.number_format = '#,##0.00' if label != "Nombre d\'essais" else '#,##0'
+                c.number_format = '#,##0.00' if label != "Nombre d'essais" else '#,##0'
                 c.alignment = Alignment(horizontal='right', vertical='center')
                 c.border = thin_border
             row_idx += 1
 
         row_idx += 3
-        ws.cell(row=row_idx, column=1, value="Responsable d\'essai").font = bold_font
+        ws.cell(row=row_idx, column=1, value="Responsable d'essai").font = bold_font
         ws.cell(row=row_idx, column=6, value="Chef du Laboratoire").font = bold_font
 
     col_dimensions = {
@@ -500,25 +500,25 @@ def show(supabase_client):
             default_obs = ""
             default_points = [{"z1": 0.53, "z2": 0.52, "pk_point": "PK 1+200"}]
 
-        st.subheader("📝 " + ("Modifier l\'essai" if editing_item else "Saisie d\'un nouvel essai"))
+        st.subheader("📝 " + ("Modifier l'essai" if editing_item else "Saisie d'un nouvel essai"))
 
         col0, col1, col2 = st.columns(3)
 
         with col0:
-            reference = st.text_input("Référence de l\'essai", value=default_ref, key="plaque_reference")
+            reference = st.text_input("Référence de l'essai", value=default_ref, key="plaque_reference")
         with col1:
-            date_essai = st.date_input("Date de l\'essai", value=default_date, key="plaque_date")
+            date_essai = st.date_input("Date de l'essai", value=default_date, key="plaque_date")
             client = st.text_input("Client / Organisme", value=default_client, key="plaque_client")
             projet = st.text_input("Chantier / Projet", value=default_projet, key="plaque_projet")
         with col2:
             couche_options = [
                 "Sous-couche et Couche de forme ferroviaire (LGV)",
-                "Remblais contigus aux Ouvrages d\'Art (PRO)",
+                "Remblais contigus aux Ouvrages d'Art (PRO)",
                 "Arase des terrassements / PST",
                 "Corps de remblai courant (avant PST)",
-                "Remblais de fouilles d\'ouvrages d\'art",
+                "Remblais de fouilles d'ouvrages d'art",
                 "Couche de forme des rétablissements / accès",
-                "Plateforme support d\'étaiements / cintres",
+                "Plateforme support d'étaiements / cintres",
                 "Autre"
             ]
             couche_idx = couche_options.index(default_couche) if default_couche in couche_options else 0
@@ -533,7 +533,7 @@ def show(supabase_client):
             technicien = st.text_input("Technicien LPEE", value=default_tech, key="plaque_tech")
 
         st.markdown("---")
-        st.subheader("2. Points de Mesure d\'essai à la plaque")
+        st.subheader("2. Points de Mesure d'essai à la plaque")
 
         if "plaque_points_count" not in st.session_state or editing_item:
             st.session_state["plaque_points_count"] = len(default_points)
@@ -603,7 +603,7 @@ def show(supabase_client):
 
         btn_col1, btn_col2 = st.columns([3, 1])
         with btn_col1:
-            button_label = "🔄 Mettre à jour l\'essai" if editing_item else "💾 Enregistrer l\'essai"
+            button_label = "🔄 Mettre à jour l'essai" if editing_item else "💾 Enregistrer l'essai"
             if st.button(button_label, key="btn_enregistrer_plaque", type="primary", use_container_width=True):
                 
                 try:
@@ -612,7 +612,7 @@ def show(supabase_client):
                         query_doublon = query_doublon.neq("id", editing_item["id"])
                     res_doublon = query_doublon.execute()
                     if res_doublon.data and len(res_doublon.data) > 0:
-                        st.error(f"🚫 **BLOCAGE** : La référence d\'essai **'{reference}'** existe déjà dans ce projet !")
+                        st.error(f"🚫 **BLOCAGE** : La référence d'essai **'{reference}'** existe déjà dans ce projet !")
                         st.stop()
                 except Exception:
                     pass
@@ -648,14 +648,13 @@ def show(supabase_client):
                         st.success(f"✅ Essai #{editing_item['id']} mis à jour avec succès !")
                         st.session_state["edit_plaque_item"] = None
                     else:
-                        # Insertion directe sans .select() pour éliminer le timeout 504 de passerelle réseau
                         supabase.table("essai_plaque").insert(safe_payload).execute()
                         st.success("✅ Essai enregistré avec succès !")
                     
                     st.cache_data.clear()
                     st.rerun()
                 except Exception as e:
-                    st.error(f"Erreur lors de l\'enregistrement : {e}")
+                    st.error(f"Erreur lors de l'enregistrement : {e}")
 
         with btn_col2:
             if editing_item and st.button("❌ Annuler", use_container_width=True):
@@ -692,7 +691,7 @@ def show(supabase_client):
             data_plaque = charger_essais_plaque(projet_id_actif)
             if data_plaque and len(data_plaque) > 0:
                 options_essais = {f"ID #{item['id']} - Réf: {item.get('reference', 'Sans réf')} ({item.get('date_essai', '')})": item for item in data_plaque}
-                choix_essai_str = st.selectbox("Sélectionner l\'essai à éditer en PV :", options=list(options_essais.keys()))
+                choix_essai_str = st.selectbox("Sélectionner l'essai à éditer en PV :", options=list(options_essais.keys()))
                 essai_selectionne = options_essais[choix_essai_str]
 
                 st.markdown("---")
@@ -756,7 +755,7 @@ def show(supabase_client):
                 st.markdown("---")
                 col_m, col_btn = st.columns([2, 1])
                 with col_m:
-                    st.metric("Nombre d\'essais correspondants", len(df_filtered))
+                    st.metric("Nombre d'essais correspondants", len(df_filtered))
                 with col_btn:
                     if not df_filtered.empty:
                         nom_projet_actif = projets_config.nom_projet(projet_id_actif)
