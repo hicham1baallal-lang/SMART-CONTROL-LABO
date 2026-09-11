@@ -648,7 +648,7 @@ def show(supabase_client):
                         st.success(f"✅ Essai #{editing_item['id']} mis à jour avec succès !")
                         st.session_state["edit_plaque_item"] = None
                     else:
-                        # Insertion directe sans select pour éliminer le timeout 504 de passerelle réseau
+                        # Insertion directe sans .select() pour éliminer le timeout 504 de passerelle réseau
                         supabase.table("essai_plaque").insert(safe_payload).execute()
                         st.success("✅ Essai enregistré avec succès !")
                     
