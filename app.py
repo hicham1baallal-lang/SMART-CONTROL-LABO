@@ -26,7 +26,7 @@ except ImportError:
 # 1. CONFIGURATION DE LA PAGE & INJECTION PWA
 # ==========================================
 st.set_page_config(
-    page_title="Smart Control Béton — LPEE",
+    page_title="Smart Control — LPEE",
     page_icon="🧪",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -237,7 +237,7 @@ with st.sidebar:
     elif os.path.exists("logo.png"):
         st.image("logo.png", use_container_width=True)
 
-    st.title("Smart Control Béton")
+    st.title("Smart Control")
     st.caption(f"👤 Connecté : **{current_username}**")
     st.markdown("---")
 
