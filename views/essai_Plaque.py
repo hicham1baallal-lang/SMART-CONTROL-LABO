@@ -618,6 +618,7 @@ def show(supabase_client):
     user_role = str(st.session_state.get("role", "")).upper()
     is_admin = st.session_state.get("is_admin", False) or user_role == "ADMIN"
     is_baallal_admin = current_user.strip() == "BAALLAL" and is_admin
+    can_edit = bool(st.session_state.get("can_edit", False)) or is_admin
 
     user_info_projet = st.session_state.get("user") or {}
     projet_id_actif = projets_config.projet_actif(user_info_projet)
