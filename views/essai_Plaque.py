@@ -608,7 +608,10 @@ def show(supabase_client):
     )
 
     if isinstance(user_raw, dict):
-        user_raw = user_raw.get("email") or user_raw.get("name") or "Agent LPEE"
+        # Corrige la détection : la session pose la clé "username" (voir
+        # app.py), pas "email"/"name" — sans quoi is_baallal_admin ne
+        # devenait jamais vrai, même connecté en tant que BAALLAL.
+        user_raw = user_raw.get("username") or user_raw.get("email") or user_raw.get("name") or "Agent LPEE"
 
     current_user = str(user_raw).upper()
 
@@ -899,6 +902,62 @@ def show(supabase_client):
                         "Technicien": row.get("technicien")
                     })
                 st.dataframe(pd.DataFrame(clean_rows), use_container_width=True, hide_index=True)
+
+                # ------------------------------------------------------------
+                # MODIFICATION d'un essai déjà saisi + SUPPRESSION (admin
+                # BAALLAL uniquement)
+                # ------------------------------------------------------------
+                st.markdown("---")
+                st.markdown("##### ✏️ Modifier ou 🗑️ Supprimer un essai existant")
+
+                options_hist = {
+                    f"ID #{item['id']} - Réf: {item.get('reference', 'Sans réf')} ({item.get('date_essai', '')})": item
+                    for item in data_plaque
+                }
+                choix_hist_str = st.selectbox(
+                    "Sélectionner un essai", options=list(options_hist.keys()), key="hist_plaque_select"
+                )
+                essai_hist_selectionne = options_hist[choix_hist_str]
+
+                col_mod, col_sup = st.columns(2)
+                with col_mod:
+                    if can_edit:
+                        if st.button("✏️ Modifier cet essai", use_container_width=True, key="btn_edit_plaque_hist"):
+                            st.session_state["edit_plaque_item"] = essai_hist_selectionne
+                            st.rerun()
+
+                if is_baallal_admin:
+                    with col_sup:
+                        with st.popover("🗑️ Supprimer cet essai", use_container_width=True):
+                            st.warning(
+                                f"⚠️ Suppression définitive de l\'essai **#{essai_hist_selectionne['id']}** "
+                                f"(Réf: {essai_hist_selectionne.get('reference', '-')}). Cette action est irréversible."
+                            )
+                            confirm_del_plaque = st.checkbox(
+                                "Je confirme vouloir supprimer définitivement cet essai",
+                                key=f"confirm_del_plaque_{essai_hist_selectionne['id']}"
+                            )
+                            if st.button(
+                                "🗑️ Confirmer la suppression",
+                                type="primary",
+                                use_container_width=True,
+                                disabled=not confirm_del_plaque,
+                                key=f"btn_confirm_del_plaque_{essai_hist_selectionne['id']}"
+                            ):
+                                try:
+                                    _executer_avec_reprise(lambda: supabase.table("essai_plaque").delete().eq("id", essai_hist_selectionne["id"]).eq("projet_id", projet_id_actif).execute())
+                                    enregistrer_modification(
+                                        supabase, "essai_plaque", essai_hist_selectionne["id"], "SUPPRESSION",
+                                        anciennes_valeurs={k: essai_hist_selectionne.get(k) for k in ("reference", "couche", "ev2")},
+                                        commentaire=f"Supprimé par {current_user}"
+                                    )
+                                    st.success(f"✅ Essai #{essai_hist_selectionne['id']} supprimé avec succès.")
+                                    if st.session_state.get("edit_plaque_item", {}).get("id") == essai_hist_selectionne["id"]:
+                                        st.session_state["edit_plaque_item"] = None
+                                    st.cache_data.clear()
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"❌ Échec de la suppression : {e}")
             else:
                 st.info("Aucun essai enregistré.")
         except Exception as e:
