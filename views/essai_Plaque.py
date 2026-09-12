@@ -1,8 +1,41 @@
 import streamlit as st
 import pandas as pd
+import time
 from datetime import date, datetime
 from audit_log import enregistrer_modification, afficher_historique_modifications
 import projets_config
+
+# Repli hors-ligne (optionnel) : mêmes fonctions que celles chargées par
+# app.py. Importé ici aussi (indépendamment) car app.py ne transmet pas ces
+# fonctions à ce module — sans cet import, aucun filet de sécurité n'existe
+# en cas d'échec réseau prolongé vers Supabase.
+try:
+    from offline_manager import insert_safe
+    OFFLINE_SUPPORT = True
+except ImportError:
+    OFFLINE_SUPPORT = False
+
+def _est_erreur_timeout(exc):
+    """Détecte une erreur réseau transitoire (timeout / passerelle lente)
+    plutôt qu'une vraie erreur de données, pour décider s'il faut réessayer
+    ou basculer en mode local."""
+    msg = str(exc).lower()
+    return any(motif in msg for motif in ["timed out", "timeout", "504", "gateway", "connection reset", "temporarily unavailable"])
+
+def _executer_avec_reprise(fn, tentatives=3, delai=1.5):
+    """Exécute fn() en réessayant automatiquement en cas d'erreur réseau
+    transitoire (timeout), avec un court délai entre les tentatives.
+    Relance la dernière exception si toutes les tentatives échouent."""
+    derniere_erreur = None
+    for i in range(tentatives):
+        try:
+            return fn()
+        except Exception as e:
+            derniere_erreur = e
+            if not _est_erreur_timeout(e) or i == tentatives - 1:
+                raise
+            time.sleep(delai)
+    raise derniere_erreur
 
 # Import pour la génération du PDF
 from reportlab.lib.pagesizes import A4
@@ -653,21 +686,40 @@ def show(supabase_client):
 
                     if editing_item:
                         anciennes_valeurs_plaque = {k: editing_item.get(k) for k in safe_payload}
-                        supabase.table("essai_plaque").update(safe_payload).eq("id", editing_item["id"]).eq("projet_id", projet_id_actif).select("id").execute()
+                        _executer_avec_reprise(lambda: supabase.table("essai_plaque").update(safe_payload).eq("id", editing_item["id"]).eq("projet_id", projet_id_actif).select("id").execute())
                         enregistrer_modification(supabase, "essai_plaque", editing_item["id"], "MODIFICATION", anciennes_valeurs_plaque, safe_payload)
                         st.success(f"✅ Essai #{editing_item['id']} mis à jour avec succès !")
                         st.session_state["edit_plaque_item"] = None
                     else:
-                        res_ins_plaque = supabase.table("essai_plaque").insert(safe_payload).select("id").execute()
+                        res_ins_plaque = _executer_avec_reprise(lambda: supabase.table("essai_plaque").insert(safe_payload).select("id").execute())
                         if res_ins_plaque.data:
                             nouvel_id_plaque = res_ins_plaque.data[0].get("id")
                             enregistrer_modification(supabase, "essai_plaque", nouvel_id_plaque, "CREATION", nouvelles_valeurs=safe_payload)
                         st.success("✅ Essai enregistré avec succès !")
-                    
+
                     st.cache_data.clear()
                     st.rerun()
                 except Exception as e:
-                    st.error(f"Erreur lors de l\'enregistrement : {e}")
+                    if _est_erreur_timeout(e):
+                        st.warning("⚠️ Connexion lente à Supabase (Timeout). Nouvelles tentatives déjà effectuées sans succès — sauvegarde en mode local...")
+                        if OFFLINE_SUPPORT:
+                            try:
+                                insert_safe("essai_plaque", safe_payload)
+                                st.success(
+                                    "💾 Essai sauvegardé localement sur cet appareil — il sera synchronisé "
+                                    "automatiquement avec Supabase dès que la connexion sera rétablie."
+                                )
+                                st.cache_data.clear()
+                                st.rerun()
+                            except Exception as e2:
+                                st.error(f"❌ Échec de la sauvegarde locale également : {e2}")
+                        else:
+                            st.error(
+                                "❌ Le module offline_manager n'est pas disponible : impossible de sauvegarder "
+                                "cet essai pour le moment. Réessayez lorsque la connexion sera meilleure."
+                            )
+                    else:
+                        st.error(f"Erreur lors de l'enregistrement : {e}")
 
         with btn_col2:
             if editing_item and st.button("❌ Annuler", use_container_width=True):
