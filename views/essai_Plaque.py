@@ -22,7 +22,7 @@ def _est_erreur_timeout(exc):
     msg = str(exc).lower()
     return any(motif in msg for motif in ["timed out", "timeout", "504", "gateway", "connection reset", "temporarily unavailable"])
 
-def _executer_avec_reprise(fn, tentatives=3, delai=1.5):
+def _executer_avec_reprise(fn, tentatives=2, delai=1.0):
     """Exécute fn() en réessayant automatiquement en cas d'erreur réseau
     transitoire (timeout), avec un court délai entre les tentatives.
     Relance la dernière exception si toutes les tentatives échouent."""
@@ -669,33 +669,52 @@ def show(supabase_client):
                     "observations": observations
                 }
 
+                # Valeur de repli TOUJOURS définie avant le bloc try, pour que
+                # le mode hors-ligne (except ci-dessous) puisse toujours s'en
+                # servir, même si l'erreur survient avant tout calcul de
+                # safe_payload (ex: timeout dès la 1ère requête réseau).
+                safe_payload = dict(payload)
+                safe_payload["projet_id"] = projet_id_actif
+
                 try:
-                    sample_query = supabase.table("essai_plaque").select("*").limit(1).execute()
-                    if sample_query.data and len(sample_query.data) > 0:
-                        valid_columns = set(sample_query.data[0].keys())
-                        safe_payload = {k: v for k, v in payload.items() if k in valid_columns}
-                    else:
-                        safe_payload = payload
+                    with st.spinner("⏳ Enregistrement en cours..."):
+                        # Colonnes valides de la table : récupérées UNE SEULE FOIS
+                        # par session (mise en cache) au lieu d'une requête réseau
+                        # supplémentaire à chaque enregistrement — c'était une
+                        # source significative de lenteur et de timeouts.
+                        if "_essai_plaque_valid_columns" not in st.session_state:
+                            sample_query = _executer_avec_reprise(
+                                lambda: supabase.table("essai_plaque").select("*").limit(1).execute(),
+                                tentatives=2, delai=1.0
+                            )
+                            if sample_query.data and len(sample_query.data) > 0:
+                                st.session_state["_essai_plaque_valid_columns"] = set(sample_query.data[0].keys())
+                            else:
+                                st.session_state["_essai_plaque_valid_columns"] = None  # colonnes inconnues -> tout envoyer tel quel
 
-                    safe_payload["projet_id"] = projet_id_actif
-                    if "points_mesure" in safe_payload:
-                        safe_payload["points_mesure"] = [
-                            {"z1": float(pt["z1"]), "z2": float(pt["z2"]), "pk_point": str(pt["pk_point"])}
-                            for pt in safe_payload["points_mesure"]
-                        ]
+                        valid_columns = st.session_state["_essai_plaque_valid_columns"]
+                        if valid_columns:
+                            safe_payload = {k: v for k, v in payload.items() if k in valid_columns}
+                            safe_payload["projet_id"] = projet_id_actif
 
-                    if editing_item:
-                        anciennes_valeurs_plaque = {k: editing_item.get(k) for k in safe_payload}
-                        _executer_avec_reprise(lambda: supabase.table("essai_plaque").update(safe_payload).eq("id", editing_item["id"]).eq("projet_id", projet_id_actif).select("id").execute())
-                        enregistrer_modification(supabase, "essai_plaque", editing_item["id"], "MODIFICATION", anciennes_valeurs_plaque, safe_payload)
-                        st.success(f"✅ Essai #{editing_item['id']} mis à jour avec succès !")
-                        st.session_state["edit_plaque_item"] = None
-                    else:
-                        res_ins_plaque = _executer_avec_reprise(lambda: supabase.table("essai_plaque").insert(safe_payload).select("id").execute())
-                        if res_ins_plaque.data:
-                            nouvel_id_plaque = res_ins_plaque.data[0].get("id")
-                            enregistrer_modification(supabase, "essai_plaque", nouvel_id_plaque, "CREATION", nouvelles_valeurs=safe_payload)
-                        st.success("✅ Essai enregistré avec succès !")
+                        if "points_mesure" in safe_payload:
+                            safe_payload["points_mesure"] = [
+                                {"z1": float(pt["z1"]), "z2": float(pt["z2"]), "pk_point": str(pt["pk_point"])}
+                                for pt in safe_payload["points_mesure"]
+                            ]
+
+                        if editing_item:
+                            anciennes_valeurs_plaque = {k: editing_item.get(k) for k in safe_payload}
+                            _executer_avec_reprise(lambda: supabase.table("essai_plaque").update(safe_payload).eq("id", editing_item["id"]).eq("projet_id", projet_id_actif).select("id").execute())
+                            enregistrer_modification(supabase, "essai_plaque", editing_item["id"], "MODIFICATION", anciennes_valeurs_plaque, safe_payload)
+                            st.success(f"✅ Essai #{editing_item['id']} mis à jour avec succès !")
+                            st.session_state["edit_plaque_item"] = None
+                        else:
+                            res_ins_plaque = _executer_avec_reprise(lambda: supabase.table("essai_plaque").insert(safe_payload).select("id").execute())
+                            if res_ins_plaque.data:
+                                nouvel_id_plaque = res_ins_plaque.data[0].get("id")
+                                enregistrer_modification(supabase, "essai_plaque", nouvel_id_plaque, "CREATION", nouvelles_valeurs=safe_payload)
+                            st.success("✅ Essai enregistré avec succès !")
 
                     st.cache_data.clear()
                     st.rerun()
