@@ -360,11 +360,14 @@ def generer_pdf_pv(essai):
     elements.append(t_pts)
     elements.append(Spacer(1, 10))
 
-    elements.append(Paragraph("Exigence", section_style))
+    elements.append(Paragraph("Exigence et Commentaire", section_style))
 
     texte_exigence = construire_texte_exigence(couche_nom, ev2_tous_points, zone_pro=zone_pro_essai)
+    verdict_global = evaluer_conformite_couche(couche_nom, ev2_tous_points, zone_pro=zone_pro_essai)
+    verdict_court = "Résultats Conforme" if verdict_global.startswith("Résultats Conforme") else "Résultats non Conforme"
+    texte_exigence_et_commentaire = f"{texte_exigence} {verdict_court}"
 
-    t_obs = Table([[Paragraph(texte_exigence, normal_style)]], colWidths=[525])
+    t_obs = Table([[Paragraph(texte_exigence_et_commentaire, normal_style)]], colWidths=[525])
     t_obs.setStyle(TableStyle([
         ('BOX', (0,0), (-1,-1), 0.5, colors.HexColor('#d9d9d9')),
         ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#fafafa')),
