@@ -266,6 +266,27 @@ with st.sidebar:
     )
     st.session_state["selected_page"] = selected_page_label
 
+    # Indicateur + synchronisation manuelle du mode hors-ligne (données
+    # sauvegardées localement suite à un timeout Supabase, en attente
+    # d'envoi). N'affiche rien s'il n'y a rien en attente.
+    if OFFLINE_SUPPORT:
+        try:
+            _pending_count = get_pending_count()
+        except Exception:
+            _pending_count = 0
+        if _pending_count > 0:
+            st.markdown("---")
+            st.warning(f"📦 {_pending_count} enregistrement(s) en attente de synchronisation (mode local).")
+            if st.button("🔄 Synchroniser maintenant", use_container_width=True):
+                with st.spinner("Synchronisation en cours..."):
+                    resume = sync_data_to_supabase(supabase)
+                if resume["synced"] > 0:
+                    st.success(f"✅ {resume['synced']} enregistrement(s) synchronisé(s) avec succès.")
+                if resume["failed"] > 0:
+                    st.error(f"⚠️ {resume['failed']} enregistrement(s) toujours en échec (connexion encore instable).")
+                st.cache_data.clear()
+                st.rerun()
+
     st.markdown("---")
     if st.button("🚪 Déconnexion", use_container_width=True):
         st.session_state["user"] = None
