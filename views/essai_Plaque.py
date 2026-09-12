@@ -55,7 +55,7 @@ def charger_essais_plaque(projet_id):
     try:
         response = (
             supabase.table("essai_plaque")
-            .select("id, reference, date_essai, client, projet, emplacement, pk_profil, couche, nature_materiau, ev1, ev2, k_ratio, technicien, observations, points_mesure")
+            .select("id, reference, date_essai, client, projet, emplacement, pk_profil, couche, zone_pro, nature_materiau, ev1, ev2, k_ratio, technicien, observations, points_mesure")
             .eq("projet_id", projet_id)
             .order("id", desc=True)
             .limit(100)
@@ -66,42 +66,74 @@ def charger_essais_plaque(projet_id):
         print(f"Erreur chargement plaque: {e}")
         return []
 
-def evaluer_conformite_couche(couche, ev2_val):
+def evaluer_conformite_couche(couche, ev2_values, zone_pro=None):
+    """Évalue la conformité d'un essai à la plaque selon la couche/l'ouvrage
+    testé, à partir de TOUS les points de mesure EV2 (MPa) de l'essai (et
+    non plus seulement du premier point).
+
+    - couche : libellé de la couche/l'ouvrage (voir couche_options).
+    - ev2_values : liste des valeurs EV2 (MPa) de chaque point mesuré.
+    - zone_pro : uniquement pour "Remblais contigus aux Ouvrages d'Art
+      (PRO)" -> "Partie supérieure (zone Q3)" ou "Plateforme", détermine le
+      seuil applicable (100 MPa vs 80 MPa).
+
+    Retourne toujours l'un de : "Résultats Conforme" ou
+    "Résultats non Conforme (motif détaillé)".
+    """
+    ev2_values = [float(v) for v in (ev2_values or []) if v is not None]
+    if not ev2_values:
+        return "Résultats non Conforme (aucune mesure EV2 disponible)"
+
+    n = len(ev2_values)
+    ev2_min = min(ev2_values)
     conforme = True
-    motif = []
-    if couche == "Sous-couche et Couche de forme ferroviaire (LGV)":
-        if ev2_val < 80.0:
+    motifs = []
+
+    if couche == "Sous-couche et Couche de forme":
+        seuil = 80.0
+        if ev2_min <= seuil:
             conforme = False
-            motif.append(f"EV2 = {ev2_val} MPa < 80 MPa requis")
+            motifs.append(f"EV2 min = {ev2_min:.1f} MPa (requis > {seuil:.0f} MPa)")
+
     elif couche == "Remblais contigus aux Ouvrages d\'Art (PRO)":
-        if ev2_val < 80.0:
+        if zone_pro == "Partie supérieure (zone Q3)":
+            seuil = 100.0
+            zone_txt = "partie supérieure, zone Q3"
+        else:
+            seuil = 80.0
+            zone_txt = "plateforme"
+        if ev2_min <= seuil:
             conforme = False
-            motif.append(f"EV2 = {ev2_val} MPa < 80 MPa requis")
+            motifs.append(f"EV2 min = {ev2_min:.1f} MPa (requis > {seuil:.0f} MPa en {zone_txt})")
+
     elif couche == "Arase des terrassements / PST":
-        if ev2_val < 50.0:
+        pct_60 = 100.0 * sum(1 for v in ev2_values if v > 60.0) / n
+        pct_50 = 100.0 * sum(1 for v in ev2_values if v > 50.0) / n
+        if pct_60 < 95.0:
             conforme = False
-            motif.append(f"EV2 = {ev2_val} MPa < 50 MPa requis")
+            motifs.append(f"{pct_60:.0f}% des mesures > 60 MPa (95% requis)")
+        if pct_50 < 100.0:
+            conforme = False
+            motifs.append(f"{pct_50:.0f}% des mesures > 50 MPa (100% requis)")
+
     elif couche == "Corps de remblai courant (avant PST)":
-        if ev2_val < 30.0:
+        seuil = 30.0
+        if ev2_min <= seuil:
             conforme = False
-            motif.append(f"EV2 = {ev2_val} MPa < 30 MPa requis")
-    elif couche == "Remblais de fouilles d\'ouvrages d\'art":
-        if ev2_val < 80.0:
-            conforme = False
-            motif.append(f"EV2 = {ev2_val} MPa < 80 MPa requis")
-    elif couche == "Couche de forme des rétablissements / accès":
-        if ev2_val <= 50.0:
-            conforme = False
-            motif.append(f"EV2 = {ev2_val} MPa non supérieur à 50 MPa requis")
+            motifs.append(f"EV2 min = {ev2_min:.1f} MPa (requis > {seuil:.0f} MPa)")
+
     elif couche == "Plateforme support d\'étaiements / cintres":
-        if ev2_val <= 80.0:
+        seuil = 80.0
+        if ev2_min <= seuil:
             conforme = False
-            motif.append(f"EV2 = {ev2_val} MPa non supérieur à 80 MPa requis")
+            motifs.append(f"EV2 min = {ev2_min:.1f} MPa (requis > {seuil:.0f} MPa)")
+
+    # "Autre" (ou toute couche non listée ci-dessus) : aucun critère normatif
+    # défini dans l'application -> conforme par défaut, sans motif.
 
     if conforme:
-        return "Résultats conforme"
-    else:
-        return f"Résultats non conforme ({', '.join(motif)})"
+        return "Résultats Conforme"
+    return f"Résultats non Conforme ({' ; '.join(motifs)})"
 
 
 def generer_pdf_pv(essai):
@@ -211,14 +243,16 @@ def generer_pdf_pv(essai):
         points = [{"z1": essai.get('z1', 0.53), "z2": essai.get('z2', 0.52), "pk_point": essai.get('pk_profil', '-')}]
 
     table_pts_data = [["Point / PK", "Z1 1er chrg (mm)", "Z2 2ème chrg (mm)", "EV1 (MPa)", "EV2 (MPa)", "K (EV2/EV1)"]]
-    
+    ev2_tous_points = []
+
     for idx, pt in enumerate(points):
         z1_v = float(pt.get("z1", 0.53))
         z2_v = float(pt.get("z2", 0.52))
         ev1_v = round(112.5 / (z1_v * 2), 2) if z1_v > 0 else 0.0
         ev2_v = round(90.0 / (z2_v * 2), 2) if z2_v > 0 else 0.0
         k_v = round(ev2_v / ev1_v, 2) if ev1_v > 0 else 0.0
-        
+        ev2_tous_points.append(ev2_v)
+
         table_pts_data.append([
             str(pt.get("pk_point", f"P{idx+1}")),
             f"{z1_v:.2f}",
@@ -246,8 +280,8 @@ def generer_pdf_pv(essai):
     elements.append(Paragraph("Commentaire", section_style))
     
     couche_nom = essai.get('couche', '')
-    ev2_principal = float(essai.get('ev2', 0))
-    commentaire_automatique = evaluer_conformite_couche(couche_nom, ev2_principal)
+    zone_pro_essai = essai.get('zone_pro')
+    commentaire_automatique = evaluer_conformite_couche(couche_nom, ev2_tous_points, zone_pro=zone_pro_essai)
     
     t_obs = Table([[Paragraph(commentaire_automatique, normal_style)]], colWidths=[525])
     t_obs.setStyle(TableStyle([
@@ -544,17 +578,26 @@ def show(supabase_client):
             projet = st.text_input("Chantier / Projet", value=default_projet, key="plaque_projet")
         with col2:
             couche_options = [
-                "Sous-couche et Couche de forme ferroviaire (LGV)",
+                "Sous-couche et Couche de forme",
                 "Remblais contigus aux Ouvrages d\'Art (PRO)",
                 "Arase des terrassements / PST",
                 "Corps de remblai courant (avant PST)",
-                "Remblais de fouilles d\'ouvrages d\'art",
-                "Couche de forme des rétablissements / accès",
                 "Plateforme support d\'étaiements / cintres",
                 "Autre"
             ]
             couche_idx = couche_options.index(default_couche) if default_couche in couche_options else 0
             couche = st.selectbox("Couche / Ouvrage testé", couche_options, index=couche_idx, key="plaque_couche")
+
+            zone_pro = None
+            if couche == "Remblais contigus aux Ouvrages d\'Art (PRO)":
+                default_zone_pro = editing_item.get("zone_pro", "Plateforme") if editing_item else "Plateforme"
+                zone_pro_options = ["Partie supérieure (zone Q3)", "Plateforme"]
+                zone_pro_idx = zone_pro_options.index(default_zone_pro) if default_zone_pro in zone_pro_options else 1
+                zone_pro = st.selectbox(
+                    "Zone de mesure (PRO)", zone_pro_options, index=zone_pro_idx, key="plaque_zone_pro",
+                    help="Détermine le seuil EV2 applicable : > 100 MPa en partie supérieure (zone Q3), > 80 MPa au niveau de la plateforme."
+                )
+
             emplacement = st.text_input("Emplacement / Zone", value=default_empl, key="plaque_empl")
             pk_profil = st.text_input("PK / Profil Global", value=default_pk, key="plaque_pk")
 
@@ -657,6 +700,7 @@ def show(supabase_client):
                     "emplacement": emplacement,
                     "pk_profil": pk_profil,
                     "couche": couche,
+                    "zone_pro": zone_pro,
                     "nature_materiau": nature_materiau,
                     "z1": float(active_z1),
                     "z2": float(active_z2),
