@@ -10,7 +10,7 @@ def evaluer_etat_hydrique_gtr(w_mesure, w_opn, classe_gtr="Classe B", sous_class
     """
     Détermine l'état hydrique (th, h, m, s, ts) et la conformité selon les seuils du GTR (Classes A et B).
     """
-    if w_opn <= 0:
+    if w_opn is None or w_opn <= 0:
         return "N/A", "N/A", 0.0
 
     ratio = w_mesure / w_opn
@@ -87,7 +87,7 @@ def generate_pv_teneur_eau_pdf(header_info, points_data):
 
     # N° RAPPORT
     pdf.set_font("Helvetica", "B", 10)
-    pdf.cell(0, 6, f"Rapport d'Essai n° : {header_info.get('num_rapport', 'N/A')}", 0, 1, "R")
+    pdf.cell(0, 6, f"Rapport d'Essai n° : {header_info.get('num_rapport') or 'N/A'}", 0, 1, "R")
     pdf.ln(4)
 
     # --- SECTION I : IDENTIFICATION DU MATÉRIAU ---
@@ -96,16 +96,16 @@ def generate_pv_teneur_eau_pdf(header_info, points_data):
     pdf.cell(190, 8, " I - Identification du matériau testé", 1, 1, "L", fill=True)
     pdf.set_font("Helvetica", "", 9)
 
-    type_p = header_info.get('type_proctor', 'OPN')
+    type_p = header_info.get('type_proctor') or 'OPN'
     
-    pdf.cell(95, 7, f"  Nature du matériau : {header_info.get('nature_materiau', '')}", 1, 0, "L")
+    pdf.cell(95, 7, f"  Nature du matériau : {header_info.get('nature_materiau') or ''}", 1, 0, "L")
     pdf.cell(95, 7, f"  Type de Proctor : {type_p}", 1, 1, "L")
 
-    pdf.cell(95, 7, f"  Lieu de prélèvement : {header_info.get('lieu_prelevement', '')}", 1, 0, "L")
-    pdf.cell(95, 7, f"  Teneur en eau {type_p} (%) : {header_info.get('w_opn', '')} %", 1, 1, "L")
+    pdf.cell(95, 7, f"  Lieu de prélèvement : {header_info.get('lieu_prelevement') or ''}", 1, 0, "L")
+    pdf.cell(95, 7, f"  Teneur en eau {type_p} (%) : {header_info.get('w_opn') or ''} %", 1, 1, "L")
 
-    pdf.cell(95, 7, f"  Prélèvement effectué le : {header_info.get('date_prelevement', '')}", 1, 0, "L")
-    pdf.cell(95, 7, f"  PK / Section : {header_info.get('pk_zone', '')}", 1, 1, "L")
+    pdf.cell(95, 7, f"  Prélèvement effectué le : {header_info.get('date_prelevement') or ''}", 1, 0, "L")
+    pdf.cell(95, 7, f"  PK / Section : {header_info.get('pk_zone') or ''}", 1, 1, "L")
     pdf.ln(8)
 
     # --- SECTION II : RÉSULTATS DES ESSAIS ---
@@ -125,18 +125,18 @@ def generate_pv_teneur_eau_pdf(header_info, points_data):
     row_height = 10 if nb_samples <= 4 else (8 if nb_samples <= 8 else 6)
 
     for p in points_data:
-        w_m = float(p.get('w_mesure', 0.0))
-        w_o = float(p.get('w_opn', 1.0))
-        ratio = p.get('ratio_w', w_m / w_o if w_o > 0 else 0.0)
+        w_m = float(p.get('w_mesure')) if p.get('w_mesure') is not None else 0.0
+        w_o = float(p.get('w_opn')) if p.get('w_opn') is not None else 1.0
+        ratio = p.get('ratio_w') if p.get('ratio_w') is not None else (w_m / w_o if w_o > 0 else 0.0)
 
-        pdf.cell(widths[0], row_height, str(p.get("ref_ech", "")), 1, 0, "C")
-        pdf.cell(widths[1], row_height, str(p.get("date_prel", p.get("created_at", ""))[:10]), 1, 0, "C")
-        pdf.cell(widths[2], row_height, str(p.get("pk", "")), 1, 0, "C")
+        pdf.cell(widths[0], row_height, str(p.get("ref_ech") or ""), 1, 0, "C")
+        pdf.cell(widths[1], row_height, str(p.get("date_prel") or p.get("created_at") or "")[:10], 1, 0, "C")
+        pdf.cell(widths[2], row_height, str(p.get("pk") or ""), 1, 0, "C")
         pdf.cell(widths[3], row_height, f"{w_m:.1f}", 1, 0, "C")
         pdf.cell(widths[4], row_height, f"{w_o:.1f}", 1, 0, "C")
         pdf.cell(widths[5], row_height, f"{ratio:.2f}", 1, 0, "C")
-        pdf.cell(widths[6], row_height, str(p.get("etat_hydrique", "")), 1, 0, "C")
-        pdf.cell(widths[7], row_height, str(p.get("observation", "Conforme")), 1, 1, "C")
+        pdf.cell(widths[6], row_height, str(p.get("etat_hydrique") or ""), 1, 0, "C")
+        pdf.cell(widths[7], row_height, str(p.get("observation") or "Conforme"), 1, 1, "C")
 
     if pdf.get_y() < 220:
         pdf.set_y(220)
@@ -392,9 +392,9 @@ def show(supabase_client, can_edit=False, is_admin=False):
                     if search_query:
                         filtered_pv_list = [
                             pv for pv in pv_list
-                            if search_query in str(pv.get("num_rapport", "")).lower()
-                            or search_query in str(pv.get("lieu_prelevement", "")).lower()
-                            or search_query in str(pv.get("pk_zone", "")).lower()
+                            if search_query in str(pv.get("num_rapport") or "").lower()
+                            or search_query in str(pv.get("lieu_prelevement") or "").lower()
+                            or search_query in str(pv.get("pk_zone") or "").lower()
                         ]
                     else:
                         filtered_pv_list = pv_list
@@ -402,101 +402,102 @@ def show(supabase_client, can_edit=False, is_admin=False):
                     if not filtered_pv_list:
                         st.warning("Aucun PV ne correspond à votre recherche.")
                     else:
-                        pv_options = {pv["num_rapport"]: pv for pv in filtered_pv_list}
+                        pv_options = {pv["num_rapport"]: pv for pv in filtered_pv_list if pv.get("num_rapport")}
 
-                        selected_num_rapport = st.selectbox(
-                            "Sélectionner un PV dans la liste :",
-                            options=list(pv_options.keys())
-                        )
+                        if pv_options:
+                            selected_num_rapport = st.selectbox(
+                                "Sélectionner un PV dans la liste :",
+                                options=list(pv_options.keys())
+                            )
 
-                        if selected_num_rapport:
-                            selected_pv = pv_options[selected_num_rapport]
+                            if selected_num_rapport:
+                                selected_pv = pv_options[selected_num_rapport]
 
-                            samples_res = supabase_client.table("essai_teneur_eau") \
-                                .select("*") \
-                                .eq("num_rapport", selected_num_rapport) \
-                                .order("ref_ech", desc=False) \
-                                .execute()
+                                samples_res = supabase_client.table("essai_teneur_eau") \
+                                    .select("*") \
+                                    .eq("num_rapport", selected_num_rapport) \
+                                    .order("ref_ech", desc=False) \
+                                    .execute()
 
-                            samples_data = samples_res.data if samples_res.data else []
+                                samples_data = samples_res.data if samples_res.data else []
 
-                            with st.expander(f"📄 Détails du PV : {selected_num_rapport}", expanded=True):
-                                c_info1, c_info2 = st.columns(2)
-                                with c_info1:
-                                    st.markdown(f"**Nature du matériau :** {selected_pv.get('nature_materiau', 'N/A')}")
-                                    st.markdown(f"**Lieu de prélèvement :** {selected_pv.get('lieu_prelevement', 'N/A')}")
-                                    st.markdown(f"**PK / Section :** {selected_pv.get('pk_zone', 'N/A')}")
-                                with c_info2:
-                                    st.markdown(f"**Date de prélèvement :** {selected_pv.get('date_prelevement', 'N/A')}")
-                                    st.markdown(f"**Type de Proctor :** {selected_pv.get('type_proctor', 'OPN')}")
-                                    st.markdown(f"**w Proctor (%) :** {selected_pv.get('w_opn', 'N/A')} %")
+                                with st.expander(f"📄 Détails du PV : {selected_num_rapport}", expanded=True):
+                                    c_info1, c_info2 = st.columns(2)
+                                    with c_info1:
+                                        st.markdown(f"**Nature du matériau :** {selected_pv.get('nature_materiau') or 'N/A'}")
+                                        st.markdown(f"**Lieu de prélèvement :** {selected_pv.get('lieu_prelevement') or 'N/A'}")
+                                        st.markdown(f"**PK / Section :** {selected_pv.get('pk_zone') or 'N/A'}")
+                                    with c_info2:
+                                        st.markdown(f"**Date de prélèvement :** {selected_pv.get('date_prelevement') or 'N/A'}")
+                                        st.markdown(f"**Type de Proctor :** {selected_pv.get('type_proctor') or 'OPN'}")
+                                        st.markdown(f"**w Proctor (%) :** {selected_pv.get('w_opn') or 'N/A'} %")
 
-                                st.markdown("#### Liste des échantillons :")
-                                if samples_data:
-                                    df_samples = pd.DataFrame(samples_data)
-                                    display_cols = [c for c in ["ref_ech", "pk", "m_humide", "m_seche", "m_tare", "w_mesure", "w_opn", "etat_hydrique", "observation"] if c in df_samples.columns]
-                                    st.dataframe(df_samples[display_cols], use_container_width=True)
-                                else:
-                                    st.warning("Aucun échantillon rattaché à ce PV.")
-
-                            col_act1, col_act2, col_act3 = st.columns([2, 1.5, 1.5])
-
-                            with col_act1:
-                                pdf_reprint = generate_pv_teneur_eau_pdf(selected_pv, samples_data)
-                                st.download_button(
-                                    label="📥 Télécharger en PDF",
-                                    data=pdf_reprint,
-                                    file_name=f"PV_Teneur_en_eau_{selected_num_rapport.replace('/', '_')}.pdf",
-                                    mime="application/pdf",
-                                    type="primary",
-                                    use_container_width=True
-                                )
-
-                            with col_act2:
-                                # Modification strictement pour l'administrateur BAALLAL
-                                can_modify_baallal = is_baallal or user_is_admin
-                                if st.button("✏️ Modifier ce PV", disabled=not can_modify_baallal, use_container_width=True, help="Modification réservée strictement à l'administrateur BAALLAL"):
-                                    try:
-                                        seq_val = int(selected_num_rapport.split('/')[-1])
-                                    except Exception:
-                                        seq_val = 371
-
-                                    st.session_state["teneur_eau_edit_mode"] = True
-                                    st.session_state["teneur_eau_edit_num_rapport"] = selected_num_rapport
-                                    st.session_state["edit_num_pv_seq"] = seq_val
-                                    st.session_state["edit_lieu"] = selected_pv.get("lieu_prelevement", "")
-                                    st.session_state["edit_pk"] = selected_pv.get("pk_zone", "")
-                                    st.session_state["edit_w_opn"] = selected_pv.get("w_opn", 12.0)
-
+                                    st.markdown("#### Liste des échantillons :")
                                     if samples_data:
-                                        st.session_state["teneur_eau_samples"] = [
-                                            {
-                                                "pk": s.get("pk", selected_pv.get("pk_zone", "")),
-                                                "couche": s.get("couche", 1),
-                                                "m_humide": s.get("m_humide", 200.0),
-                                                "m_seche": s.get("m_seche", 180.0),
-                                                "m_tare": s.get("m_tare", 30.0)
-                                            } for s in samples_data
-                                        ]
-                                    st.success("PV chargé dans l'onglet 'Saisie & Modification'.")
-                                    st.rerun()
+                                        df_samples = pd.DataFrame(samples_data)
+                                        display_cols = [c for c in ["ref_ech", "pk", "m_humide", "m_seche", "m_tare", "w_mesure", "w_opn", "etat_hydrique", "observation"] if c in df_samples.columns]
+                                        st.dataframe(df_samples[display_cols], use_container_width=True)
+                                    else:
+                                        st.warning("Aucun échantillon rattaché à ce PV.")
 
-                            with col_act3:
-                                # Suppression strictement pour l'administrateur BAALLAL
-                                can_delete_baallal = is_baallal
-                                if st.button(
-                                    "🗑️ Supprimer ce PV",
-                                    disabled=not can_delete_baallal,
-                                    help="Strictement réservé à l'administrateur BAALLAL" if not can_delete_baallal else "Supprimer définitivement ce PV",
-                                    use_container_width=True
-                                ):
-                                    try:
-                                        supabase_client.table("essai_teneur_eau").delete().eq("num_rapport", selected_num_rapport).execute()
-                                        supabase_client.table("pv_teneur_eau").delete().eq("num_rapport", selected_num_rapport).execute()
-                                        st.success(f"✅ PV `{selected_num_rapport}` supprimé avec succès.")
+                                col_act1, col_act2, col_act3 = st.columns([2, 1.5, 1.5])
+
+                                with col_act1:
+                                    pdf_reprint = generate_pv_teneur_eau_pdf(selected_pv, samples_data)
+                                    st.download_button(
+                                        label="📥 Télécharger en PDF",
+                                        data=pdf_reprint,
+                                        file_name=f"PV_Teneur_en_eau_{selected_num_rapport.replace('/', '_')}.pdf",
+                                        mime="application/pdf",
+                                        type="primary",
+                                        use_container_width=True
+                                    )
+
+                                with col_act2:
+                                    # Modification strictement pour l'administrateur BAALLAL
+                                    can_modify_baallal = is_baallal or user_is_admin
+                                    if st.button("✏️ Modifier ce PV", disabled=not can_modify_baallal, use_container_width=True, help="Modification réservée strictement à l'administrateur BAALLAL"):
+                                        try:
+                                            seq_val = int(selected_num_rapport.split('/')[-1])
+                                        except Exception:
+                                            seq_val = 371
+
+                                        st.session_state["teneur_eau_edit_mode"] = True
+                                        st.session_state["teneur_eau_edit_num_rapport"] = selected_num_rapport
+                                        st.session_state["edit_num_pv_seq"] = seq_val
+                                        st.session_state["edit_lieu"] = selected_pv.get("lieu_prelevement", "")
+                                        st.session_state["edit_pk"] = selected_pv.get("pk_zone", "")
+                                        st.session_state["edit_w_opn"] = selected_pv.get("w_opn", 12.0)
+
+                                        if samples_data:
+                                            st.session_state["teneur_eau_samples"] = [
+                                                {
+                                                    "pk": s.get("pk") or selected_pv.get("pk_zone", ""),
+                                                    "couche": s.get("couche") or 1,
+                                                    "m_humide": s.get("m_humide") or 200.0,
+                                                    "m_seche": s.get("m_seche") or 180.0,
+                                                    "m_tare": s.get("m_tare") or 30.0
+                                                } for s in samples_data
+                                            ]
+                                        st.success("PV chargé dans l'onglet 'Saisie & Modification'.")
                                         st.rerun()
-                                    except Exception as err:
-                                        st.error(f"Erreur lors de la suppression : {err}")
+
+                                with col_act3:
+                                    # Suppression strictement pour l'administrateur BAALLAL
+                                    can_delete_baallal = is_baallal
+                                    if st.button(
+                                        "🗑️ Supprimer ce PV",
+                                        disabled=not can_delete_baallal,
+                                        help="Strictement réservé à l'administrateur BAALLAL" if not can_delete_baallal else "Supprimer définitivement ce PV",
+                                        use_container_width=True
+                                    ):
+                                        try:
+                                            supabase_client.table("essai_teneur_eau").delete().eq("num_rapport", selected_num_rapport).execute()
+                                            supabase_client.table("pv_teneur_eau").delete().eq("num_rapport", selected_num_rapport).execute()
+                                            st.success(f"✅ PV `{selected_num_rapport}` supprimé avec succès.")
+                                            st.rerun()
+                                        except Exception as err:
+                                            st.error(f"Erreur lors de la suppression : {err}")
 
                 else:
                     st.info("Aucun PV enregistré dans la base de données.")
@@ -534,7 +535,6 @@ def show(supabase_client, can_edit=False, is_admin=False):
                     df_synth = pd.DataFrame(res_synth.data)
                     df_pv = pd.DataFrame(res_pv.data) if res_pv.data else pd.DataFrame()
 
-                    # Fusionner avec les données de pv_teneur_eau pour récupérer l'emplacement et la nature si besoin
                     if not df_pv.empty and "num_rapport" in df_synth.columns and "num_rapport" in df_pv.columns:
                         df_merged = pd.merge(df_synth, df_pv[["num_rapport", "lieu_prelevement", "nature_materiau"]], on="num_rapport", how="left")
                     else:
@@ -544,30 +544,27 @@ def show(supabase_client, can_edit=False, is_admin=False):
                         if "nature_materiau" not in df_merged.columns:
                             df_merged["nature_materiau"] = "N/A"
 
-                    # Extraire la période (Mois) à partir de date_prel ou created_at
                     date_col = "date_prel" if "date_prel" in df_merged.columns else "created_at"
                     if date_col in df_merged.columns:
                         df_merged["mois"] = pd.to_datetime(df_merged[date_col], errors="coerce").dt.to_period("M").astype(str)
                     else:
                         df_merged["mois"] = "N/A"
 
-                    # 3 Rubriques des filtres demandées : Période (Mois), Emplacement, Type de couche
                     st.markdown("#### 🎛️ Filtres de Synthèse")
                     f_col1, f_col2, f_col3 = st.columns(3)
 
-                    mois_options = ["Tous"] + sorted(df_merged["mois"].dropna().unique().tolist())
+                    mois_options = ["Tous"] + sorted([str(m) for m in df_merged["mois"].dropna().unique().tolist() if m != "nan" and m != "NaT"])
                     with f_col1:
                         filtre_mois = st.selectbox("Période (Mois)", mois_options)
 
-                    emplacement_options = ["Tous"] + sorted(df_merged["lieu_prelevement"].dropna().unique().tolist())
+                    emplacement_options = ["Tous"] + sorted([str(e) for e in df_merged["lieu_prelevement"].dropna().unique().tolist() if e != "nan"])
                     with f_col2:
                         filtre_emplacement = st.selectbox("Emplacement", emplacement_options)
 
-                    couche_options = ["Tous"] + sorted([str(c) for c in df_merged["couche"].dropna().unique().tolist()]) if "couche" in df_merged.columns else ["Tous"]
+                    couche_options = ["Tous"] + sorted([str(c) for c in df_merged["couche"].dropna().unique().tolist() if c != "nan"]) if "couche" in df_merged.columns else ["Tous"]
                     with f_col3:
                         filtre_couche = st.selectbox("Type de couche", couche_options)
 
-                    # Application des filtres
                     df_filtered = df_merged.copy()
                     if filtre_mois != "Tous":
                         df_filtered = df_filtered[df_filtered["mois"] == filtre_mois]
@@ -578,7 +575,6 @@ def show(supabase_client, can_edit=False, is_admin=False):
 
                     st.markdown("---")
                     
-                    # Indicateurs clés
                     tot_essais = len(df_filtered)
                     conformes = len(df_filtered[df_filtered["observation"] == "Conforme"]) if "observation" in df_filtered.columns else 0
                     taux_conformite = (conformes / tot_essais * 100) if tot_essais > 0 else 0
