@@ -26,7 +26,7 @@ except ImportError:
 # 1. CONFIGURATION DE LA PAGE & INJECTION PWA
 # ==========================================
 st.set_page_config(
-    page_title="Smart Control — LPEE",
+    page_title="Smart Control Béton — LPEE",
     page_icon="🧪",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -228,6 +228,11 @@ try:
 except ImportError:
     essai_identification_materiaux = None
 
+try:
+    from views import gestion_utilisateurs
+except ImportError:
+    gestion_utilisateurs = None
+
 # ==========================================
 # 4. BARRE LATÉRALE DE NAVIGATION (SIDEBAR)
 # ==========================================
@@ -237,7 +242,7 @@ with st.sidebar:
     elif os.path.exists("logo.png"):
         st.image("logo.png", use_container_width=True)
 
-    st.title("Smart Control")
+    st.title("Smart Control Béton")
     st.caption(f"👤 Connecté : **{current_username}**")
     st.markdown("---")
 
@@ -250,6 +255,9 @@ with st.sidebar:
         "🔬 Identification Matériau": essai_identification_materiaux,
         "📜 Historique & Audit": historique_pvs,
     }
+
+    if str(st.session_state.get("role", "")).lower() == "admin":
+        menu_options = {"👤 Gestion Utilisateurs": gestion_utilisateurs, **menu_options}
 
     st.session_state.setdefault("page_widget_seed", 0)
     st.session_state.setdefault("selected_page", list(menu_options.keys())[0])
