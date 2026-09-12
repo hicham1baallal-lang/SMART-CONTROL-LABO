@@ -119,14 +119,22 @@ def load_users():
     users = DEFAULT_USERS.copy()
     if supabase:
         try:
-            res = supabase.table("app_users").select("*").execute()
+            # NOTE : la table réelle s'appelle "users" (pas "app_users") —
+            # voir diagnostic PGRST205. Le mot de passe peut être stocké
+            # sous "password" ou "password_hash" selon le schéma exact ;
+            # les deux sont pris en charge par prudence.
+            res = supabase.table("users").select("*").execute()
             if res.data:
                 for row in res.data:
-                    users[row["username"]] = {
-                        "password": row["password"],
-                        "role": row["role"],
-                        "can_edit": row.get("can_edit", False),
-                    }
+                    mot_de_passe = row.get("password")
+                    if mot_de_passe is None:
+                        mot_de_passe = row.get("password_hash")
+                    if row.get("username") and mot_de_passe is not None:
+                        users[row["username"]] = {
+                            "password": mot_de_passe,
+                            "role": row.get("role", "laboratoire"),
+                            "can_edit": row.get("can_edit", False),
+                        }
         except Exception:
             pass
     return users
