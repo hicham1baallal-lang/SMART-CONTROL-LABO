@@ -148,6 +148,64 @@ def evaluer_conformite_couche(couche, ev2_values, zone_pro=None):
     return f"Résultats non Conforme ({' ; '.join(motifs)})"
 
 
+def point_est_conforme(couche, ev2_v, zone_pro=None):
+    """Conformité d'UN SEUL point de mesure (colonne "Résultat" du tableau
+    des points). Pour la couche PST (critère basé sur un pourcentage de
+    points, pas un seuil individuel), le seuil plancher absolu de 50 MPa
+    (100% des mesures requises) est utilisé comme critère par point."""
+    if ev2_v is None:
+        return False
+    if couche == "Sous-couche et Couche de forme":
+        return ev2_v > 80.0
+    elif couche == "Remblais contigus aux Ouvrages d\'Art (PRO)":
+        seuil = 100.0 if zone_pro == "Partie supérieure (zone Q3)" else 80.0
+        return ev2_v > seuil
+    elif couche == "Arase des terrassements / PST":
+        return ev2_v > 50.0
+    elif couche == "Corps de remblai courant (avant PST)":
+        return ev2_v > 30.0
+    elif couche == "Plateforme support d\'étaiements / cintres":
+        return ev2_v > 80.0
+    else:
+        return True  # "Autre" : aucun critère normatif défini
+
+
+def construire_texte_exigence(couche, ev2_values, zone_pro=None):
+    """Décrit l'exigence normative de la couche/l'ouvrage testé, avec les
+    valeurs réellement mesurées en regard. Toujours affiché (que l'essai
+    soit conforme ou non), contrairement à l'ancien "Commentaire" qui ne
+    donnait le détail qu'en cas de non-conformité."""
+    ev2_values = [float(v) for v in (ev2_values or []) if v is not None]
+    if not ev2_values:
+        return "Aucune mesure EV2 disponible pour établir l\'exigence."
+
+    n = len(ev2_values)
+    ev2_min = min(ev2_values)
+
+    if couche == "Sous-couche et Couche de forme":
+        return f"EV2 > 80 MPa exigé. EV2 minimal mesuré : {ev2_min:.1f} MPa."
+
+    elif couche == "Remblais contigus aux Ouvrages d\'Art (PRO)":
+        if zone_pro == "Partie supérieure (zone Q3)":
+            return f"EV2 > 100 MPa exigé en partie supérieure (zone Q3). EV2 minimal mesuré : {ev2_min:.1f} MPa."
+        else:
+            return f"EV2 > 80 MPa exigé au niveau de la plateforme. EV2 minimal mesuré : {ev2_min:.1f} MPa."
+
+    elif couche == "Arase des terrassements / PST":
+        pct_60 = 100.0 * sum(1 for v in ev2_values if v > 60.0) / n
+        pct_50 = 100.0 * sum(1 for v in ev2_values if v > 50.0) / n
+        return f"{pct_60:.0f}% des mesures > 60 MPa (95% requis) ; {pct_50:.0f}% des mesures > 50 MPa (100% requis)"
+
+    elif couche == "Corps de remblai courant (avant PST)":
+        return f"EV2 > 30 MPa exigé. EV2 minimal mesuré : {ev2_min:.1f} MPa."
+
+    elif couche == "Plateforme support d\'étaiements / cintres":
+        return f"EV2 > 80 MPa exigé. EV2 minimal mesuré : {ev2_min:.1f} MPa."
+
+    else:
+        return "Aucune exigence normative définie pour cette couche/ouvrage."
+
+
 def generer_pdf_pv(essai):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
@@ -254,8 +312,12 @@ def generer_pdf_pv(essai):
     if not points:
         points = [{"z1": essai.get('z1', 0.53), "z2": essai.get('z2', 0.52), "pk_point": essai.get('pk_profil', '-')}]
 
-    table_pts_data = [["Point / PK", "Z1 1er chrg (mm)", "Z2 2ème chrg (mm)", "EV1 (MPa)", "EV2 (MPa)", "K (EV2/EV1)"]]
+    couche_nom = essai.get('couche', '')
+    zone_pro_essai = essai.get('zone_pro')
+
+    table_pts_data = [["Point / PK", "Z1 1er chrg (mm)", "Z2 2ème chrg (mm)", "EV1 (MPa)", "EV2 (MPa)", "K (EV2/EV1)", "Résultat"]]
     ev2_tous_points = []
+    lignes_conformes = []  # True/False par ligne, pour la coloration du texte
 
     for idx, pt in enumerate(points):
         z1_v = float(pt.get("z1", 0.53))
@@ -265,17 +327,21 @@ def generer_pdf_pv(essai):
         k_v = round(ev2_v / ev1_v, 2) if ev1_v > 0 else 0.0
         ev2_tous_points.append(ev2_v)
 
+        point_conforme = point_est_conforme(couche_nom, ev2_v, zone_pro=zone_pro_essai)
+        lignes_conformes.append(point_conforme)
+
         table_pts_data.append([
             str(pt.get("pk_point", f"P{idx+1}")),
             f"{z1_v:.2f}",
             f"{z2_v:.2f}",
             f"{ev1_v:.2f}",
             f"{ev2_v:.2f}",
-            f"{k_v:.2f}"
+            f"{k_v:.2f}",
+            "Résultat conforme" if point_conforme else "Résultat non conforme"
         ])
 
-    t_pts = Table(table_pts_data, colWidths=[105, 90, 90, 80, 80, 80])
-    t_pts.setStyle(TableStyle([
+    t_pts = Table(table_pts_data, colWidths=[75, 75, 75, 65, 65, 60, 110])
+    t_pts_style = [
         ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#1f4e78')),
         ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
         ('ALIGN', (0,0), (-1,-1), 'CENTER'),
@@ -285,17 +351,20 @@ def generer_pdf_pv(essai):
         ('BOTTOMPADDING', (0,0), (-1,-1), 6),
         ('TOPPADDING', (0,0), (-1,-1), 6),
         ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#bfbfbf')),
-    ]))
+    ]
+    for row_idx, est_conforme in enumerate(lignes_conformes, start=1):
+        couleur = colors.HexColor('#1e7e34') if est_conforme else colors.HexColor('#c0392b')
+        t_pts_style.append(('TEXTCOLOR', (6, row_idx), (6, row_idx), couleur))
+        t_pts_style.append(('FONTNAME', (6, row_idx), (6, row_idx), 'Helvetica-Bold'))
+    t_pts.setStyle(TableStyle(t_pts_style))
     elements.append(t_pts)
     elements.append(Spacer(1, 10))
 
-    elements.append(Paragraph("Commentaire", section_style))
-    
-    couche_nom = essai.get('couche', '')
-    zone_pro_essai = essai.get('zone_pro')
-    commentaire_automatique = evaluer_conformite_couche(couche_nom, ev2_tous_points, zone_pro=zone_pro_essai)
-    
-    t_obs = Table([[Paragraph(commentaire_automatique, normal_style)]], colWidths=[525])
+    elements.append(Paragraph("Exigence", section_style))
+
+    texte_exigence = construire_texte_exigence(couche_nom, ev2_tous_points, zone_pro=zone_pro_essai)
+
+    t_obs = Table([[Paragraph(texte_exigence, normal_style)]], colWidths=[525])
     t_obs.setStyle(TableStyle([
         ('BOX', (0,0), (-1,-1), 0.5, colors.HexColor('#d9d9d9')),
         ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#fafafa')),
