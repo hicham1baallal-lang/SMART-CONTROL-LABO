@@ -6,6 +6,8 @@ from datetime import datetime
 import json
 import copy
 import io
+import os
+import base64
 
 import matplotlib
 matplotlib.use('Agg')
@@ -201,6 +203,18 @@ def compute_MF(sieves, passings):
             sum_refus_cum += (100.0 - passant)
     return round(sum_refus_cum / 100.0, 2)
 
+def _find_lpee_logo_path():
+    """Cherche le logo LPEE à quelques emplacements usuels du dépôt.
+    Retourne le chemin trouvé, ou None si absent (aucun logo n'est requis
+    pour que les PV se génèrent correctement)."""
+    _candidates = [
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), 'assets', 'lpee_logo.png'),
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lpee_logo.png'),
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'assets', 'lpee_logo.png'),
+        '/mnt/user-data/uploads/lpee_logo.png',
+    ]
+    return next((p for p in _candidates if os.path.isfile(p)), None)
+
 def generate_pv_html(pv_info, info_p, data_granulats):
     """Génère le document HTML complet et autonome du PV pour impression / téléchargement."""
     gii_data = data_granulats.get('GII', {})
@@ -215,6 +229,33 @@ def generate_pv_html(pv_info, info_p, data_granulats):
     gi_sieves, gi_passants   = calculate_characteristic_data(gi_data) if gi_data else empty_char
     sc_sieves, sc_passants   = calculate_characteristic_data(sc_data) if sc_data else empty_char
     sd_sieves, sd_passants   = calculate_characteristic_data(sd_data) if sd_data else empty_char
+
+    _logo_path = _find_lpee_logo_path()
+    _logo_b64 = None
+    if _logo_path:
+        try:
+            with open(_logo_path, 'rb') as _lf:
+                _logo_b64 = base64.b64encode(_lf.read()).decode('ascii')
+        except Exception:
+            _logo_b64 = None
+
+    if _logo_b64:
+        org_header_html = f"""
+        <div class="lpee-org-header">
+            <img src="data:image/png;base64,{_logo_b64}" alt="Logo LPEE" class="lpee-org-logo">
+            <div class="lpee-org-text">
+                LABORATOIRE PUBLIC D'ESSAIS ET D'ÉTUDES (LPEE)<br>
+                <span>CENTRE TECHNIQUE REGIONAL DE CASABLANCA-SETTAT BENI MELLAL</span>
+            </div>
+        </div>"""
+    else:
+        org_header_html = """
+        <div class="lpee-org-header" style="justify-content:center;">
+            <div class="lpee-org-text" style="text-align:center;">
+                LABORATOIRE PUBLIC D'ESSAIS ET D'ÉTUDES (LPEE)<br>
+                <span>CENTRE TECHNIQUE REGIONAL DE CASABLANCA-SETTAT BENI MELLAL</span>
+            </div>
+        </div>"""
 
     html = f"""<!DOCTYPE html>
 <html lang="fr">
@@ -248,6 +289,29 @@ def generate_pv_html(pv_info, info_p, data_granulats):
         border-radius: 4px;
         letter-spacing: 0.5px;
         margin-bottom: 12px;
+    }}
+    .lpee-org-header {{
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 6px 4px 10px 4px;
+        margin-bottom: 8px;
+    }}
+    .lpee-org-logo {{
+        height: 48px;
+        width: 48px;
+        object-fit: contain;
+        flex-shrink: 0;
+    }}
+    .lpee-org-text {{
+        font-weight: bold;
+        font-size: 14px;
+        color: #1e3a8a;
+        line-height: 1.4;
+    }}
+    .lpee-org-text span {{
+        font-weight: normal;
+        font-size: 11.5px;
     }}
     .lpee-info-grid {{
         width: 100%;
@@ -336,6 +400,7 @@ def generate_pv_html(pv_info, info_p, data_granulats):
 </head>
 <body>
     <div class="lpee-pv-card">
+        {org_header_html}
         <div class="lpee-header-title">
             RAPPORT D'ESSAI N° : {pv_info.get('ref_pv', '')}<br>
             <span style="font-size:13px; font-weight:normal;">OBJET : IDENTIFICATION DES GRANULATS POUR BETON</span>
@@ -611,6 +676,46 @@ def generate_pv_pdf(pv_info, info_p, data_granulats):
     cell_left_bold = ParagraphStyle('PDFCellLeftBold', fontName='Helvetica-Bold', fontSize=7, leading=9, alignment=0)
     
     ref_b = info_p.get('num_rapport', info_p.get('ref_base', '26/260/LGV/CS/1237'))
+
+    # --------------------------------------------------------------------
+    # EN-TÊTE INSTITUTIONNEL (LPEE) — logo + raison sociale du laboratoire,
+    # affiché au-dessus du bandeau bleu "RAPPORT D'ESSAI N°...".
+    # Le logo est recherché dans quelques emplacements usuels du dépôt ;
+    # s'il est absent, l'en-tête reste affiché en texte seul (pas d'erreur).
+    # --------------------------------------------------------------------
+    _logo_path = _find_lpee_logo_path()
+
+    org_style = ParagraphStyle(
+        'PDFOrgHeader', parent=styles['Normal'],
+        fontName='Helvetica-Bold', fontSize=10, leading=13,
+        textColor=colors.HexColor('#1e3a8a'), alignment=1
+    )
+    org_text = (
+        "LABORATOIRE PUBLIC D'ESSAIS ET D'ÉTUDES (LPEE)<br/>"
+        "<font size=8.5>CENTRE TECHNIQUE REGIONAL DE CASABLANCA-SETTAT BENI MELLAL</font>"
+    )
+
+    if _logo_path:
+        org_header_table = Table(
+            [[Image(_logo_path, width=48, height=48), Paragraph(org_text, org_style)]],
+            colWidths=[58, 507]
+        )
+        org_header_table.setStyle(TableStyle([
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('ALIGN', (0,0), (0,0), 'CENTER'),
+            ('TOPPADDING', (0,0), (-1,-1), 4),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 4),
+        ]))
+    else:
+        org_header_table = Table([[Paragraph(org_text, org_style)]], colWidths=[565])
+        org_header_table.setStyle(TableStyle([
+            ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+            ('TOPPADDING', (0,0), (-1,-1), 4),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 4),
+        ]))
+
+    story.append(org_header_table)
+    story.append(Spacer(1, 2))
 
     header_text = f"RAPPORT D'ESSAI N° : {pv_info.get('ref_pv', '')}<br/><font size=7.5>OBJET : IDENTIFICATION DES GRANULATS POUR BETON</font>"
     header_table = Table([[Paragraph(header_text, title_style)]], colWidths=[565])
