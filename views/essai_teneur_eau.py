@@ -160,11 +160,9 @@ def generate_pv_teneur_eau_pdf(header_info, points_data):
 # MODULE VUE STREAMLIT : TENEUR EN EAU
 # ==========================================
 def show(supabase_client, can_edit=False, is_admin=False):
-    # DÉTECTION DU RÔLE DEPUIS LE SESSION_STATE
     user_name = str(st.session_state.get("user_name", st.session_state.get("username", ""))).upper()
     user_role = str(st.session_state.get("role", st.session_state.get("user_role", ""))).upper()
     
-    # Vérification large et robuste des privilèges administrateur
     is_baallal = ("BAALLAL" in user_name) or ("BAALLAL" in user_role)
     user_is_admin = is_admin or ("ADMIN" in user_role) or is_baallal
     user_can_edit = can_edit or user_is_admin or ("LABO" in user_role)
@@ -385,7 +383,6 @@ def show(supabase_client, can_edit=False, is_admin=False):
                 if pv_res.data:
                     pv_list = pv_res.data
 
-                    # Rubrique de recherche de PV
                     st.markdown("#### 🔎 Recherche de PV")
                     search_query = st.text_input("Rechercher par N° de Rapport, Lieu ou PK :", "").strip().lower()
 
@@ -454,7 +451,6 @@ def show(supabase_client, can_edit=False, is_admin=False):
                                     )
 
                                 with col_act2:
-                                    # Droits de modification élargis à l'administrateur et rôles autorisés
                                     can_modify_baallal = user_is_admin or ("BAALLAL" in user_name) or ("BAALLAL" in user_role)
                                     if st.button("✏️ Modifier ce PV", disabled=not can_modify_baallal, use_container_width=True, help="Modification réservée aux administrateurs"):
                                         try:
@@ -483,21 +479,33 @@ def show(supabase_client, can_edit=False, is_admin=False):
                                         st.rerun()
 
                                 with col_act3:
-                                    # Droits de suppression élargis à l'administrateur connecté
                                     can_delete_baallal = user_is_admin or ("BAALLAL" in user_name) or ("BAALLAL" in user_role)
-                                    if st.button(
-                                        "🗑️ Supprimer ce PV",
-                                        disabled=not can_delete_baallal,
-                                        help="Réservé aux administrateurs" if not can_delete_baallal else "Supprimer définitivement ce PV",
-                                        use_container_width=True
-                                    ):
-                                        try:
-                                            supabase_client.table("essai_teneur_eau").delete().eq("num_rapport", selected_num_rapport).execute()
-                                            supabase_client.table("pv_teneur_eau").delete().eq("num_rapport", selected_num_rapport).execute()
-                                            st.success(f"✅ PV `{selected_num_rapport}` supprimé avec succès.")
+                                    
+                                    # Gestion d'un état de confirmation par session_state pour ce PV spécifique
+                                    confirm_key = f"confirm_delete_{selected_num_rapport.replace('/', '_')}"
+                                    is_confirming = st.session_state.get(confirm_key, False)
+
+                                    if not is_confirming:
+                                        if st.button("🗑️ Supprimer ce PV", disabled=not can_delete_baallal, use_container_width=True, help="Supprimer définitivement ce PV"):
+                                            st.session_state[confirm_key] = True
                                             st.rerun()
-                                        except Exception as err:
-                                            st.error(f"Erreur lors de la suppression : {err}")
+                                    else:
+                                        st.warning(f"⚠️ Confirmer la suppression de {selected_num_rapport} ?")
+                                        c_yes, c_no = st.columns(2)
+                                        with c_yes:
+                                            if st.button("✅ Oui", key=f"yes_{selected_num_rapport.replace('/', '_')}", use_container_width=True):
+                                                try:
+                                                    supabase_client.table("essai_teneur_eau").delete().eq("num_rapport", selected_num_rapport).execute()
+                                                    supabase_client.table("pv_teneur_eau").delete().eq("num_rapport", selected_num_rapport).execute()
+                                                    st.session_state[confirm_key] = False
+                                                    st.success(f"✅ PV `{selected_num_rapport}` supprimé.")
+                                                    st.rerun()
+                                                except Exception as err:
+                                                    st.error(f"Erreur : {err}")
+                                        with c_no:
+                                            if st.button("❌ Non", key=f"no_{selected_num_rapport.replace('/', '_')}", use_container_width=True):
+                                                st.session_state[confirm_key] = False
+                                                st.rerun()
 
                 else:
                     st.info("Aucun PV enregistré dans la base de données.")
