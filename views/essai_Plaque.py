@@ -360,6 +360,16 @@ def generer_pdf_pv(essai):
     elements.append(t_pts)
     elements.append(Spacer(1, 10))
 
+    # Remarque(s) saisie(s) manuellement par le technicien : n'apparaît dans
+    # le PV que si une remarque a réellement été saisie (le champ n'est plus
+    # pré-rempli automatiquement), sous forme de liste à puces "*".
+    observations_essai = (essai.get('observations') or '').strip()
+    if observations_essai:
+        lignes_remarque = [l.strip() for l in observations_essai.split('\n') if l.strip()]
+        texte_remarques = "<br/>".join(f"* {l}" for l in lignes_remarque)
+        elements.append(Paragraph(texte_remarques, normal_style))
+        elements.append(Spacer(1, 10))
+
     elements.append(Paragraph("Exigence et Commentaire", section_style))
 
     texte_exigence = construire_texte_exigence(couche_nom, ev2_tous_points, zone_pro=zone_pro_essai)
@@ -752,12 +762,10 @@ def show(supabase_client):
         ev2 = points_results[0]["ev2"]
         k_ratio = points_results[0]["k_ratio"]
 
-        default_obs_systematique = "\n".join(commentaires_points)
-        if not default_obs and not editing_item:
-            default_obs = default_obs_systematique
-        elif editing_item and not default_obs:
-            default_obs = default_obs_systematique
-
+        # Le champ Commentaire / Remarques reste VIDE par défaut : il ne doit
+        # contenir que ce que l'utilisateur saisit lui-même (aucun texte
+        # systématique pré-rempli), pour qu'il ne s'affiche dans le PV que si
+        # une remarque a réellement été saisie.
         observations = st.text_area("Commentaire / Remarques", value=default_obs, key="plaque_obs")
 
         btn_col1, btn_col2 = st.columns([3, 1])
