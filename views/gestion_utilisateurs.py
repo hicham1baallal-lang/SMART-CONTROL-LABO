@@ -76,8 +76,6 @@ def _charger_utilisateurs(_supabase_client):
         lignes = res.data or []
         for l in lignes:
             l["projets_autorises"] = _normaliser_projets(l.get("projets_autorises"))
-            # Le mot de passe peut être stocké sous "password" ou
-            # "password_hash" selon le schéma réel de la table.
             if "password" not in l and "password_hash" in l:
                 l["password"] = l["password_hash"]
         return lignes
@@ -93,6 +91,39 @@ def _libelle_projets_autorises(user_row):
     if not projets:
         return "-"
     return ", ".join(projets_config.nom_projet(p) for p in projets)
+
+
+def initialiser_utilisateurs_defaut(supabase_client):
+    """Insère automatiquement les utilisateurs par défaut de la maquette s'ils n'existent pas encore."""
+    if supabase_client is None:
+        return
+    
+    utilisateurs_par_defaut = [
+        {"username": "BAALLAL", "password": "arwa2020", "role": "admin", "can_edit": True, "projets_autorises": []},
+        {"username": "AMINA", "password": "amina2026", "role": "laboratoire", "can_edit": True, "projets_autorises": ["LGV CASA SUD"]},
+        {"username": "HANINE", "password": "hanine2026", "role": "laboratoire", "can_edit": False, "projets_autorises": ["LGV CASA SUD"]},
+        {"username": "IKKEN", "password": "ikken2026", "role": "laboratoire", "can_edit": True, "projets_autorises": ["LGV CASA SUD"]},
+        {"username": "HAMDANI", "password": "hamdani2026", "role": "laboratoire", "can_edit": False, "projets_autorises": ["LGV CASA SUD"]},
+        {"username": "ADAM", "password": "ctr2026", "role": "restricted_betonnage", "can_edit": False, "projets_autorises": ["LGV CASA SUD"]},
+        {"username": "LAHCEN", "password": "ctr2026", "role": "restricted_betonnage", "can_edit": False, "projets_autorises": ["LGV CASA SUD"]},
+        {"username": "ELIDRISSI", "password": "ctr2026", "role": "restricted_betonnage", "can_edit": False, "projets_autorises": ["LGV CASA SUD"]},
+        {"username": "YOUSSEF", "password": "youssef2026", "role": "restricted_betonnage", "can_edit": False, "projets_autorises": ["LGV CASA SUD"]},
+    ]
+
+    try:
+        existants = _charger_utilisateurs(supabase_client)
+        noms_existants = {u["username"].upper() for u in existants}
+
+        for user in utilisateurs_par_defaut:
+            if user["username"] not in noms_existants:
+                _ecrire_utilisateur_adaptatif(
+                    lambda p: supabase_client.table(TABLE_USERS).insert(p).execute(),
+                    user
+                )
+        if not existants:
+            st.cache_data.clear()
+    except Exception as e:
+        print(f"Erreur lors de l'initialisation des utilisateurs : {e}")
 
 
 def show(supabase_client, can_edit=True, **kwargs):
@@ -114,6 +145,9 @@ def show(supabase_client, can_edit=True, **kwargs):
     if supabase_client is None:
         st.error("❌ Aucun client Supabase disponible : la gestion des utilisateurs nécessite une connexion à la base de données.")
         return
+
+    # S'assurer que les utilisateurs initiaux sont présents dans Supabase
+    initialiser_utilisateurs_defaut(supabase_client)
 
     utilisateurs = _charger_utilisateurs(supabase_client)
     projets_options = list(projets_config.PROJETS.keys())
