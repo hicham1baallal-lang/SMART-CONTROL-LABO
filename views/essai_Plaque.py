@@ -22,57 +22,45 @@ def convertir_payload_safe(data: dict) -> dict:
 
 
 def enregistrer_essai_plaque(supabase, payload: dict):
-    """Enregistre les données sur Supabase avec gestion du fallback SQLite si échec."""
+    """Enregistre les données uniquement et directement sur Supabase."""
+    if supabase is None:
+        st.error(
+            "❌ Connexion Supabase indisponible. Impossible d'enregistrer l'essai."
+        )
+        return
+
     clean_payload = convertir_payload_safe(payload)
 
-    with st.spinner("💾 Enregistrement de l'essai à la plaque..."):
-        # 1. Tentative d'insertion Supabase
-        if supabase is not None:
-            try:
-                res = (
-                    supabase.table("essais_plaque")
-                    .insert(clean_payload)
-                    .execute()
-                )
-                if res.data:
-                    st.success(
-                        "✅ Essai à la plaque enregistré avec succès sur Supabase !"
-                    )
-                    st.rerun()
-                    return
-            except Exception as e:
-                err_msg = str(e)
-                if (
-                    "504" in err_msg
-                    or "Gateway Timeout" in err_msg
-                    or "Timeout" in err_msg
-                ):
-                    st.warning(
-                        "⚠️ Connexion lente à Supabase (Timeout 504). Sauvegarde en mode local..."
-                    )
-                else:
-                    st.warning(
-                        f"⚠️ Erreur de connexion Supabase : {err_msg}. Passage au stockage local..."
-                    )
-
-        # 2. Backup sur la base SQLite hors-ligne
+    with st.spinner("💾 Enregistrement direct sur Supabase..."):
         try:
-            from offline_manager import insert_safe
-
-            insert_safe("essais_plaque", clean_payload)
-            st.info(
-                "📦 Essai enregistré localement en mode hors-ligne. Il sera synchronisé ultérieurement."
+            res = (
+                supabase.table("essais_plaque").insert(clean_payload).execute()
             )
-        except ImportError:
-            st.error("❌ Le module offline_manager n'est pas disponible.")
-        except Exception as offline_err:
-            st.error(
-                f"❌ Erreur lors de la sauvegarde locale : {offline_err}"
-            )
+            if res.data:
+                st.success(
+                    "✅ Essai à la plaque enregistré avec succès sur Supabase !"
+                )
+                st.rerun()
+            else:
+                st.error(
+                    "❌ L'enregistrement a échoué : aucune donnée retournée par Supabase."
+                )
+        except Exception as e:
+            err_msg = str(e)
+            if (
+                "504" in err_msg
+                or "Gateway Timeout" in err_msg
+                or "Timeout" in err_msg
+            ):
+                st.error(
+                    "❌ Erreur 504 (Gateway Timeout) : Le serveur Supabase a mis trop de temps à répondre. Vérifiez votre connexion internet ou la configuration de la table Supabase."
+                )
+            else:
+                st.error(f"❌ Erreur d'enregistrement Supabase : {err_msg}")
 
 
 def charger_donnees_plaque(supabase):
-    """Récupère tous les essais de la table essais_plaque."""
+    """Récupère tous les essais directement depuis la table Supabase essais_plaque."""
     if supabase is not None:
         try:
             res = (
@@ -83,8 +71,10 @@ def charger_donnees_plaque(supabase):
             )
             if res.data:
                 return pd.DataFrame(res.data)
-        except Exception:
-            pass
+        except Exception as e:
+            st.warning(
+                f"⚠️ Impossible de charger les données depuis Supabase : {e}"
+            )
     return pd.DataFrame()
 
 
@@ -147,7 +137,10 @@ def show(supabase=None):
             with cp1:
                 st.markdown("##### 📍 Point N°1")
                 ev1_p1 = st.number_input(
-                    "EV1 (MPa) - Point 1", min_value=0.0, value=106.13, step=0.01
+                    "EV1 (MPa) - Point 1",
+                    min_value=0.0,
+                    value=106.13,
+                    step=0.01,
                 )
                 ev2_p1 = st.number_input(
                     "EV2 (MPa) - Point 1", min_value=0.0, value=86.54, step=0.01
@@ -158,7 +151,10 @@ def show(supabase=None):
             with cp2:
                 st.markdown("##### 📍 Point N°2")
                 ev1_p2 = st.number_input(
-                    "EV1 (MPa) - Point 2", min_value=0.0, value=106.13, step=0.01
+                    "EV1 (MPa) - Point 2",
+                    min_value=0.0,
+                    value=106.13,
+                    step=0.01,
                 )
                 ev2_p2 = st.number_input(
                     "EV2 (MPa) - Point 2", min_value=0.0, value=86.54, step=0.01
@@ -173,7 +169,7 @@ def show(supabase=None):
             )
 
             btn_submit = st.form_submit_button(
-                "💾 Enregistrer l'essai",
+                "💾 Enregistrer l'essai sur Supabase",
                 use_container_width=True,
                 type="primary",
             )
@@ -204,14 +200,13 @@ def show(supabase=None):
         st.subheader("📄 Consultation du Procès-Verbal")
         df_essais = charger_donnees_plaque(supabase)
 
-        if not df_essais.empty:
+        if not df_essais.empty and "num_pv" in df_essais.columns:
             list_pvs = df_essais["num_pv"].unique().tolist()
             pv_selectionne = st.selectbox("Sélectionner un PV :", list_pvs)
 
             pv_data = df_essais[df_essais["num_pv"] == pv_selectionne].iloc[0]
 
             st.markdown("---")
-            # Fiche PV structurée
             st.markdown(f"### 🧪 PV N° : **{pv_data.get('num_pv', '-')}**")
 
             col_a, col_b = st.columns(2)
@@ -256,7 +251,7 @@ def show(supabase=None):
 
         else:
             st.info(
-                "Aucun enregistrement disponible pour générer un Procès-Verbal."
+                "Aucun enregistrement disponible sur Supabase pour générer un Procès-Verbal."
             )
 
     # =============================================================
@@ -267,26 +262,35 @@ def show(supabase=None):
         df_synthese = charger_donnees_plaque(supabase)
 
         if not df_synthese.empty:
-            # Indicateurs Clés
             m1, m2, m3, m4 = st.columns(4)
             m1.metric("Total Essais", len(df_synthese))
-            m2.metric(
-                "Moyenne EV1 (MPa)", round(df_synthese["ev1_p1"].mean(), 2)
-            )
-            m3.metric(
-                "Moyenne EV2 (MPa)", round(df_synthese["ev2_p1"].mean(), 2)
-            )
-            m4.metric(
-                "Moyenne Ratio K", round(df_synthese["k_p1"].mean(), 2)
-            )
+            if "ev1_p1" in df_synthese.columns:
+                m2.metric(
+                    "Moyenne EV1 (MPa)",
+                    round(pd.to_numeric(df_synthese["ev1_p1"]).mean(), 2),
+                )
+            if "ev2_p1" in df_synthese.columns:
+                m3.metric(
+                    "Moyenne EV2 (MPa)",
+                    round(pd.to_numeric(df_synthese["ev2_p1"]).mean(), 2),
+                )
+            if "k_p1" in df_synthese.columns:
+                m4.metric(
+                    "Moyenne Ratio K",
+                    round(pd.to_numeric(df_synthese["k_p1"]).mean(), 2),
+                )
 
             st.markdown("---")
             st.markdown("#### 📋 Tableau des Essais Enregistrés")
             st.dataframe(df_synthese, use_container_width=True)
 
-            # Graphique de répartition
             st.markdown("#### 📊 Évolution des valeurs EV2")
-            if "ev2_p1" in df_synthese.columns:
+            if (
+                "ev2_p1" in df_synthese.columns
+                and "ev2_p2" in df_synthese.columns
+            ):
                 st.line_chart(df_synthese[["ev2_p1", "ev2_p2"]])
         else:
-            st.info("Aucune donnée disponible pour afficher la synthèse.")
+            st.info(
+                "Aucune donnée disponible sur Supabase pour afficher la synthèse."
+            )
