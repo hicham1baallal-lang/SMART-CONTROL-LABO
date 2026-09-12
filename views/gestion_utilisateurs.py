@@ -2,7 +2,7 @@
 Gestion des Utilisateurs & Mots de Passe — module d'administration.
 
 Permet de consulter, ajouter, modifier et supprimer des utilisateurs de la
-plateforme, avec sauvegarde permanente sur la table Supabase `app_users`
+plateforme, avec sauvegarde permanente sur la table Supabase `users`
 (username, password, role, can_edit, projets_autorises).
 
 Réservé aux administrateurs (role == "admin").
@@ -10,11 +10,47 @@ Réservé aux administrateurs (role == "admin").
 
 import streamlit as st
 import pandas as pd
+import re
 import projets_config
 
-TABLE_USERS = "app_users"
+TABLE_USERS = "users"
 
 ROLES_CONNUS = ["admin", "laboratoire", "restricted_betonnage"]
+
+
+def _colonne_manquante_depuis_erreur(erreur):
+    """Extrait le nom de colonne d'un message d'erreur PostgREST du type
+    "Could not find the 'xxx' column of 'users' in the schema cache"."""
+    m = re.search(r"Could not find the '([^']+)' column", str(erreur))
+    return m.group(1) if m else None
+
+
+def _ecrire_utilisateur_adaptatif(operation_fn, payload):
+    """Exécute une opération d'écriture (insert/update) sur `payload`, en
+    s'adaptant automatiquement si certaines colonnes n'existent pas dans la
+    table `users` réelle (schéma inconnu/partiel) : renomme "password" en
+    "password_hash" si besoin, ou retire silencieusement les colonnes
+    optionnelles absentes (can_edit, projets_autorises...), et réessaie.
+    Lève l'erreur si elle n'est pas liée à une colonne manquante, ou si le
+    payload devient vide après retraits."""
+    payload = dict(payload)
+    for _ in range(8):
+        try:
+            operation_fn(payload)
+            return payload
+        except Exception as e:
+            col = _colonne_manquante_depuis_erreur(e)
+            if col is None:
+                raise
+            if col == "password" and "password" in payload and "password_hash" not in payload:
+                payload["password_hash"] = payload.pop("password")
+            elif col in payload:
+                del payload[col]
+            else:
+                raise
+            if not payload:
+                raise Exception("Aucune colonne compatible trouvée dans la table 'users'.")
+    raise Exception("Impossible d'adapter automatiquement les colonnes après plusieurs tentatives.")
 
 
 def _normaliser_projets(valeur):
@@ -40,6 +76,10 @@ def _charger_utilisateurs(_supabase_client):
         lignes = res.data or []
         for l in lignes:
             l["projets_autorises"] = _normaliser_projets(l.get("projets_autorises"))
+            # Le mot de passe peut être stocké sous "password" ou
+            # "password_hash" selon le schéma réel de la table.
+            if "password" not in l and "password_hash" in l:
+                l["password"] = l["password_hash"]
         return lignes
     except Exception as e:
         st.error(f"❌ Impossible de charger les utilisateurs : {e}")
@@ -109,13 +149,17 @@ def show(supabase_client, can_edit=True, **kwargs):
                     st.error(f"⛔ L'utilisateur '{nouv_username}' existe déjà. Utilisez plutôt 'Modifier un utilisateur'.")
                 else:
                     try:
-                        supabase_client.table(TABLE_USERS).insert({
+                        payload_ajout = {
                             "username": nouv_username,
                             "password": nouv_password,
                             "role": nouv_role,
                             "can_edit": nouv_can_edit,
                             "projets_autorises": nouv_projets,
-                        }).execute()
+                        }
+                        _ecrire_utilisateur_adaptatif(
+                            lambda p: supabase_client.table(TABLE_USERS).insert(p).execute(),
+                            payload_ajout
+                        )
                         st.success(f"✅ Utilisateur '{nouv_username}' ajouté avec succès.")
                         st.cache_data.clear()
                         st.rerun()
@@ -156,12 +200,16 @@ def show(supabase_client, can_edit=True, **kwargs):
 
                 if submit_mod:
                     try:
-                        supabase_client.table(TABLE_USERS).update({
+                        payload_mod = {
                             "password": mod_password,
                             "role": mod_role,
                             "can_edit": mod_can_edit,
                             "projets_autorises": mod_projets,
-                        }).eq("username", user_mod["username"]).execute()
+                        }
+                        _ecrire_utilisateur_adaptatif(
+                            lambda p: supabase_client.table(TABLE_USERS).update(p).eq("username", user_mod["username"]).execute(),
+                            payload_mod
+                        )
                         st.success(f"✅ Utilisateur '{user_mod['username']}' mis à jour avec succès.")
                         st.cache_data.clear()
                         st.rerun()
