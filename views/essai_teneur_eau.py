@@ -1,4 +1,5 @@
 import datetime
+import os
 import pandas as pd
 import streamlit as st
 from fpdf import FPDF
@@ -53,10 +54,18 @@ def evaluer_etat_hydrique_gtr(w_mesure, w_opn, classe_gtr="Classe B", sous_class
 
 
 # ==========================================
-# CLASSE DE GÉNÉRATION DU PV EN PDF (FORMAT LPEE - AJUSTÉ A4)
+# CLASSE DE GÉNÉRATION DU PV EN PDF AVEC LOGO LPEE
 # ==========================================
 class LPEETeneurEauPDF(FPDF):
     def header(self):
+        # Vérification et insertion du logo LPEE s'il est présent dans le répertoire (ex: 'logo_lpee.png')
+        logo_path = "logo_lpee.png"
+        if os.path.exists(logo_path):
+            try:
+                self.image(logo_path, 10, 8, 25)
+            except Exception:
+                pass
+
         self.set_font("Helvetica", "B", 11)
         self.cell(0, 6, "LABORATOIRE PUBLIC D'ESSAIS ET D'ETUDES - LPEE", 0, 1, "C")
         self.set_font("Helvetica", "B", 9)
@@ -481,7 +490,6 @@ def show(supabase_client, can_edit=False, is_admin=False):
                                 with col_act3:
                                     can_delete_baallal = user_is_admin or ("BAALLAL" in user_name) or ("BAALLAL" in user_role)
                                     
-                                    # Gestion d'un état de confirmation par session_state pour ce PV spécifique
                                     confirm_key = f"confirm_delete_{selected_num_rapport.replace('/', '_')}"
                                     is_confirming = st.session_state.get(confirm_key, False)
 
