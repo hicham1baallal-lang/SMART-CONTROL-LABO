@@ -164,7 +164,7 @@ def show(supabase_client, can_edit=False, is_admin=False):
     user_name = str(st.session_state.get("user_name", st.session_state.get("username", ""))).upper()
     user_role = str(st.session_state.get("role", st.session_state.get("user_role", ""))).upper()
     
-    # Vérification stricte administrateur BAALLAL
+    # Vérification large et robuste des privilèges administrateur
     is_baallal = ("BAALLAL" in user_name) or ("BAALLAL" in user_role)
     user_is_admin = is_admin or ("ADMIN" in user_role) or is_baallal
     user_can_edit = can_edit or user_is_admin or ("LABO" in user_role)
@@ -454,9 +454,9 @@ def show(supabase_client, can_edit=False, is_admin=False):
                                     )
 
                                 with col_act2:
-                                    # Modification strictement pour l'administrateur BAALLAL
-                                    can_modify_baallal = is_baallal or user_is_admin
-                                    if st.button("✏️ Modifier ce PV", disabled=not can_modify_baallal, use_container_width=True, help="Modification réservée strictement à l'administrateur BAALLAL"):
+                                    # Droits de modification élargis à l'administrateur et rôles autorisés
+                                    can_modify_baallal = user_is_admin or ("BAALLAL" in user_name) or ("BAALLAL" in user_role)
+                                    if st.button("✏️ Modifier ce PV", disabled=not can_modify_baallal, use_container_width=True, help="Modification réservée aux administrateurs"):
                                         try:
                                             seq_val = int(selected_num_rapport.split('/')[-1])
                                         except Exception:
@@ -483,12 +483,12 @@ def show(supabase_client, can_edit=False, is_admin=False):
                                         st.rerun()
 
                                 with col_act3:
-                                    # Suppression strictement pour l'administrateur BAALLAL
-                                    can_delete_baallal = is_baallal
+                                    # Droits de suppression élargis à l'administrateur connecté
+                                    can_delete_baallal = user_is_admin or ("BAALLAL" in user_name) or ("BAALLAL" in user_role)
                                     if st.button(
                                         "🗑️ Supprimer ce PV",
                                         disabled=not can_delete_baallal,
-                                        help="Strictement réservé à l'administrateur BAALLAL" if not can_delete_baallal else "Supprimer définitivement ce PV",
+                                        help="Réservé aux administrateurs" if not can_delete_baallal else "Supprimer définitivement ce PV",
                                         use_container_width=True
                                     ):
                                         try:
