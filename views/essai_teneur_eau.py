@@ -1,499 +1,985 @@
-import datetime
-import pandas as pd
 import streamlit as st
-from fpdf import FPDF
+import pandas as pd
+import time
+from datetime import date, datetime
+from audit_log import enregistrer_modification, afficher_historique_modifications
+import projets_config
 
-# ==========================================
-# FONCTION DE CLASSIFICATION SELON LE GTR (CLASSES A & B)
-# ==========================================
-def evaluer_etat_hydrique_gtr(w_mesure, w_opn, classe_gtr="Classe B", sous_classe="B2"):
-    """
-    Détermine l'état hydrique (th, h, m, s, ts) et la conformité selon les seuils du GTR (Classes A et B).
-    """
-    if w_opn <= 0:
-        return "N/A", "N/A", 0.0
+try:
+    from offline_manager import insert_safe
+    OFFLINE_SUPPORT = True
+except ImportError:
+    OFFLINE_SUPPORT = False
 
-    ratio = w_mesure / w_opn
+def _est_erreur_timeout(exc):
+    msg = str(exc).lower()
+    return any(motif in msg for motif in ["timed out", "timeout", "504", "gateway", "connection reset", "temporarily unavailable"])
 
-    if "Classe A" in str(classe_gtr):
-        if sous_classe == "A1":
-            seuil_th, seuil_h, seuil_m, seuil_s = 1.25, 1.10, 0.90, 0.70
-        elif sous_classe == "A2":
-            seuil_th, seuil_h, seuil_m, seuil_s = 1.30, 1.10, 0.90, 0.70
-        elif sous_classe in ["A3", "A4"]:
-            seuil_th, seuil_h, seuil_m, seuil_s = 1.40, 1.20, 0.90, 0.70
+def _executer_avec_reprise(fn, tentatives=2, delai=1.0):
+    derniere_erreur = None
+    for i in range(tentatives):
+        try:
+            return fn()
+        except Exception as e:
+            derniere_erreur = e
+            if not _est_erreur_timeout(e) or i == tentatives - 1:
+                raise
+            time.sleep(delai)
+    raise derniere_erreur
+
+from reportlab.lib.pagesizes import A4
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib import colors
+import io
+import os
+
+import openpyxl
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+
+@st.cache_data(ttl=300)
+def charger_essais_plaque(projet_id):
+    colonnes_avec_zone = "id, reference, date_essai, client, emplacement, pk_profil, couche, zone_pro, nature_materiau, ev1, ev2, k_ratio, technicien, observations, points_mesure, projet"
+    colonnes_sans_zone = "id, reference, date_essai, client, emplacement, pk_profil, couche, nature_materiau, ev1, ev2, k_ratio, technicien, observations, points_mesure, projet"
+
+    for colonnes in (colonnes_avec_zone, colonnes_sans_zone):
+        try:
+            response = (
+                supabase.table("essai_plaque")
+                .select(colonnes)
+                .eq("projet_id", projet_id)
+                .order("id", desc=True)
+                .limit(100)
+                .execute()
+            )
+            return response.data if response.data else []
+        except Exception as e:
+            print(f"Erreur chargement plaque: {e}")
+            continue
+    return []
+
+def evaluer_conformite_couche(couche, ev2_values, zone_pro=None):
+    ev2_values = [float(v) for v in (ev2_values or []) if v is not None]
+    if not ev2_values:
+        return "Résultats non Conforme (aucune mesure EV2 disponible)"
+
+    n = len(ev2_values)
+    ev2_min = min(ev2_values)
+    conforme = True
+    motifs = []
+
+    if couche == "Sous-couche et Couche de forme":
+        seuil = 80.0
+        if ev2_min <= seuil:
+            conforme = False
+            motifs.append(f"EV2 min = {ev2_min:.1f} MPa (requis > {seuil:.0f} MPa)")
+
+    elif couche == "Remblais contigus aux Ouvrages d\'Art (PRO)":
+        if zone_pro == "Partie supérieure (zone Q3)":
+            seuil = 100.0
+            zone_txt = "partie supérieure, zone Q3"
         else:
-            seuil_th, seuil_h, seuil_m, seuil_s = 1.25, 1.10, 0.90, 0.70
-    else:  # Classe B
-        if sous_classe == "B6":
-            seuil_th, seuil_h, seuil_m, seuil_s = 1.30, 1.10, 0.90, 0.70
-        elif sous_classe == "B2":
-            seuil_th, seuil_h, seuil_m, seuil_s = 1.25, 1.10, 0.90, 0.50
-        else:  # B1, B3, B4, B5
-            seuil_th, seuil_h, seuil_m, seuil_s = 1.25, 1.10, 0.90, 0.60
+            seuil = 80.0
+            zone_txt = "plateforme"
+        if ev2_min <= seuil:
+            conforme = False
+            motifs.append(f"EV2 min = {ev2_min:.1f} MPa (requis > {seuil:.0f} MPa en {zone_txt})")
 
-    if ratio >= seuil_th:
-        etat_hydrique = "Très Humide (th)"
-        conforme = False
-    elif ratio >= seuil_h:
-        etat_hydrique = "Humide (h)"
-        conforme = False
-    elif ratio >= seuil_m:
-        etat_hydrique = "Moyen (m)"
-        conforme = True
-    elif ratio >= seuil_s:
-        etat_hydrique = "Sec (s)"
-        conforme = False
+    elif couche == "Arase des terrassements / PST":
+        pct_60 = 100.0 * sum(1 for v in ev2_values if v > 60.0) / n
+        pct_50 = 100.0 * sum(1 for v in ev2_values if v > 50.0) / n
+        if pct_60 < 95.0:
+            conforme = False
+            motifs.append(f"{pct_60:.0f}% des mesures > 60 MPa (95% requis)")
+        if pct_50 < 100.0:
+            conforme = False
+            motifs.append(f"{pct_50:.0f}% des mesures > 50 MPa (100% requis)")
+
+    elif couche == "Corps de remblai courant (avant PST)":
+        seuil = 30.0
+        if ev2_min <= seuil:
+            conforme = False
+            motifs.append(f"EV2 min = {ev2_min:.1f} MPa (requis > {seuil:.0f} MPa)")
+
+    elif couche == "Plateforme support d\'étaiements / cintres":
+        seuil = 80.0
+        if ev2_min <= seuil:
+            conforme = False
+            motifs.append(f"EV2 min = {ev2_min:.1f} MPa (requis > {seuil:.0f} MPa)")
+
+    if conforme:
+        return "Résultats Conforme"
+    return f"Résultats non Conforme ({' ; '.join(motifs)})"
+
+
+def point_est_conforme(couche, ev2_v, zone_pro=None):
+    if ev2_v is None:
+        return False
+    if couche == "Sous-couche et Couche de forme":
+        return ev2_v > 80.0
+    elif couche == "Remblais contigus aux Ouvrages d\'Art (PRO)":
+        seuil = 100.0 if zone_pro == "Partie supérieure (zone Q3)" else 80.0
+        return ev2_v > seuil
+    elif couche == "Arase des terrassements / PST":
+        return ev2_v > 50.0
+    elif couche == "Corps de remblai courant (avant PST)":
+        return ev2_v > 30.0
+    elif couche == "Plateforme support d\'étaiements / cintres":
+        return ev2_v > 80.0
     else:
-        etat_hydrique = "Très Sec (ts)"
-        conforme = False
-
-    observation = "Conforme" if conforme else "Non Conforme"
-    return etat_hydrique, observation, ratio
+        return True
 
 
-# ==========================================
-# CLASSE DE GÉNÉRATION DU PV EN PDF (FORMAT LPEE - AJUSTÉ A4)
-# ==========================================
-class LPEETeneurEauPDF(FPDF):
-    def header(self):
-        self.set_font("Helvetica", "B", 11)
-        self.cell(0, 6, "LABORATOIRE PUBLIC D'ESSAIS ET D'ETUDES - LPEE", 0, 1, "C")
-        self.set_font("Helvetica", "B", 9)
-        self.cell(0, 5, "CENTRE TECHNIQUE REGIONAL DE CASABLANCA-SETTAT-BENI MELLAL (CTR-CSB)", 0, 1, "C")
-        self.set_font("Helvetica", "I", 9)
-        self.cell(0, 5, "Laboratoire de Contrôle Externe - LGV CASA SUD", 0, 1, "C")
-        self.ln(3)
-        self.line(10, 26, 200, 26)
-        self.ln(6)
+def construire_texte_exigence(couche, ev2_values, zone_pro=None):
+    ev2_values = [float(v) for v in (ev2_values or []) if v is not None]
+    if not ev2_values:
+        return "Aucune mesure EV2 disponible pour établir l\'exigence."
 
-    def footer(self):
-        self.set_y(-15)
-        self.set_font("Helvetica", "I", 8)
-        self.cell(0, 10, f"CTR-CSB - Page {self.page_no()}/{{nb}}", 0, 0, "C")
+    n = len(ev2_values)
+    ev2_min = min(ev2_values)
 
+    if couche == "Sous-couche et Couche de forme":
+        return f"EV2 > 80 MPa exigé. EV2 minimal mesuré : {ev2_min:.1f} MPa."
 
-def generate_pv_teneur_eau_pdf(header_info, points_data):
-    pdf = LPEETeneurEauPDF()
-    pdf.alias_nb_pages()
-    pdf.add_page()
+    elif couche == "Remblais contigus aux Ouvrages d\'Art (PRO)":
+        if zone_pro == "Partie supérieure (zone Q3)":
+            return f"EV2 > 100 MPa exigé en partie supérieure (zone Q3). EV2 minimal mesuré : {ev2_min:.1f} MPa."
+        else:
+            return f"EV2 > 80 MPa exigé au niveau de la plateforme. EV2 minimal mesuré : {ev2_min:.1f} MPa."
 
-    # --- TITRE DU RAPPORT ---
-    pdf.set_font("Helvetica", "B", 14)
-    pdf.cell(0, 8, "PROCES VERBAL", 0, 1, "C")
-    pdf.set_font("Helvetica", "B", 10)
-    pdf.cell(0, 6, "Détermination de la teneur en eau pondérale des matériaux par étuvage (NM EN 1097-5)", 0, 1, "C")
-    pdf.ln(5)
+    elif couche == "Arase des terrassements / PST":
+        pct_60 = 100.0 * sum(1 for v in ev2_values if v > 60.0) / n
+        pct_50 = 100.0 * sum(1 for v in ev2_values if v > 50.0) / n
+        return f"{pct_60:.0f}% des mesures > 60 MPa (95% requis) ; {pct_50:.0f}% des mesures > 50 MPa (100% requis)"
 
-    # N° RAPPORT
-    pdf.set_font("Helvetica", "B", 10)
-    pdf.cell(0, 6, f"Rapport d'Essai n° : {header_info.get('num_rapport', 'N/A')}", 0, 1, "R")
-    pdf.ln(4)
+    elif couche == "Corps de remblai courant (avant PST)":
+        return f"EV2 > 30 MPa exigé. EV2 minimal mesuré : {ev2_min:.1f} MPa."
 
-    # --- SECTION I : IDENTIFICATION DU MATÉRIAU ---
-    pdf.set_fill_color(230, 230, 230)
-    pdf.set_font("Helvetica", "B", 10)
-    pdf.cell(190, 8, " I - Identification du matériau testé", 1, 1, "L", fill=True)
-    pdf.set_font("Helvetica", "", 9)
+    elif couche == "Plateforme support d\'étaiements / cintres":
+        return f"EV2 > 80 MPa exigé. EV2 minimal mesuré : {ev2_min:.1f} MPa."
 
-    type_p = header_info.get('type_proctor', 'OPN')
-    
-    # Lignes plus hautes (7mm) pour aérer la section d'identification
-    pdf.cell(95, 7, f"  Nature du matériau : {header_info.get('nature_materiau', '')}", 1, 0, "L")
-    pdf.cell(95, 7, f"  Type de Proctor : {type_p}", 1, 1, "L")
-
-    pdf.cell(95, 7, f"  Lieu de prélèvement : {header_info.get('lieu_prelevement', '')}", 1, 0, "L")
-    pdf.cell(95, 7, f"  Teneur en eau {type_p} (%) : {header_info.get('w_opn', '')} %", 1, 1, "L")
-
-    pdf.cell(95, 7, f"  Prélèvement effectué le : {header_info.get('date_prelevement', '')}", 1, 0, "L")
-    pdf.cell(95, 7, f"  PK / Section : {header_info.get('pk_zone', '')}", 1, 1, "L")
-    pdf.ln(8)
-
-    # --- SECTION II : RÉSULTATS DES ESSAIS ---
-    pdf.set_font("Helvetica", "B", 10)
-    pdf.cell(190, 8, " II - Résultats des essais", 1, 1, "L", fill=True)
-
-    headers = ["Référence", "Date Prél.", "PK / Localisation", "w (%)", f"w {type_p} (%)", "w / wOPN", "État Hydrique (GTR)", "Observation"]
-    widths = [22, 20, 38, 16, 20, 18, 34, 22]
-
-    # En-tête du tableau (Hauteur 8mm)
-    pdf.set_font("Helvetica", "B", 8)
-    for i, h in enumerate(headers):
-        pdf.cell(widths[i], 8, h, 1, 0, "C")
-    pdf.ln()
-
-    # Corps du tableau avec hauteur adaptable pour équilibrer la feuille
-    pdf.set_font("Helvetica", "", 8)
-    
-    # Ajuster la hauteur des lignes selon le nombre d'échantillons (entre 8mm et 12mm)
-    nb_samples = max(len(points_data), 1)
-    row_height = 10 if nb_samples <= 4 else (8 if nb_samples <= 8 else 6)
-
-    for p in points_data:
-        w_m = float(p.get('w_mesure', 0.0))
-        w_o = float(p.get('w_opn', 1.0))
-        ratio = p.get('ratio_w', w_m / w_o if w_o > 0 else 0.0)
-
-        pdf.cell(widths[0], row_height, str(p.get("ref_ech", "")), 1, 0, "C")
-        pdf.cell(widths[1], row_height, str(p.get("date_prel", p.get("created_at", "")[:10])), 1, 0, "C")
-        pdf.cell(widths[2], row_height, str(p.get("pk", "")), 1, 0, "C")
-        pdf.cell(widths[3], row_height, f"{w_m:.1f}", 1, 0, "C")
-        pdf.cell(widths[4], row_height, f"{w_o:.1f}", 1, 0, "C")
-        pdf.cell(widths[5], row_height, f"{ratio:.2f}", 1, 0, "C")
-        pdf.cell(widths[6], row_height, str(p.get("etat_hydrique", "")), 1, 0, "C")
-        pdf.cell(widths[7], row_height, str(p.get("observation", "Conforme")), 1, 1, "C")
-
-    # --- BLOC SIGNATURES (POSITIONNÉ DYNAMIQUEMENT VERS LE BAS) ---
-    # Positionner le bloc de signature à Y=220 mm pour occuper le bas de la page A4 (hauteur max A4 = 297 mm)
-    if pdf.get_y() < 220:
-        pdf.set_y(220)
     else:
-        pdf.ln(10)
-
-    pdf.set_font("Helvetica", "B", 9)
-    pdf.cell(63, 6, "Réception du client", 0, 0, "C")
-    pdf.cell(64, 6, "Le Coordinateur des Essais", 0, 0, "C")
-    pdf.cell(63, 6, "Le Chef de Laboratoire Externe", 0, 1, "C")
-
-    pdf.set_font("Helvetica", "I", 9)
-    pdf.cell(63, 5, "(Nom, Visa, Date)", 0, 0, "C")
-    pdf.cell(64, 5, "B. ELAMRI", 0, 0, "C")
-    pdf.cell(63, 5, "H. BAALLAL", 0, 1, "C")
-
-    return bytes(pdf.output())
+        return "Aucune exigence normative définie pour cette couche/ouvrage."
 
 
-# ==========================================
-# MODULE VUE STREAMLIT : TENEUR EN EAU
-# ==========================================
-def show(supabase_client, can_edit=False, is_admin=False):
-    # DÉTECTION DU RÔLE DEPUIS LE SESSION_STATE
-    user_role = str(st.session_state.get("role", st.session_state.get("user_role", ""))).upper()
-    user_is_admin = is_admin or ("ADMIN" in user_role)
-    user_can_edit = can_edit or user_is_admin or ("LABO" in user_role)
+def generer_pdf_pv(essai):
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
+    elements = []
+    
+    styles = getSampleStyleSheet()
+    
+    title_style = ParagraphStyle(
+        'TitleStyle',
+        parent=styles['Heading1'],
+        fontSize=12,
+        textColor=colors.HexColor('#1f4e78'),
+        alignment=1,
+        spaceAfter=10
+    )
+    
+    subtitle_style = ParagraphStyle(
+        'SubTitleStyle',
+        parent=styles['Normal'],
+        fontSize=9.5,
+        textColor=colors.HexColor('#595959'),
+        alignment=1,
+        spaceAfter=12
+    )
+    
+    section_style = ParagraphStyle(
+        'SectionStyle',
+        parent=styles['Heading2'],
+        fontSize=11,
+        textColor=colors.HexColor('#1f4e78'),
+        spaceBefore=10,
+        spaceAfter=4
+    )
+    
+    normal_style = ParagraphStyle('NormalText', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#262626'))
+    bold_style = ParagraphStyle('BoldText', parent=normal_style, fontName='Helvetica-Bold')
 
-    st.title("💧 Essai de Teneur en Eau (NM EN 1097-5 / GTR)")
-    st.caption("Laboratoire de Contrôle Externe - Projet LGV CASA SUD")
+    logo_path = "logo.png.jpg"
+    
+    org_style = ParagraphStyle(
+        'OrgStyle',
+        parent=bold_style,
+        alignment=0,
+        fontSize=14,
+        textColor=colors.HexColor('#1f4e78')
+    )
+    
+    header_text = (
+        "<b>LABORATOIRE PUBLIC D\'ESSAIS ET D\'ÉTUDES (LPEE)</b><br/>"
+        "<font size=8.5 color=\'#595959\'>CENTRE TECHNIQUE REGIONALE DE CASABLANCA -SETTAT BENIMELLAL</font>"
+    )
+    
+    if os.path.exists(logo_path):
+        try:
+            img = Image(logo_path, width=45, height=45)
+            img.hAlign = 'LEFT'
+            txt_header = Paragraph(header_text, org_style)
+            header_table = Table([[img, txt_header]], colWidths=[55, 470])
+            header_table.setStyle(TableStyle([
+                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                ('LEFTPADDING', (0,0), (-1,-1), 0),
+                ('RIGHTPADDING', (0,0), (-1,-1), 0),
+                ('BOTTOMPADDING', (0,0), (-1,-1), 0),
+                ('TOPPADDING', (0,0), (-1,-1), 0),
+            ]))
+            elements.append(header_table)
+        except Exception:
+            elements.append(Paragraph(header_text, org_style))
+    else:
+        elements.append(Paragraph(header_text, org_style))
 
-    is_editing_mode = st.session_state.get("teneur_eau_edit_mode", False)
-    if is_editing_mode:
-        st.warning(f"✏️ **Mode Modification** activé pour le PV : `{st.session_state.get('teneur_eau_edit_num_rapport')}`")
+    elements.append(Spacer(1, 6))
 
-    tabs = st.tabs(["➕ Saisie & Modification PV", "📋 Historique, Consultation & Administration"])
+    elements.append(Paragraph("PROCÈS-VERBAL D\'ESSAI À LA PLAQUE (NF P 94-117-1)", title_style))
+    elements.append(Paragraph(f"Référence : <b>{essai.get('reference', '-')}</b> | Date : {essai.get('date_essai', '-')}", subtitle_style))
 
-    # ---------------------------------------------------------
-    # TAB 1 : SAISIE & MODIFICATION PV
-    # ---------------------------------------------------------
-    with tabs[0]:
-        if not user_can_edit:
-            st.warning("🔒 Mode lecture seule. Vous n'avez pas les droits de modification.")
+    data_infos = [
+        [Paragraph("Client / Organisme :", bold_style), Paragraph(str(essai.get('client', '-')), normal_style),
+         Paragraph("Chantier / Projet :", bold_style), Paragraph(str(essai.get('projet', '-')), normal_style)],
+        [Paragraph("Emplacement / Zone :", bold_style), Paragraph(str(essai.get('emplacement', '-')), normal_style),
+         Paragraph("PK / Profil :", bold_style), Paragraph(str(essai.get('pk_profil', '-')), normal_style)],
+        [Paragraph("Couche / Ouvrage :", bold_style), Paragraph(str(essai.get('couche', '-')), normal_style),
+         Paragraph("Nature du matériau :", bold_style), Paragraph(str(essai.get('nature_materiau', '-')), normal_style)],
+        [Paragraph("Technicien :", bold_style), Paragraph(str(essai.get('technicien', '-')), normal_style),
+         Paragraph("", normal_style), Paragraph("", normal_style)]
+    ]
+    
+    t_infos = Table(data_infos, colWidths=[115, 147.5, 115, 147.5])
+    t_infos.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#f2f2f2')),
+        ('BOX', (0,0), (-1,-1), 0.5, colors.HexColor('#d9d9d9')),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 8),
+        ('TOPPADDING', (0,0), (-1,-1), 8),
+        ('LEFTPADDING', (0,0), (-1,-1), 6),
+        ('RIGHTPADDING', (0,0), (-1,-1), 6),
+    ]))
+    elements.append(t_infos)
+    elements.append(Spacer(1, 10))
 
-        st.subheader("1. Informations Générales du PV")
-        col_h1, col_h2, col_h3 = st.columns(3)
+    elements.append(Paragraph("Détail des Points de Mesure et Résultats (NF P 94-117-1)", section_style))
+    
+    points = essai.get('points_mesure', [])
+    if not points:
+        points = [{"z1": essai.get('z1', 0.53), "z2": essai.get('z2', 0.52), "pk_point": essai.get('pk_profil', '-')}]
 
-        default_seq = st.session_state.get("edit_num_pv_seq", 371)
-        default_lieu = st.session_state.get("edit_lieu", "Zone T4 Axe V3G et V6G")
-        default_pk = st.session_state.get("edit_pk", "pk 8+540 à pk 8+600")
-        default_w_opn = float(st.session_state.get("edit_w_opn", 12.0))
+    couche_nom = essai.get('couche', '')
+    zone_pro_essai = essai.get('zone_pro')
 
-        with col_h1:
-            st.markdown("**N° Rapport d'essai**")
-            c_prefix, c_num = st.columns([2.5, 1.5])
-            with c_prefix:
-                fixed_prefix = st.text_input("Préfixe fixe", value="25/260/LGV/CS/", disabled=True, key="fixed_prefix")
-            with c_num:
-                num_pv_seq = st.number_input("N° PV", value=default_seq, step=1, key="num_pv_seq", disabled=not user_can_edit or is_editing_mode)
+    table_pts_data = [["Point / PK", "Z1 1er chrg (mm)", "Z2 2ème chrg (mm)", "EV1 (MPa)", "EV2 (MPa)", "K (EV2/EV1)", "Résultat"]]
+    ev2_tous_points = []
+    lignes_conformes = []
 
-            num_rapport = f"{fixed_prefix}{num_pv_seq}"
-            st.info(f"Rapport : **{num_rapport}**")
+    for idx, pt in enumerate(points):
+        z1_v = float(pt.get("z1", 0.53))
+        z2_v = float(pt.get("z2", 0.52))
+        ev1_v = round(112.5 / (z1_v * 2), 2) if z1_v > 0 else 0.0
+        ev2_v = round(90.0 / (z2_v * 2), 2) if z2_v > 0 else 0.0
+        k_v = round(ev2_v / ev1_v, 2) if ev1_v > 0 else 0.0
+        ev2_tous_points.append(ev2_v)
 
-            classe_gtr = st.selectbox(
-                "Classe GTR du matériau",
-                ["Classe A (Sols Fins)", "Classe B (Sols Sableux et Graveleux)"],
-                index=1,
-                disabled=not user_can_edit
-            )
+        point_conforme = point_est_conforme(couche_nom, ev2_v, zone_pro=zone_pro_essai)
+        lignes_conformes.append(point_conforme)
 
-        with col_h2:
-            lieu_prelevement = st.text_input("Lieu de prélèvement / Zone", value=default_lieu, disabled=not user_can_edit)
-            pk_zone = st.text_input("PK / Section", value=default_pk, disabled=not user_can_edit)
+        table_pts_data.append([
+            str(pt.get("pk_point", f"P{idx+1}")),
+            f"{z1_v:.2f}",
+            f"{z2_v:.2f}",
+            f"{ev1_v:.2f}",
+            f"{ev2_v:.2f}",
+            f"{k_v:.2f}",
+            "Résultat conforme" if point_conforme else "Résultat non conforme"
+        ])
 
-            if "Classe A" in classe_gtr:
-                sous_classes_options = ["A1", "A2", "A3", "A4"]
-                default_idx = 1
+    t_pts = Table(table_pts_data, colWidths=[75, 75, 75, 65, 65, 60, 110])
+    t_pts_style = [
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#1f4e78')),
+        ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
+        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0,0), (-1,-1), 8.5),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 6),
+        ('TOPPADDING', (0,0), (-1,-1), 6),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#bfbfbf')),
+    ]
+    for row_idx, est_conforme in enumerate(lignes_conformes, start=1):
+        couleur = colors.HexColor('#1e7e34') if est_conforme else colors.HexColor('#c0392b')
+        t_pts_style.append(('TEXTCOLOR', (6, row_idx), (6, row_idx), couleur))
+        t_pts_style.append(('FONTNAME', (6, row_idx), (6, row_idx), 'Helvetica-Bold'))
+    t_pts.setStyle(TableStyle(t_pts_style))
+    elements.append(t_pts)
+    elements.append(Spacer(1, 10))
+
+    observations_essai = (essai.get('observations') or '').strip()
+    if observations_essai:
+        lignes_remarque = [l.strip() for l in observations_essai.split('\n') if l.strip()]
+        texte_remarques = "<br/>".join(f"* {l}" for l in lignes_remarque)
+        elements.append(Paragraph(texte_remarques, normal_style))
+        elements.append(Spacer(1, 10))
+
+    elements.append(Paragraph("Exigence et Commentaire", section_style))
+
+    texte_exigence = construire_texte_exigence(couche_nom, ev2_tous_points, zone_pro=zone_pro_essai)
+    verdict_global = evaluer_conformite_couche(couche_nom, ev2_tous_points, zone_pro=zone_pro_essai)
+    verdict_court = "Résultats Conforme" if verdict_global.startswith("Résultats Conforme") else "Résultats non Conforme"
+    texte_exigence_et_commentaire = f"{texte_exigence} {verdict_court}"
+
+    t_obs = Table([[Paragraph(texte_exigence_et_commentaire, normal_style)]], colWidths=[525])
+    t_obs.setStyle(TableStyle([
+        ('BOX', (0,0), (-1,-1), 0.5, colors.HexColor('#d9d9d9')),
+        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#fafafa')),
+        ('TOPPADDING', (0,0), (-1,-1), 10),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 10),
+        ('LEFTPADDING', (0,0), (-1,-1), 6),
+        ('RIGHTPADDING', (0,0), (-1,-1), 6),
+    ]))
+    elements.append(t_obs)
+    elements.append(Spacer(1, 15))
+
+    sig_style = ParagraphStyle('SigStyle', parent=normal_style, alignment=1)
+    data_sig = [
+        [
+            Paragraph("<b>Responsable d\'essai</b><br/><br/>O. IKKEN", sig_style), 
+            Paragraph("<b>Chef du laboratoire</b><br/><br/>H. BAALLAL", sig_style)
+        ]
+    ]
+    t_sig = Table(data_sig, colWidths=[262.5, 262.5])
+    t_sig.setStyle(TableStyle([
+        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 10),
+        ('TOPPADDING', (0,0), (-1,-1), 10),
+    ]))
+    elements.append(t_sig)
+
+    doc.build(elements)
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
+def generer_excel_synthese(df, mois_str, empl_str, couche_str, nom_projet):
+    output = io.BytesIO()
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Synthèse Plaque"
+    ws.views.sheetView[0].showGridLines = True
+
+    ws.page_setup.orientation = ws.ORIENTATION_PORTRAIT
+    ws.page_setup.paperSize = ws.PAPERSIZE_A4
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 0
+
+    header_fill = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
+    header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+    title_font = Font(name="Calibri", size=13, bold=True, color="1F4E78")
+    subtitle_font = Font(name="Calibri", size=10, italic=True, color="595959")
+    bold_font = Font(name="Calibri", size=10, bold=True)
+    normal_font = Font(name="Calibri", size=10)
+    
+    thin_border = Border(
+        left=Side(style='thin', color='D9D9D9'),
+        right=Side(style='thin', color='D9D9D9'),
+        top=Side(style='thin', color='D9D9D9'),
+        bottom=Side(style='thin', color='D9D9D9')
+    )
+    double_bottom_border = Border(
+        left=Side(style='thin', color='D9D9D9'),
+        right=Side(style='thin', color='D9D9D9'),
+        top=Side(style='thin', color='D9D9D9'),
+        bottom=Side(style='double', color='1F4E78')
+    )
+
+    ws['A1'] = "LABORATOIRE LPEE — CENTRE TECHNIQUE RÉGIONAL"
+    ws['A1'].font = title_font
+    ws.merge_cells('A1:G1')
+    ws['A1'].alignment = Alignment(horizontal='center')
+
+    ws['A2'] = "Norme : NF P 94-117-1 (Plaque Ø 600 mm)"
+    ws['A2'].font = bold_font
+    ws.merge_cells('A2:G2')
+    ws['A2'].alignment = Alignment(horizontal='center')
+
+    ws['A3'] = f"Projet : {nom_projet} | Filtres -> Mois: {mois_str} | Emplacement: {empl_str} | Couche: {couche_str}"
+    ws['A3'].font = subtitle_font
+    ws.merge_cells('A3:G3')
+    ws['A3'].alignment = Alignment(horizontal='center')
+
+    ws['A4'] = f"SYNTHÈSE DES ESSAIS DE PORTANCE À LA PLAQUE — MENSUEL - {mois_str}"
+    ws['A4'].font = bold_font
+    ws.merge_cells('A4:G4')
+    ws['A4'].alignment = Alignment(horizontal='center')
+
+    headers = ["Date Essai", "Couche", "Emplacement", "PK / Profil", "EV1 (MPa)", "EV2 (MPa)", "K (EV2/EV1)"]
+    for col_num, header_title in enumerate(headers, 1):
+        cell = ws.cell(row=6, column=col_num)
+        cell.value = header_title
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+        cell.border = thin_border
+
+    row_idx = 7
+    ev1_vals, ev2_vals, k_vals = [], [], []
+
+    for _, row in df.iterrows():
+        ws.cell(row=row_idx, column=1, value=str(row.get('date_essai', ''))).alignment = Alignment(horizontal='center', vertical='center')
+        ws.cell(row=row_idx, column=2, value=str(row.get('couche', ''))).alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+        ws.cell(row=row_idx, column=3, value=str(row.get('emplacement', ''))).alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+        ws.cell(row=row_idx, column=4, value=str(row.get('pk_profil', ''))).alignment = Alignment(horizontal='center', vertical='center')
+
+        ev1_v = float(row.get('ev1', 0) or 0)
+        ev2_v = float(row.get('ev2', 0) or 0)
+        k_v = float(row.get('k_ratio', 0) or 0)
+
+        ev1_vals.append(ev1_v)
+        ev2_vals.append(ev2_v)
+        k_vals.append(k_v)
+
+        c_ev1 = ws.cell(row=row_idx, column=5, value=ev1_v)
+        c_ev1.number_format = '#,##0.00'
+        c_ev1.alignment = Alignment(horizontal='right', vertical='center')
+
+        c_ev2 = ws.cell(row=row_idx, column=6, value=ev2_v)
+        c_ev2.number_format = '#,##0.00'
+        c_ev2.alignment = Alignment(horizontal='right', vertical='center')
+
+        c_k = ws.cell(row=row_idx, column=7, value=k_v)
+        c_k.number_format = '#,##0.00'
+        c_k.alignment = Alignment(horizontal='right', vertical='center')
+        c_k.fill = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
+
+        for c in range(1, 8):
+            ws.cell(row=row_idx, column=c).font = normal_font
+            ws.cell(row=row_idx, column=c).border = thin_border
+
+        row_idx += 1
+
+    if len(df) > 0:
+        avg_ev1 = sum(ev1_vals) / len(ev1_vals)
+        avg_ev2 = sum(ev2_vals) / len(ev2_vals)
+        avg_k = sum(k_vals) / len(k_vals)
+
+        ws.merge_cells(start_row=row_idx, start_column=1, end_row=row_idx, end_column=4)
+        m_cell = ws.cell(row=row_idx, column=1, value="MOYENNE DES ESSAIS")
+        m_cell.font = bold_font
+        m_cell.alignment = Alignment(horizontal='right', vertical='center')
+
+        for c in range(1, 5):
+            ws.cell(row=row_idx, column=c).border = double_bottom_border
+
+        c_avg1 = ws.cell(row=row_idx, column=5, value=avg_ev1)
+        c_avg1.font = bold_font
+        c_avg1.number_format = '#,##0.00'
+        c_avg1.alignment = Alignment(horizontal='right', vertical='center')
+        c_avg1.border = double_bottom_border
+
+        c_avg2 = ws.cell(row=row_idx, column=6, value=avg_ev2)
+        c_avg2.font = bold_font
+        c_avg2.number_format = '#,##0.00'
+        c_avg2.alignment = Alignment(horizontal='right', vertical='center')
+        c_avg2.border = double_bottom_border
+
+        c_avgk = ws.cell(row=row_idx, column=7, value=avg_k)
+        c_avgk.font = bold_font
+        c_avgk.number_format = '#,##0.00'
+        c_avgk.alignment = Alignment(horizontal='right', vertical='center')
+        c_avgk.border = double_bottom_border
+
+        row_idx += 2
+
+        ws.cell(row=row_idx, column=1, value="RÉSUMÉ STATISTIQUE QUALITÉ").font = bold_font
+        row_idx += 1
+
+        stat_headers = ["Indicateur", "EV1 (MPa)", "EV2 (MPa)", "Ratio K (EV2/EV1)"]
+        for col_num, sh in enumerate(stat_headers, 1):
+            cell = ws.cell(row=row_idx, column=col_num)
+            cell.value = sh
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = Alignment(horizontal='center', vertical='center')
+            cell.border = thin_border
+        row_idx += 1
+
+        stats_data = [
+            ("Valeur Minimale", min(ev1_vals), min(ev2_vals), min(k_vals)),
+            ("Valeur Maximale", max(ev1_vals), max(ev2_vals), max(k_vals)),
+            ("Moyenne Générale", avg_ev1, avg_ev2, avg_k),
+            ("Nombre d\'essais", len(ev1_vals), len(ev2_vals), len(k_vals))
+        ]
+
+        for label, v1, v2, vk in stats_data:
+            ws.cell(row=row_idx, column=1, value=label).font = bold_font
+            ws.cell(row=row_idx, column=1).border = thin_border
+            
+            for col_idx, val in enumerate([v1, v2, vk], 2):
+                c = ws.cell(row=row_idx, column=col_idx, value=val)
+                c.font = normal_font
+                c.number_format = '#,##0.00' if label != "Nombre d\'essais" else '#,##0'
+                c.alignment = Alignment(horizontal='right', vertical='center')
+                c.border = thin_border
+            row_idx += 1
+
+        row_idx += 3
+        ws.cell(row=row_idx, column=1, value="Responsable d\'essai").font = bold_font
+        ws.cell(row=row_idx, column=6, value="Chef du Laboratoire").font = bold_font
+
+    col_dimensions = {
+        'A': 13,
+        'B': 24,
+        'C': 16,
+        'D': 14,
+        'E': 12,
+        'F': 12,
+        'G': 15
+    }
+    for col_letter, width in col_dimensions.items():
+        ws.column_dimensions[col_letter].width = width
+
+    wb.save(output)
+    output.seek(0)
+    return output.getvalue()
+
+
+def show(supabase_client):
+    global supabase
+    supabase = supabase_client
+
+    st.title("🚜 Essai à la Plaque (NF P 94-117-1)")
+
+    user_raw = (
+        st.session_state.get("username") or 
+        st.session_state.get("user") or 
+        st.session_state.get("user_name") or 
+        "Agent LPEE"
+    )
+
+    if isinstance(user_raw, dict):
+        user_raw = user_raw.get("username") or user_raw.get("email") or user_raw.get("name") or "Agent LPEE"
+
+    current_user = str(user_raw).upper()
+
+    user_role = str(st.session_state.get("role", "")).upper()
+    is_admin = st.session_state.get("is_admin", False) or user_role == "ADMIN"
+    is_baallal_admin = current_user.strip() == "BAALLAL" and is_admin
+    can_edit = bool(st.session_state.get("can_edit", False)) or is_admin
+
+    user_info_projet = st.session_state.get("user") or {}
+    projet_id_actif = projets_config.projet_actif(user_info_projet)
+    if not projet_id_actif:
+        st.error("⚠️ Aucun projet ne vous est autorisé. Contactez un administrateur.")
+        return
+    st.caption(f"📁 Projet actif : **{projets_config.nom_projet(projet_id_actif)}**")
+
+    tab_saisie, tab_pv, tab_synthese = st.tabs(["📝 Saisie & Modification", "📋 PVs / Historique & Consultation", "📊 Synthèse"])
+
+    with tab_saisie:
+        editing_item = st.session_state.get("edit_plaque_item", None)
+
+        if editing_item:
+            st.info(f"✏️ **Mode Modification** - Essai ID #{editing_item['id']}")
+            
+            default_ref = editing_item.get("reference") or editing_item.get("ref_essai") or editing_item.get("ref") or "260/26/PLQ/01"
+            default_date = datetime.strptime(editing_item["date_essai"], "%Y-%m-%d").date() if isinstance(editing_item.get("date_essai"), str) else date.today()
+            default_client = editing_item.get("client", "TGCC")
+            default_empl = editing_item.get("emplacement", "")
+            default_pk = editing_item.get("pk_profil", editing_item.get("pkl", ""))
+            default_couche = editing_item.get("couche", "Sous-couche et Couche de forme ferroviaire (LGV)")
+            default_mat = editing_item.get("nature_materiau", "")
+            default_tech = editing_item.get("technicien", current_user)
+            default_obs = editing_item.get("observations", "")
+            
+            saved_points = editing_item.get("points_mesure")
+            if not saved_points or not isinstance(saved_points, list):
+                default_points = [{"z1": float(editing_item.get("z1", 0.53)), "z2": float(editing_item.get("z2", 0.52)), "pk_point": default_pk}]
             else:
-                sous_classes_options = ["B1", "B2", "B3", "B4", "B5", "B6"]
-                default_idx = 1
+                default_points = saved_points
+        else:
+            default_ref = "260/26/PLQ/01"
+            default_date = date.today()
+            default_client = "TGCC"
+            default_empl = "Voie B"
+            default_pk = "PK 1+200"
+            default_couche = "Sous-couche et Couche de forme ferroviaire (LGV)"
+            default_mat = "GNT 0/31.5 Classée B2"
+            default_tech = current_user
+            default_obs = ""
+            default_points = [{"z1": 0.53, "z2": 0.52, "pk_point": "PK 1+200"}]
 
-            sous_classe_gtr = st.selectbox(
-                "Sous-classe GTR",
-                sous_classes_options,
-                index=default_idx,
-                disabled=not user_can_edit
-            )
+        st.subheader("📝 " + ("Modifier l\'essai" if editing_item else "Saisie d\'un nouvel essai"))
 
-        with col_h3:
-            date_prelevement = st.date_input("Date de prélèvement", value=datetime.date.today(), disabled=not user_can_edit)
-            type_proctor = st.selectbox("Type de Proctor", ["OPN", "OPM"], disabled=not user_can_edit)
-            w_opn = st.number_input(f"Teneur en eau {type_proctor} (%)", value=default_w_opn, step=0.1, disabled=not user_can_edit)
+        col0, col1, col2 = st.columns(3)
 
-        nature_mat_complete = f"{classe_gtr.split()[0]} - Sous-classe {sous_classe_gtr}"
-
-        st.markdown("---")
-        st.subheader("2. Mesures & Prélèvements")
-
-        if "teneur_eau_samples" not in st.session_state:
-            st.session_state["teneur_eau_samples"] = [
-                {"pk": pk_zone, "couche": 1, "m_humide": 238.1, "m_seche": 217.0, "m_tare": 38.0},
-                {"pk": pk_zone, "couche": 1, "m_humide": 239.0, "m_seche": 217.5, "m_tare": 38.5},
+        with col0:
+            reference = st.text_input("Référence de l\'essai", value=default_ref, key="plaque_reference")
+        with col1:
+            date_essai = st.date_input("Date de l\'essai", value=default_date, key="plaque_date")
+            client = st.text_input("Client / Organisme", value=default_client, key="plaque_client")
+        with col2:
+            couche_options = [
+                "Sous-couche et Couche de forme",
+                "Remblais contigus aux Ouvrages d\'Art (PRO)",
+                "Arase des terrassements / PST",
+                "Corps de remblai courant (avant PST)",
+                "Plateforme support d\'étaiements / cintres",
+                "Autre"
             ]
+            couche_idx = couche_options.index(default_couche) if default_couche in couche_options else 0
+            couche = st.selectbox("Couche / Ouvrage testé", couche_options, index=couche_idx, key="plaque_couche")
 
-        col_b1, col_b2, col_b3 = st.columns([1.5, 1.5, 3])
-        with col_b1:
-            if st.button("➕ Ajouter un échantillon", disabled=not user_can_edit):
-                st.session_state["teneur_eau_samples"].append({
-                    "pk": pk_zone, "couche": 1, "m_humide": 200.0, "m_seche": 180.0, "m_tare": 30.0
-                })
-                st.rerun()
-
-        with col_b2:
-            if st.button("➖ Supprimer le dernier", disabled=not user_can_edit or len(st.session_state["teneur_eau_samples"]) <= 1):
-                st.session_state["teneur_eau_samples"].pop()
-                st.rerun()
-
-        samples_calculated = []
-        to_delete_idx = None
-
-        for i, sample in enumerate(st.session_state["teneur_eau_samples"]):
-            computed_ref = f"{num_pv_seq}/{i+1}"
-
-            with st.expander(f"📍 Échantillon N° {i+1} : {computed_ref}", expanded=True):
-                c1, c2, c3, c4, c5, c6 = st.columns([1.5, 2, 2, 2, 2, 1])
-                with c1:
-                    st.text_input("Référence", value=computed_ref, key=f"ref_{i}", disabled=True)
-                with c2:
-                    pk_item = st.text_input("PK / Localisation", value=sample["pk"], key=f"pk_{i}", disabled=not user_can_edit)
-                with c3:
-                    m_h = st.number_input("Masse Humide + Tare (g)", value=float(sample["m_humide"]), step=0.1, key=f"mh_{i}", disabled=not user_can_edit)
-                with c4:
-                    m_s = st.number_input("Masse Sèche + Tare (g)", value=float(sample["m_seche"]), step=0.1, key=f"ms_{i}", disabled=not user_can_edit)
-                with c5:
-                    m_t = st.number_input("Masse Tare (g)", value=float(sample["m_tare"]), step=0.1, key=f"mt_{i}", disabled=not user_can_edit)
-                with c6:
-                    st.markdown("&nbsp;")
-                    if st.button("🗑️", key=f"del_{i}", help="Supprimer cet échantillon", disabled=not user_can_edit or len(st.session_state["teneur_eau_samples"]) <= 1):
-                        to_delete_idx = i
-
-                m_eau = m_h - m_s
-                m_seche_nette = m_s - m_t
-                w_mesure = (m_eau / m_seche_nette * 100) if m_seche_nette > 0 else 0.0
-
-                etat_hydrique, obs, ratio_w = evaluer_etat_hydrique_gtr(
-                    w_mesure, w_opn, classe_gtr=classe_gtr, sous_classe=sous_classe_gtr
+            zone_pro = None
+            if couche == "Remblais contigus aux Ouvrages d\'Art (PRO)":
+                default_zone_pro = editing_item.get("zone_pro", "Plateforme") if editing_item else "Plateforme"
+                zone_pro_options = ["Partie supérieure (zone Q3)", "Plateforme"]
+                zone_pro_idx = zone_pro_options.index(default_zone_pro) if default_zone_pro in zone_pro_options else 1
+                zone_pro = st.selectbox(
+                    "Zone de mesure (PRO)", zone_pro_options, index=zone_pro_idx, key="plaque_zone_pro",
+                    help="Détermine le seuil EV2 applicable : > 100 MPa en partie supérieure (zone Q3), > 80 MPa au niveau de la plateforme."
                 )
 
-                st.caption(f"📊 **w mesurée** = `{w_mesure:.1f} %` | **Ratio w/wOPN** = `{ratio_w:.2f}` | **État Hydrique (GTR)** = `{etat_hydrique}` | **Observation** = `{obs}`")
+            emplacement = st.text_input("Emplacement / Zone", value=default_empl, key="plaque_empl")
+            pk_profil = st.text_input("PK / Profil Global", value=default_pk, key="plaque_pk")
 
-                samples_calculated.append({
-                    "ref_ech": computed_ref,
-                    "date_prel": str(date_prelevement),
-                    "pk": pk_item,
-                    "couche": sample.get("couche", 1),
-                    "m_humide": m_h,
-                    "m_seche": m_s,
-                    "m_tare": m_t,
-                    "w_mesure": round(w_mesure, 1),
-                    "w_opn": w_opn,
-                    "ratio_w": round(ratio_w, 2),
-                    "etat_hydrique": etat_hydrique,
-                    "observation": obs
-                })
-
-        if to_delete_idx is not None:
-            st.session_state["teneur_eau_samples"].pop(to_delete_idx)
-            st.rerun()
+        col_m1, col_m2 = st.columns(2)
+        with col_m1:
+            nature_materiau = st.text_input("Nature du matériau", value=default_mat, key="plaque_mat")
+        with col_m2:
+            technicien = st.text_input("Technicien LPEE", value=default_tech, key="plaque_tech")
 
         st.markdown("---")
+        st.subheader("2. Points de Mesure d\'essai à la plaque")
 
-        header_data = {
-            "num_rapport": num_rapport,
-            "nature_materiau": nature_mat_complete,
-            "lieu_prelevement": lieu_prelevement,
-            "pk_zone": pk_zone,
-            "date_prelevement": str(date_prelevement),
-            "type_proctor": type_proctor,
-            "w_opn": w_opn
-        }
+        if "plaque_points_count" not in st.session_state or editing_item:
+            st.session_state["plaque_points_count"] = len(default_points)
 
-        pdf_bytes = generate_pv_teneur_eau_pdf(header_data, samples_calculated)
+        col_add, col_rem, _ = st.columns([1, 1, 3])
+        with col_add:
+            if st.button("➕ Ajouter un point"):
+                st.session_state["plaque_points_count"] += 1
+        with col_rem:
+            if st.session_state["plaque_points_count"] > 1:
+                if st.button("➖ Supprimer un point"):
+                    st.session_state["plaque_points_count"] -= 1
 
-        col_act1, col_act2 = st.columns(2)
-        with col_act1:
-            st.download_button(
-                label="📄 Télécharger le PV Officiel (PDF)",
-                data=pdf_bytes,
-                file_name=f"PV_Teneur_en_eau_{num_pv_seq}.pdf",
-                mime="application/pdf",
-                use_container_width=True
-            )
+        points_data = []
+        for i in range(st.session_state["plaque_points_count"]):
+            st.markdown(f"**Point de mesure N° {i+1}**")
+            p_col0, p_col1, p_col2 = st.columns([1, 1, 1])
+            
+            default_pk_point = default_points[i].get("pk_point", default_pk) if i < len(default_points) else default_pk
+            default_z1_val = default_points[i]["z1"] if i < len(default_points) else 0.53
+            default_z2_val = default_points[i]["z2"] if i < len(default_points) else 0.52
 
-        with col_act2:
-            btn_label = "🔄 Mettre à jour dans Supabase" if is_editing_mode else "💾 Enregistrer dans Supabase"
-            if st.button(btn_label, type="primary", use_container_width=True, disabled=not user_can_edit):
-                if not supabase_client:
-                    st.error("❌ Connexion Supabase indisponible.")
-                else:
-                    try:
-                        if not is_editing_mode:
-                            refs_to_check = [s["ref_ech"] for s in samples_calculated]
-                            check_samples = supabase_client.table("essai_teneur_eau").select("ref_ech").in_("ref_ech", refs_to_check).execute()
+            with p_col0:
+                pk_point = st.text_input(f"Num/PK/Profil [Point {i+1}]", value=str(default_pk_point), key=f"plaque_pk_point_{i}")
+            with p_col1:
+                z1 = st.number_input(f"Z1 - 1er chrg (mm) [Point {i+1}]", min_value=0.01, max_value=10.0, value=float(default_z1_val), step=0.01, format="%.2f", key=f"plaque_z1_{i}")
+            with p_col2:
+                z2 = st.number_input(f"Z2 - 2ème chrg (mm) [Point {i+1}]", min_value=0.01, max_value=10.0, value=float(default_z2_val), step=0.01, format="%.2f", key=f"plaque_z2_{i}")
+            
+            points_data.append({"z1": z1, "z2": z2, "pk_point": pk_point})
 
-                            if check_samples.data:
-                                existing_refs = [item["ref_ech"] for item in check_samples.data]
-                                st.error(f"⛔ **Saisie bloquée** : Les références suivantes existent déjà : **{', '.join(existing_refs)}**.")
-                                st.stop()
+        st.markdown("---")
+        st.subheader("📈 Résultats Calculés Automatiquement")
 
-                        supabase_client.table("pv_teneur_eau").upsert(header_data).execute()
+        points_results = []
+        commentaires_points = []
+        
+        for i, p in enumerate(points_data):
+            z1_val = p["z1"]
+            z2_val = p["z2"]
+            ev1_i = round(112.5 / (z1_val * 2), 2) if z1_val > 0 else 0.0
+            ev2_i = round(90.0 / (z2_val * 2), 2) if z2_val > 0 else 0.0
+            k_ratio_i = round(ev2_i / ev1_i, 2) if ev1_i > 0 else 0.0
 
-                        if is_editing_mode:
-                            supabase_client.table("essai_teneur_eau").delete().eq("num_rapport", num_rapport).execute()
+            comm_pt = f"Point {p['pk_point']} : EV2 = {ev2_i} MPa, K = {k_ratio_i}."
+            commentaires_points.append(comm_pt)
+            points_results.append({"ev1": ev1_i, "ev2": ev2_i, "k_ratio": k_ratio_i})
 
-                        for item in samples_calculated:
-                            item_to_insert = item.copy()
-                            item_to_insert["num_rapport"] = num_rapport
-                            item_to_insert.pop("ratio_w", None)  # Évite l'erreur PGRST204 si la colonne n'existe pas en BDD
-                            supabase_client.table("essai_teneur_eau").insert(item_to_insert).execute()
+            res_col1, res_col2, res_col3 = st.columns(3)
+            res_col1.metric(f"EV1 [Point {i+1}]", f"{ev1_i:.2f} MPa")
+            res_col2.metric(f"EV2 [Point {i+1}]", f"{ev2_i:.2f} MPa")
+            res_col3.metric(f"Coefficient K [Point {i+1}]", f"{k_ratio_i:.2f}")
 
-                        st.success(f"✅ PV **{num_rapport}** enregistré/mis à jour avec succès !")
+        active_z1 = points_data[0]["z1"]
+        active_z2 = points_data[0]["z2"]
+        ev1 = points_results[0]["ev1"]
+        ev2 = points_results[0]["ev2"]
+        k_ratio = points_results[0]["k_ratio"]
 
-                        if is_editing_mode:
-                            st.session_state["teneur_eau_edit_mode"] = False
-                            st.rerun()
+        observations = st.text_area("Commentaire / Remarques", value=default_obs, key="plaque_obs")
 
-                    except Exception as e:
-                        st.error(f"❌ Erreur lors de l'enregistrement : {e}")
+        btn_col1, btn_col2 = st.columns([3, 1])
+        with btn_col1:
+            button_label = "🔄 Mettre à jour l\'essai" if editing_item else "💾 Enregistrer l\'essai"
+            if st.button(button_label, key="btn_enregistrer_plaque", type="primary", use_container_width=True):
+                
+                try:
+                    query_doublon = supabase.table("essai_plaque").select("id").eq("projet_id", projet_id_actif).eq("reference", reference)
+                    if editing_item:
+                        query_doublon = query_doublon.neq("id", editing_item["id"])
+                    res_doublon = query_doublon.execute()
+                    if res_doublon.data and len(res_doublon.data) > 0:
+                        st.error(f"🚫 **BLOCAGE** : La référence d\'essai **'{reference}'** existe déjà dans ce projet !")
+                        st.stop()
+                except Exception:
+                    pass
 
-    # ---------------------------------------------------------
-    # TAB 2 : HISTORIQUE, CONSULTATION & ADMINISTRATION
-    # ---------------------------------------------------------
-    with tabs[1]:
-        st.subheader("🖨️ Sélection, Impression et Gestion des PV")
+                payload = {
+                    "reference": reference,
+                    "date_essai": str(date_essai),
+                    "client": client,
+                    "emplacement": emplacement,
+                    "pk_profil": pk_profil,
+                    "couche": couche,
+                    "zone_pro": zone_pro,
+                    "nature_materiau": nature_materiau,
+                    "z1": float(active_z1),
+                    "z2": float(active_z2),
+                    "points_mesure": points_data,
+                    "ev1": float(ev1),
+                    "ev2": float(ev2),
+                    "k_ratio": float(k_ratio),
+                    "technicien": technicien,
+                    "observations": observations
+                }
 
-        if not supabase_client:
-            st.info("💡 Client Supabase non configuré.")
-        else:
-            try:
-                pv_res = supabase_client.table("pv_teneur_eau").select("*").order("created_at", desc=True).execute()
+                safe_payload = dict(payload)
+                safe_payload["projet_id"] = projet_id_actif
 
-                if pv_res.data:
-                    pv_list = pv_res.data
-                    pv_options = {pv["num_rapport"]: pv for pv in pv_list}
-
-                    selected_num_rapport = st.selectbox(
-                        "🔍 Choisir un N° de Rapport / PV :",
-                        options=list(pv_options.keys())
-                    )
-
-                    if selected_num_rapport:
-                        selected_pv = pv_options[selected_num_rapport]
-
-                        samples_res = supabase_client.table("essai_teneur_eau") \
-                            .select("*") \
-                            .eq("num_rapport", selected_num_rapport) \
-                            .order("ref_ech", desc=False) \
-                            .execute()
-
-                        samples_data = samples_res.data if samples_res.data else []
-
-                        with st.expander(f"📄 Détails du PV : {selected_num_rapport}", expanded=True):
-                            c_info1, c_info2 = st.columns(2)
-                            with c_info1:
-                                st.markdown(f"**Nature du matériau :** {selected_pv.get('nature_materiau', 'N/A')}")
-                                st.markdown(f"**Lieu de prélèvement :** {selected_pv.get('lieu_prelevement', 'N/A')}")
-                                st.markdown(f"**PK / Section :** {selected_pv.get('pk_zone', 'N/A')}")
-                            with c_info2:
-                                st.markdown(f"**Date de prélèvement :** {selected_pv.get('date_prelevement', 'N/A')}")
-                                st.markdown(f"**Type de Proctor :** {selected_pv.get('type_proctor', 'OPN')}")
-                                st.markdown(f"**w Proctor (%) :** {selected_pv.get('w_opn', 'N/A')} %")
-
-                            st.markdown("#### Liste des échantillons :")
-                            if samples_data:
-                                df_samples = pd.DataFrame(samples_data)
-                                display_cols = [c for c in ["ref_ech", "pk", "m_humide", "m_seche", "m_tare", "w_mesure", "w_opn", "etat_hydrique", "observation"] if c in df_samples.columns]
-                                st.dataframe(df_samples[display_cols], use_container_width=True)
-                            else:
-                                st.warning("Aucun échantillon rattaché à ce PV.")
-
-                        col_act1, col_act2, col_act3 = st.columns([2, 1.5, 1.5])
-
-                        with col_act1:
-                            pdf_reprint = generate_pv_teneur_eau_pdf(selected_pv, samples_data)
-                            st.download_button(
-                                label="🖨️ Imprimer / PDF",
-                                data=pdf_reprint,
-                                file_name=f"PV_Teneur_en_eau_{selected_num_rapport.replace('/', '_')}.pdf",
-                                mime="application/pdf",
-                                type="primary",
-                                use_container_width=True
+                try:
+                    with st.spinner("⏳ Enregistrement en cours..."):
+                        if "_essai_plaque_valid_columns" not in st.session_state:
+                            sample_query = _executer_avec_reprise(
+                                lambda: supabase.table("essai_plaque").select("*").limit(1).execute(),
+                                tentatives=2, delai=1.0
                             )
+                            if sample_query.data and len(sample_query.data) > 0:
+                                st.session_state["_essai_plaque_valid_columns"] = set(sample_query.data[0].keys())
+                            else:
+                                st.session_state["_essai_plaque_valid_columns"] = None
 
-                        with col_act2:
-                            if st.button("✏️ Modifier ce PV", disabled=not user_can_edit, use_container_width=True):
-                                try:
-                                    seq_val = int(selected_num_rapport.split('/')[-1])
-                                except Exception:
-                                    seq_val = 371
+                        valid_columns = st.session_state["_essai_plaque_valid_columns"]
+                        if valid_columns:
+                            safe_payload = {k: v for k, v in payload.items() if k in valid_columns}
+                            safe_payload["projet_id"] = projet_id_actif
 
-                                st.session_state["teneur_eau_edit_mode"] = True
-                                st.session_state["teneur_eau_edit_num_rapport"] = selected_num_rapport
-                                st.session_state["edit_num_pv_seq"] = seq_val
-                                st.session_state["edit_lieu"] = selected_pv.get("lieu_prelevement", "")
-                                st.session_state["edit_pk"] = selected_pv.get("pk_zone", "")
-                                st.session_state["edit_w_opn"] = selected_pv.get("w_opn", 12.0)
+                        if "points_mesure" in safe_payload:
+                            safe_payload["points_mesure"] = [
+                                {"z1": float(pt["z1"]), "z2": float(pt["z2"]), "pk_point": str(pt["pk_point"])}
+                                for pt in safe_payload["points_mesure"]
+                            ]
 
-                                if samples_data:
-                                    st.session_state["teneur_eau_samples"] = [
-                                        {
-                                            "pk": s.get("pk", selected_pv.get("pk_zone", "")),
-                                            "couche": s.get("couche", 1),
-                                            "m_humide": s.get("m_humide", 200.0),
-                                            "m_seche": s.get("m_seche", 180.0),
-                                            "m_tare": s.get("m_tare", 30.0)
-                                        } for s in samples_data
-                                    ]
-                                st.success("PV chargé dans l'onglet 'Saisie & Modification'.")
+                        if editing_item:
+                            anciennes_valeurs_plaque = {k: editing_item.get(k) for k in safe_payload}
+                            _executer_avec_reprise(lambda: supabase.table("essai_plaque").update(safe_payload).eq("id", editing_item["id"]).eq("projet_id", projet_id_actif).select("id").execute())
+                            enregistrer_modification(supabase, "essai_plaque", editing_item["id"], "MODIFICATION", anciennes_valeurs_plaque, safe_payload)
+                            st.success(f"✅ Essai #{editing_item['id']} mis à jour avec succès !")
+                            st.session_state["edit_plaque_item"] = None
+                        else:
+                            res_ins_plaque = _executer_avec_reprise(lambda: supabase.table("essai_plaque").insert(safe_payload).select("id").execute())
+                            if res_ins_plaque.data:
+                                nouvel_id_plaque = res_ins_plaque.data[0].get("id")
+                                enregistrer_modification(supabase, "essai_plaque", nouvel_id_plaque, "CREATION", nouvelles_valeurs=safe_payload)
+                            st.success("✅ Essai enregistré avec succès !")
+
+                    st.cache_data.clear()
+                    st.rerun()
+                except Exception as e:
+                    if _est_erreur_timeout(e):
+                        st.warning("⚠️ Connexion lente à Supabase (Timeout). Nouvelles tentatives déjà effectuées sans succès — sauvegarde en mode local...")
+                        if OFFLINE_SUPPORT:
+                            try:
+                                insert_safe("essai_plaque", safe_payload)
+                                st.success(
+                                    "💾 Essai sauvegardé localement sur cet appareil — il sera synchronisé "
+                                    "automatiquement avec Supabase dès que la connexion sera rétablie."
+                                )
+                                st.cache_data.clear()
                                 st.rerun()
+                            except Exception as e2:
+                                st.error(f"❌ Échec de la sauvegarde locale également : {e2}")
+                        else:
+                            st.error(
+                                "❌ Le module offline_manager n'est pas disponible : impossible de sauvegarder "
+                                "cet essai pour le moment. Réessayez lorsque la connexion sera meilleure."
+                            )
+                    else:
+                        st.error(f"Erreur lors de l'enregistrement : {e}")
 
-                        with col_act3:
-                            if st.button(
-                                "🗑️ Supprimer ce PV",
-                                disabled=not user_is_admin,
-                                help="Exclusif aux administrateurs" if not user_is_admin else "Supprimer définitivement ce PV",
-                                use_container_width=True
-                            ):
-                                try:
-                                    supabase_client.table("essai_teneur_eau").delete().eq("num_rapport", selected_num_rapport).execute()
-                                    supabase_client.table("pv_teneur_eau").delete().eq("num_rapport", selected_num_rapport).execute()
-                                    st.success(f"✅ PV `{selected_num_rapport}` supprimé avec succès.")
-                                    st.rerun()
-                                except Exception as err:
-                                    st.error(f"Erreur lors de la suppression : {err}")
+        with btn_col2:
+            if editing_item and st.button("❌ Annuler", use_container_width=True):
+                st.session_state["edit_plaque_item"] = None
+                st.rerun()
 
+    with tab_pv:
+        st.subheader("📋 PVS / Historique, Consultation & Administration")
+        try:
+            data_plaque = charger_essais_plaque(projet_id_actif)
+            if data_plaque and len(data_plaque) > 0:
+                # Barre de recherche de PV
+                recherche_ref = st.text_input("🔍 Rechercher un PV par référence ou emplacement :", "")
+                
+                data_Filtree_pv = data_plaque
+                if recherche_ref.strip():
+                    term = recherche_ref.strip().lower()
+                    data_Filtree_pv = [
+                        item for item in data_plaque 
+                        if term in str(item.get("reference", "")).lower() 
+                        or term in str(item.get("emplacement", "")).lower()
+                        or term in str(item.get("id", "")).lower()
+                    ]
+
+                if data_Filtree_pv:
+                    options_essais = {f"ID #{item['id']} - Réf: {item.get('reference', 'Sans réf')} ({item.get('date_essai', '')})": item for item in data_Filtree_pv}
+                    choix_essai_str = st.selectbox("Sélectionner l\'essai à consulter / télécharger :", options=list(options_essais.keys()), key="select_pv_consult")
+                    essai_selectionne = options_essais[choix_essai_str]
+
+                    st.markdown("---")
+                    col_p1, col_p2 = st.columns(2)
+                    with col_p1:
+                        st.write(f"**Référence :** {essai_selectionne.get('reference', '-')}")
+                        st.write(f"**Date :** {essai_selectionne.get('date_essai', '-')}")
+                        st.write(f"**Client :** {essai_selectionne.get('client', '-')}")
+                        st.write(f"**Projet :** {projets_config.nom_projet(projet_id_actif)}")
+                    with col_p2:
+                        st.write(f"**Emplacement :** {essai_selectionne.get('emplacement', '-')}")
+                        st.write(f"**Couche :** {essai_selectionne.get('couche', '-')}")
+                        st.write(f"**Technicien :** {essai_selectionne.get('technicien', '-')}")
+
+                    st.markdown("### 📥 Téléchargement et Actions")
+                    pdf_bytes = generer_pdf_pv(essai_selectionne)
+                    nom_fichier = f"PV_Essai_Plaque_{str(essai_selectionne.get('reference', essai_selectionne.get('id'))).replace('/', '_')}.pdf"
+                    
+                    col_dl, col_mod_h, col_sup_h = st.columns([2, 1, 1])
+                    with col_dl:
+                        st.download_button(
+                            label="📥 Télécharger le Procès-Verbal (PDF)",
+                            data=pdf_bytes,
+                            file_name=nom_fichier,
+                            mime="application/pdf",
+                            type="primary",
+                            use_container_width=True
+                        )
+                    
+                    with col_mod_h:
+                        if is_baallal_admin:
+                            if st.button("✏️ Modifier", use_container_width=True, key="btn_edit_baallal_hist"):
+                                st.session_state["edit_plaque_item"] = essai_selectionne
+                                st.success("Essai chargé dans l'onglet Saisie & Modification.")
+                                st.rerun()
+                        else:
+                            st.caption("🔒 Modif. réservée à BAALLAL")
+
+                    with col_sup_h:
+                        if is_baallal_admin:
+                            with st.popover("🗑️ Supprimer", use_container_width=True):
+                                st.warning(f"Supprimer définitivement l'essai #{essai_selectionne['id']} ?")
+                                confirm_del = st.checkbox("Confirmer la suppression", key=f"del_h_{essai_selectionne['id']}")
+                                if st.button("Supprimer définitivement", type="primary", disabled=not confirm_del, key=f"btn_del_h_{essai_selectionne['id']}"):
+                                    try:
+                                        _executer_avec_reprise(lambda: supabase.table("essai_plaque").delete().eq("id", essai_selectionne["id"]).eq("projet_id", projet_id_actif).execute())
+                                        enregistrer_modification(
+                                            supabase, "essai_plaque", essai_selectionne["id"], "SUPPRESSION",
+                                            anciennes_valeurs={k: essai_selectionne.get(k) for k in ("reference", "couche", "ev2")},
+                                            commentaire=f"Supprimé par l'admin {current_user}"
+                                        )
+                                        st.success("Essai supprimé avec succès.")
+                                        st.cache_data.clear()
+                                        st.rerun()
+                                    except Exception as e:
+                                        st.error(f"Erreur : {e}")
+                        else:
+                            st.caption("🔒 Suppr. réservée à BAALLAL")
                 else:
-                    st.info("Aucun PV enregistré dans la base de données.")
+                    st.info("Aucun essai ne correspond à votre recherche.")
+            else:
+                st.info("Aucun essai enregistré.")
+        except Exception as e:
+            st.warning(f"Erreur historique : {e}")
 
-            except Exception as e:
-                st.error(f"❌ Erreur lors de la récupération des données : {e}")
+    with tab_synthese:
+        st.subheader("📊 Synthèse & Filtres Avancés (Téléchargement Excel)")
+        try:
+            data_plaque = charger_essais_plaque(projet_id_actif)
+            if data_plaque and len(data_plaque) > 0:
+                df_synth = pd.DataFrame(data_plaque)
+                df_synth['date_datetime'] = pd.to_datetime(df_synth['date_essai'], errors='coerce')
+                df_synth['mois'] = df_synth['date_datetime'].dt.strftime('%Y-%m')
 
-        st.markdown("---")
-        st.subheader("📋 Base de données brute des mesures (essai_teneur_eau)")
-        if supabase_client:
-            try:
-                res = supabase_client.table("essai_teneur_eau").select("*").order("created_at", desc=True).execute()
-                if res.data:
-                    df = pd.DataFrame(res.data)
-                    st.dataframe(df, use_container_width=True)
+                f_col1, f_col2, f_col3 = st.columns(3)
+                with f_col1:
+                    mois_options = ["Tous"] + sorted([m for m in df_synth['mois'].dropna().unique().tolist()], reverse=True)
+                    _NOMS_MOIS_FR = {
+                        '01': 'Janvier', '02': 'Février', '03': 'Mars', '04': 'Avril',
+                        '05': 'Mai', '06': 'Juin', '07': 'Juillet', '08': 'Août',
+                        '09': 'Septembre', '10': 'Octobre', '11': 'Novembre', '12': 'Décembre'
+                    }
+                    def _formatter_mois(m):
+                        if m == "Tous":
+                            return "Tous"
+                        try:
+                            annee, mois_num = m.split("-")
+                            return f"{_NOMS_MOIS_FR.get(mois_num, mois_num)} {annee}"
+                        except Exception:
+                            return m
+                    choix_mois = st.selectbox("Période (Mois)", mois_options, key="filtre_mois", format_func=_formatter_mois)
+                with f_col2:
+                    empl_options = ["Tous"] + sorted([str(e) for e in df_synth['emplacement'].dropna().unique().tolist()])
+                    choix_empl = st.selectbox("Emplacement", empl_options, key="filtre_emplacement")
+                with f_col3:
+                    couche_options_filt = ["Tous"] + sorted([str(c) for c in df_synth['couche'].dropna().unique().tolist()])
+                    choix_couche = st.selectbox("Type de couche", couche_options_filt, key="filtre_couche")
+
+                df_filtered = df_synth.copy()
+                if choix_mois != "Tous":
+                    df_filtered = df_filtered[df_filtered['mois'] == choix_mois]
+                if choix_empl != "Tous":
+                    df_filtered = df_filtered[df_filtered['emplacement'] == choix_empl]
+                if choix_couche != "Tous":
+                    df_filtered = df_filtered[df_filtered['couche'] == choix_couche]
+
+                st.markdown("---")
+                col_m, col_btn = st.columns([2, 1])
+                with col_m:
+                    st.metric("Nombre d\'essais correspondants", len(df_filtered))
+                with col_btn:
+                    if not df_filtered.empty:
+                        nom_projet_actif = projets_config.nom_projet(projet_id_actif)
+                        excel_bytes = generer_excel_synthese(df_filtered, choix_mois, choix_empl, choix_couche, nom_projet_actif)
+                        st.download_button(
+                            label="📥 Télécharger la Synthèse Excel",
+                            data=excel_bytes,
+                            file_name=f"Synthese_Essais_Plaque_{choix_mois}.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            type="primary",
+                            use_container_width=True
+                        )
+
+                if not df_filtered.empty:
+                    clean_synth_rows = []
+                    for _, row in df_filtered.iterrows():
+                        ref_val = row.get("reference") or row.get("ref_essai") or row.get("ref")  or "-"
+                        clean_synth_rows.append({
+                            "ID": row.get("id"),
+                            "Référence": ref_val,
+                            "Date": row.get("date_essai"),
+                            "Client": row.get("client"),
+                            "Emplacement": row.get("emplacement"),
+                            "Couche": row.get("couche"),
+                            "EV2 (MPa)": row.get("ev2"),
+                            "Technicien": row.get("technicien")
+                        })
+                    st.dataframe(pd.DataFrame(clean_synth_rows), use_container_width=True, hide_index=True)
                 else:
-                    st.info("Aucune donnée d'échantillon enregistrée.")
-            except Exception as e:
-                st.error(f"Erreur de chargement de la table brute : {e}")
+                    st.info("Aucun essai ne correspond aux critères de filtre sélectionnés.")
+            else:
+                st.info("Aucun essai enregistré pour ce projet.")
+        except Exception as e:
+            st.warning(f"Erreur lors du chargement de la synthèse : {e}")
