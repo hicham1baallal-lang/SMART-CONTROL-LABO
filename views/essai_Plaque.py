@@ -177,6 +177,9 @@ def generer_pdf_pv(essai):
 
     elements.append(Spacer(1, 6))
 
+    elements.append(Paragraph("PROCÈS-VERBAL D\'ESSAI À LA PLAQUE (NF P 94-117-1)", title_style))
+    elements.append(Paragraph(f"Référence : <b>{essai.get('reference', '-')}</b> | Date : {essai.get('date_essai', '-')}", subtitle_style))
+
     data_infos = [
         [Paragraph("Client / Organisme :", bold_style), Paragraph(str(essai.get('client', '-')), normal_style),
          Paragraph("Chantier / Projet :", bold_style), Paragraph(str(essai.get('projet', '-')), normal_style)],
@@ -273,10 +276,6 @@ def generer_pdf_pv(essai):
         ('TOPPADDING', (0,0), (-1,-1), 10),
     ]))
     elements.append(t_sig)
-
-    elements.append(Spacer(1, 15))
-    elements.append(Paragraph("PROCÈS-VERBAL D\'ESSAI À LA PLAQUE (NF P 94-117-1)", title_style))
-    elements.append(Paragraph(f"Référence : <b>{essai.get('reference', '-')}</b> | Date : {essai.get('date_essai', '-')}", subtitle_style))
 
     doc.build(elements)
     buffer.seek(0)
@@ -820,7 +819,20 @@ def show(supabase_client):
                 f_col1, f_col2, f_col3 = st.columns(3)
                 with f_col1:
                     mois_options = ["Tous"] + sorted([m for m in df_synth['mois'].dropna().unique().tolist()], reverse=True)
-                    choix_mois = st.selectbox("Période (Mois)", mois_options, key="filtre_mois")
+                    _NOMS_MOIS_FR = {
+                        '01': 'Janvier', '02': 'Février', '03': 'Mars', '04': 'Avril',
+                        '05': 'Mai', '06': 'Juin', '07': 'Juillet', '08': 'Août',
+                        '09': 'Septembre', '10': 'Octobre', '11': 'Novembre', '12': 'Décembre'
+                    }
+                    def _formatter_mois(m):
+                        if m == "Tous":
+                            return "Tous"
+                        try:
+                            annee, mois_num = m.split("-")
+                            return f"{_NOMS_MOIS_FR.get(mois_num, mois_num)} {annee}"
+                        except Exception:
+                            return m
+                    choix_mois = st.selectbox("Période (Mois)", mois_options, key="filtre_mois", format_func=_formatter_mois)
                 with f_col2:
                     empl_options = ["Tous"] + sorted([str(e) for e in df_synth['emplacement'].dropna().unique().tolist()])
                     choix_empl = st.selectbox("Emplacement", empl_options, key="filtre_emplacement")
