@@ -51,20 +51,32 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
 @st.cache_data(ttl=300)
 def charger_essais_plaque(projet_id):
-    """Charge uniquement les colonnes indispensables des essais de plaque avec un filtre strict et rapide."""
-    try:
-        response = (
-            supabase.table("essai_plaque")
-            .select("id, reference, date_essai, client, projet, emplacement, pk_profil, couche, zone_pro, nature_materiau, ev1, ev2, k_ratio, technicien, observations, points_mesure")
-            .eq("projet_id", projet_id)
-            .order("id", desc=True)
-            .limit(100)
-            .execute()
-        )
-        return response.data if response.data else []
-    except Exception as e:
-        print(f"Erreur chargement plaque: {e}")
-        return []
+    """Charge uniquement les colonnes indispensables des essais de plaque avec un filtre strict et rapide.
+
+    Tente d'abord avec la colonne `zone_pro` (utilisée pour le seuil PRO) ;
+    si cette colonne n'existe pas encore côté Supabase (migration pas encore
+    appliquée), se rabat automatiquement sur une requête sans elle plutôt
+    que d'échouer complètement et d'afficher "Aucun essai enregistré" alors
+    que des essais existent bel et bien en base.
+    """
+    colonnes_avec_zone = "id, reference, date_essai, client, projet, emplacement, pk_profil, couche, zone_pro, nature_materiau, ev1, ev2, k_ratio, technicien, observations, points_mesure"
+    colonnes_sans_zone = "id, reference, date_essai, client, projet, emplacement, pk_profil, couche, nature_materiau, ev1, ev2, k_ratio, technicien, observations, points_mesure"
+
+    for colonnes in (colonnes_avec_zone, colonnes_sans_zone):
+        try:
+            response = (
+                supabase.table("essai_plaque")
+                .select(colonnes)
+                .eq("projet_id", projet_id)
+                .order("id", desc=True)
+                .limit(100)
+                .execute()
+            )
+            return response.data if response.data else []
+        except Exception as e:
+            print(f"Erreur chargement plaque (colonnes={'avec' if colonnes is colonnes_avec_zone else 'sans'} zone_pro): {e}")
+            continue
+    return []
 
 def evaluer_conformite_couche(couche, ev2_values, zone_pro=None):
     """Évalue la conformité d'un essai à la plaque selon la couche/l'ouvrage
