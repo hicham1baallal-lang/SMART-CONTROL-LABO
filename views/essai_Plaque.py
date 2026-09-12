@@ -56,11 +56,11 @@ def charger_essais_plaque(projet_id):
     Tente d'abord avec la colonne `zone_pro` (utilisée pour le seuil PRO) ;
     si cette colonne n'existe pas encore côté Supabase (migration pas encore
     appliquée), se rabat automatiquement sur une requête sans elle plutôt
-    que d'échouer complètement et d'afficher "Aucun essai enregistré" alors
+    qu'd'échouer complètement et d'afficher "Aucun essai enregistré" alors
     que des essais existent bel et bien en base.
     """
-    colonnes_avec_zone = "id, reference, date_essai, client, projet, emplacement, pk_profil, couche, zone_pro, nature_materiau, ev1, ev2, k_ratio, technicien, observations, points_mesure"
-    colonnes_sans_zone = "id, reference, date_essai, client, projet, emplacement, pk_profil, couche, nature_materiau, ev1, ev2, k_ratio, technicien, observations, points_mesure"
+    colonnes_avec_zone = "id, reference, date_essai, client, emplacement, pk_profil, couche, zone_pro, nature_materiau, ev1, ev2, k_ratio, technicien, observations, points_mesure"
+    colonnes_sans_zone = "id, reference, date_essai, client, emplacement, pk_profil, couche, nature_materiau, ev1, ev2, k_ratio, technicien, observations, points_mesure"
 
     for colonnes in (colonnes_avec_zone, colonnes_sans_zone):
         try:
@@ -140,9 +140,6 @@ def evaluer_conformite_couche(couche, ev2_values, zone_pro=None):
             conforme = False
             motifs.append(f"EV2 min = {ev2_min:.1f} MPa (requis > {seuil:.0f} MPa)")
 
-    # "Autre" (ou toute couche non listée ci-dessus) : aucun critère normatif
-    # défini dans l'application -> conforme par défaut, sans motif.
-
     if conforme:
         return "Résultats Conforme"
     return f"Résultats non Conforme ({' ; '.join(motifs)})"
@@ -167,14 +164,12 @@ def point_est_conforme(couche, ev2_v, zone_pro=None):
     elif couche == "Plateforme support d\'étaiements / cintres":
         return ev2_v > 80.0
     else:
-        return True  # "Autre" : aucun critère normatif défini
+        return True
 
 
 def construire_texte_exigence(couche, ev2_values, zone_pro=None):
     """Décrit l'exigence normative de la couche/l'ouvrage testé, avec les
-    valeurs réellement mesurées en regard. Toujours affiché (que l'essai
-    soit conforme ou non), contrairement à l'ancien "Commentaire" qui ne
-    donnait le détail qu'en cas de non-conformité."""
+    valeurs réellement mesurées en regard."""
     ev2_values = [float(v) for v in (ev2_values or []) if v is not None]
     if not ev2_values:
         return "Aucune mesure EV2 disponible pour établir l\'exigence."
@@ -317,7 +312,7 @@ def generer_pdf_pv(essai):
 
     table_pts_data = [["Point / PK", "Z1 1er chrg (mm)", "Z2 2ème chrg (mm)", "EV1 (MPa)", "EV2 (MPa)", "K (EV2/EV1)", "Résultat"]]
     ev2_tous_points = []
-    lignes_conformes = []  # True/False par ligne, pour la coloration du texte
+    lignes_conformes = []
 
     for idx, pt in enumerate(points):
         z1_v = float(pt.get("z1", 0.53))
@@ -360,9 +355,6 @@ def generer_pdf_pv(essai):
     elements.append(t_pts)
     elements.append(Spacer(1, 10))
 
-    # Remarque(s) saisie(s) manuellement par le technicien : n'apparaît dans
-    # le PV que si une remarque a réellement été saisie (le champ n'est plus
-    # pré-rempli automatiquement), sous forme de liste à puces "*".
     observations_essai = (essai.get('observations') or '').strip()
     if observations_essai:
         lignes_remarque = [l.strip() for l in observations_essai.split('\n') if l.strip()]
@@ -608,9 +600,6 @@ def show(supabase_client):
     )
 
     if isinstance(user_raw, dict):
-        # Corrige la détection : la session pose la clé "username" (voir
-        # app.py), pas "email"/"name" — sans quoi is_baallal_admin ne
-        # devenait jamais vrai, même connecté en tant que BAALLAL.
         user_raw = user_raw.get("username") or user_raw.get("email") or user_raw.get("name") or "Agent LPEE"
 
     current_user = str(user_raw).upper()
@@ -638,7 +627,6 @@ def show(supabase_client):
             default_ref = editing_item.get("reference") or editing_item.get("ref_essai") or editing_item.get("ref") or "260/26/PLQ/01"
             default_date = datetime.strptime(editing_item["date_essai"], "%Y-%m-%d").date() if isinstance(editing_item.get("date_essai"), str) else date.today()
             default_client = editing_item.get("client", "TGCC")
-            default_projet = editing_item.get("projet", "LGV CASA SUD")
             default_empl = editing_item.get("emplacement", "")
             default_pk = editing_item.get("pk_profil", editing_item.get("pkl", ""))
             default_couche = editing_item.get("couche", "Sous-couche et Couche de forme ferroviaire (LGV)")
@@ -655,7 +643,6 @@ def show(supabase_client):
             default_ref = "260/26/PLQ/01"
             default_date = date.today()
             default_client = "TGCC"
-            default_projet = "LGV CASA SUD"
             default_empl = "Voie B"
             default_pk = "PK 1+200"
             default_couche = "Sous-couche et Couche de forme ferroviaire (LGV)"
@@ -673,7 +660,6 @@ def show(supabase_client):
         with col1:
             date_essai = st.date_input("Date de l\'essai", value=default_date, key="plaque_date")
             client = st.text_input("Client / Organisme", value=default_client, key="plaque_client")
-            projet = st.text_input("Chantier / Projet", value=default_projet, key="plaque_projet")
         with col2:
             couche_options = [
                 "Sous-couche et Couche de forme",
@@ -766,10 +752,6 @@ def show(supabase_client):
         ev2 = points_results[0]["ev2"]
         k_ratio = points_results[0]["k_ratio"]
 
-        # Le champ Commentaire / Remarques reste VIDE par défaut : il ne doit
-        # contenir que ce que l'utilisateur saisit lui-même (aucun texte
-        # systématique pré-rempli), pour qu'il ne s'affiche dans le PV que si
-        # une remarque a réellement été saisie.
         observations = st.text_area("Commentaire / Remarques", value=default_obs, key="plaque_obs")
 
         btn_col1, btn_col2 = st.columns([3, 1])
@@ -792,7 +774,6 @@ def show(supabase_client):
                     "reference": reference,
                     "date_essai": str(date_essai),
                     "client": client,
-                    "projet": projet,
                     "emplacement": emplacement,
                     "pk_profil": pk_profil,
                     "couche": couche,
@@ -808,19 +789,11 @@ def show(supabase_client):
                     "observations": observations
                 }
 
-                # Valeur de repli TOUJOURS définie avant le bloc try, pour que
-                # le mode hors-ligne (except ci-dessous) puisse toujours s'en
-                # servir, même si l'erreur survient avant tout calcul de
-                # safe_payload (ex: timeout dès la 1ère requête réseau).
                 safe_payload = dict(payload)
                 safe_payload["projet_id"] = projet_id_actif
 
                 try:
                     with st.spinner("⏳ Enregistrement en cours..."):
-                        # Colonnes valides de la table : récupérées UNE SEULE FOIS
-                        # par session (mise en cache) au lieu d'une requête réseau
-                        # supplémentaire à chaque enregistrement — c'était une
-                        # source significative de lenteur et de timeouts.
                         if "_essai_plaque_valid_columns" not in st.session_state:
                             sample_query = _executer_avec_reprise(
                                 lambda: supabase.table("essai_plaque").select("*").limit(1).execute(),
@@ -829,7 +802,7 @@ def show(supabase_client):
                             if sample_query.data and len(sample_query.data) > 0:
                                 st.session_state["_essai_plaque_valid_columns"] = set(sample_query.data[0].keys())
                             else:
-                                st.session_state["_essai_plaque_valid_columns"] = None  # colonnes inconnues -> tout envoyer tel quel
+                                st.session_state["_essai_plaque_valid_columns"] = None
 
                         valid_columns = st.session_state["_essai_plaque_valid_columns"]
                         if valid_columns:
@@ -904,10 +877,6 @@ def show(supabase_client):
                     })
                 st.dataframe(pd.DataFrame(clean_rows), use_container_width=True, hide_index=True)
 
-                # ------------------------------------------------------------
-                # MODIFICATION d'un essai déjà saisi + SUPPRESSION (admin
-                # BAALLAL uniquement)
-                # ------------------------------------------------------------
                 st.markdown("---")
                 st.markdown("##### ✏️ Modifier ou 🗑️ Supprimer un essai existant")
 
@@ -980,7 +949,7 @@ def show(supabase_client):
                     st.write(f"**Référence :** {essai_selectionne.get('reference', '-')}")
                     st.write(f"**Date :** {essai_selectionne.get('date_essai', '-')}")
                     st.write(f"**Client :** {essai_selectionne.get('client', '-')}")
-                    st.write(f"**Projet :** {essai_selectionne.get('projet', '-')}")
+                    st.write(f"**Projet :** {projets_config.nom_projet(projet_id_actif)}")
                 with col_p2:
                     st.write(f"**Emplacement :** {essai_selectionne.get('emplacement', '-')}")
                     st.write(f"**Couche :** {essai_selectionne.get('couche', '-')}")
