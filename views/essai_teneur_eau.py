@@ -58,8 +58,8 @@ def evaluer_etat_hydrique_gtr(w_mesure, w_opn, classe_gtr="Classe B", sous_class
 # ==========================================
 class LPEETeneurEauPDF(FPDF):
     def header(self):
-        # Vérification et insertion du logo LPEE s'il est présent dans le répertoire (ex: 'logo_lpee.png')
-        logo_path = "logo_lpee.png"
+        # Utilisation du nom de fichier exact fourni : logo.png.jpg
+        logo_path = "logo.png.jpg"
         if os.path.exists(logo_path):
             try:
                 self.image(logo_path, 10, 8, 25)
