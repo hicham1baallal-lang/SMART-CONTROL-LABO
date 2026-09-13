@@ -225,14 +225,28 @@ def show(supabase_client):
             with col_plt:
                 fig, ax = plt.subplots(figsize=(5.2, 4.3))
                 plot_curve_df = result_df.sort_values(by="Tamis (mm)", ascending=True).reset_index(drop=True)
-                sieve_labels = [f"{t}mm" for t in plot_curve_df["Tamis (mm)"]]
+                
+                # Axe X : 100% des tamis >= 10mm, ~70% des tamis < 10mm
                 x_indices = np.arange(len(plot_curve_df))
+                sieve_values = plot_curve_df["Tamis (mm)"].values
+                
+                ticks_positions = []
+                ticks_labels = []
+                for idx, (x_pos, t_val) in enumerate(zip(x_indices, sieve_values)):
+                    if t_val >= 10.0:
+                        ticks_positions.append(x_pos)
+                        ticks_labels.append(f"{t_val}mm")
+                    else:
+                        if idx % 3 != 0:  # ~66.7% conservé (~70%)
+                            ticks_positions.append(x_pos)
+                            ticks_labels.append(f"{t_val}mm")
+
                 ax.plot(
                     x_indices, plot_curve_df["% Passant"],
                     marker='o', markersize=4, linestyle='-', color='#1f77b4', linewidth=1.5
                 )
-                ax.set_xticks(x_indices)
-                ax.set_xticklabels(sieve_labels, rotation=75, ha='right', fontsize=7)
+                ax.set_xticks(ticks_positions)
+                ax.set_xticklabels(ticks_labels, rotation=70, ha='right', fontsize=7)
                 ax.set_xlabel("Ouverture des tamis (mm)")
                 ax.set_ylabel("% Passant (%)")
                 ax.set_ylim(-2, 105)
