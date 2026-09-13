@@ -255,11 +255,11 @@ def generer_pdf_pv(essai):
     
     if os.path.exists(logo_path):
         try:
-            # Taille augmentée à width=65, height=65 (au lieu de 45x45) et adaptation de la largeur de colonne à 75
-            img = Image(logo_path, width=65, height=65)
+            # Taille augmentée à width=90, height=90 et adaptation de la largeur de colonne à 105
+            img = Image(logo_path, width=90, height=90)
             img.hAlign = 'LEFT'
             txt_header = Paragraph(header_text, org_style)
-            header_table = Table([[img, txt_header]], colWidths=[75, 450])
+            header_table = Table([[img, txt_header]], colWidths=[105, 420])
             header_table.setStyle(TableStyle([
                 ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
                 ('LEFTPADDING', (0,0), (-1,-1), 0),
@@ -567,7 +567,7 @@ def generer_excel_synthese(df, mois_str, empl_str, couche_str, nom_projet):
             row_idx += 1
 
         row_idx += 3
-        ws.cell(row=row_idx, column=1, value="Responsable d\'essai").font = bold_font
+        ws.cell(row=row_idx, column=1, value="O.IKKEN").font = bold_font
         ws.cell(row=row_idx, column=6, value="Chef du Laboratoire").font = bold_font
 
     col_dimensions = {
@@ -632,7 +632,7 @@ def show(supabase_client):
             default_pk = editing_item.get("pk_profil", editing_item.get("pkl", ""))
             default_couche = editing_item.get("couche", "Sous-couche et Couche de forme ferroviaire (LGV)")
             default_mat = editing_item.get("nature_materiau", "")
-            default_tech = "" if str(editing_item.get("technicien", "")).upper() == "BAALLAL" else editing_item.get("technicien", "")
+            default_tech = "O.IKKEN" if str(editing_item.get("technicien", "")).strip() in ["", "O.IKKEN", "BAALLAL"] else editing_item.get("technicien", "")
             default_obs = editing_item.get("observations", "")
             
             saved_points = editing_item.get("points_mesure")
@@ -648,7 +648,7 @@ def show(supabase_client):
             default_pk = "PK 1+200"
             default_couche = "Sous-couche et Couche de forme ferroviaire (LGV)"
             default_mat = "GNT 0/31.5 Classée B2"
-            default_tech = "" if current_user.strip() == "BAALLAL" else current_user
+            default_tech = "O.IKKEN"
             default_obs = ""
             default_points = [{"z1": 0.53, "z2": 0.52, "pk_point": "PK 1+200"}]
 
@@ -674,7 +674,7 @@ def show(supabase_client):
             couche = st.selectbox("Couche / Ouvrage testé", couche_options, index=couche_idx, key="plaque_couche")
 
             zone_pro = None
-            if couche == "Remblais contigus aux Ouvrages d'Art (PRO)":
+            if couche == "Remblais contigus aux Ouvrages d\'Art (PRO)":
                 default_zone_pro = editing_item.get("zone_pro", "Plateforme") if editing_item else "Plateforme"
                 zone_pro_options = ["Partie supérieure (zone Q3)", "Plateforme"]
                 zone_pro_idx = zone_pro_options.index(default_zone_pro) if default_zone_pro in zone_pro_options else 1
@@ -829,7 +829,7 @@ def show(supabase_client):
                             if res_ins_plaque.data:
                                 nouvel_id_plaque = res_ins_plaque.data[0].get("id")
                                 enregistrer_modification(supabase, "essai_plaque", nouvel_id_plaque, "CREATION", nouvelles_valeurs=safe_payload)
-                            st.success("✅ Essai enregistré avec succès !")
+                            st.success("✅ Enregistré avec succès !")
 
                     st.cache_data.clear()
                     st.rerun()
