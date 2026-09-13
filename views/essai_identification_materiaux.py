@@ -6,6 +6,30 @@ import streamlit as st
 from fpdf import FPDF
 
 
+def classer_gtr(dmax, pass_80um, ip, vbs=0.5):
+    """Classification GTR automatique selon l'abaque officiel LPEE/SETRA."""
+    if dmax <= 50:
+        if pass_80um >= 35.0:
+            if ip < 12: return "A1"
+            elif ip < 25: return "A2"
+            elif ip < 40: return "A3"
+            else: return "A4"
+        elif pass_80um >= 12.0:
+            if vbs < 0.2:
+                return "B1" if pass_80um < 20 else "B5"
+            elif vbs <= 1.5: return "B2"
+            elif vbs <= 6.0: return "B6"
+            else: return "B4"
+        else:
+            if vbs < 0.1: return "D1" if pass_80um < 6 else "D2"
+            else: return "B3" if vbs <= 0.2 else "B2"
+    else:
+        if pass_80um < 12.0 and vbs < 0.1:
+            return "D3"
+        else:
+            return "C1" if pass_80um <= 40 else "C2"
+
+
 class IdentificationPDF(FPDF):
     def header(self):
         logo_path = "logo.png.jpg"
@@ -51,7 +75,7 @@ def generate_pdf(header_info, data_dict, type_mat):
     pdf.ln(5)
 
     pdf.set_font("Helvetica", "B", 10)
-    pdf.cell(190, 8, " II - Résultats d'identification", 1, 1, "L", fill=True)
+    pdf.cell(190, 8, " II - Résultats d'identification & GTR", 1, 1, "L", fill=True)
     pdf.set_font("Helvetica", "", 9)
     for k, v in data_dict.items():
         pdf.cell(95, 7, f"   {k}", 1, 0, "L")
@@ -70,7 +94,7 @@ def show(supabase_client):
     is_admin = ("ADMIN" in user_role) or ("BAALLAL" in user_name)
     user_can_edit = is_admin or ("LABO" in user_role)
 
-    st.title("🔬 Identification des Matériaux")
+    st.title("🔬 Identification des Matériaux & GTR")
     st.caption("Laboratoire de Contrôle Externe - Projet LGV CASA SUD")
 
     if not user_can_edit:
@@ -86,41 +110,63 @@ def show(supabase_client):
     # TAB 0 : ➕ SAISIR UN PV
     # ---------------------------------------------------------
     with tabs[0]:
-        st.subheader("➕ Saisie PV Identification Matériau")
+        st.subheader("➕ Saisie PV Identification Matériau & Classification Auto GTR")
         c1, c2, c3 = st.columns(3)
         with c1:
             num_rapport = st.text_input("N° Rapport", value="25/260/LGV/CS/IDENT/001", disabled=not user_can_edit)
-            lieu = st.text_input("Lieu / Zone", value="Zone T4 / Carrière", disabled=not user_can_edit)
+            lieu = st.text_input("Lieu / Zone", value="Zone T4 / Remblai d'apport", disabled=not user_can_edit)
         with c2:
             pk = st.text_input("PK / Section", value="PK 8+540", disabled=not user_can_edit)
             date_essai = st.date_input("Date Essai", value=datetime.date.today(), disabled=not user_can_edit)
         with c3:
-            type_mat = st.selectbox("Type de matériau", ["Sol (Atterberg, ES, GTR)", "Grave (Los Angeles, Micro-Deval, ES)"], disabled=not user_can_edit)
+            type_mat = st.selectbox(
+                "Type de matériau",
+                ["Sol (Standard - Atterberg, ES, GTR)", "Sol - GNF 1 (Remblai / GNF type 1)", "Grave (Los Angeles, Micro-Deval, ES)"],
+                disabled=not user_can_edit
+            )
 
         st.markdown("---")
         data_dict = {}
+        obs = "Conforme"
+
         if "Sol" in type_mat:
-            st.subheader("Paramètres d'identification - Sol")
-            col_s1, col_s2, col_s3 = st.columns(3)
+            is_gnf1 = "GNF 1" in type_mat
+            st.subheader(f"Paramètres d'identification — {'Sol GNF 1' if is_gnf1 else 'Sol Standard'}")
+            
+            col_s1, col_s2, col_s3, col_s4 = st.columns(4)
             with col_s1:
-                w_l = st.number_input("Limite de liquidité wL (%)", value=35.0, step=0.5, disabled=not user_can_edit)
+                dmax_val = st.number_input("Dmax (mm)", value=63.0 if is_gnf1 else 50.0, step=1.0, disabled=not user_can_edit)
             with col_s2:
-                w_p = st.number_input("Limite de plasticité wP (%)", value=20.0, step=0.5, disabled=not user_can_edit)
+                pass_80um = st.number_input("Passant à 80 µm (%) [ex: 22.2]", value=22.2 if is_gnf1 else 25.0, step=0.1, disabled=not user_can_edit)
             with col_s3:
-                ip = w_l - w_p
-                st.metric("Indice de plasticité IP", f"{ip:.1f} %")
-
-            col_s4, col_s5 = st.columns(2)
+                w_l = st.number_input("Limite de liquidité wL (%)", value=35.0, step=0.5, disabled=not user_can_edit)
             with col_s4:
-                es_val = st.selectbox("Équivalent de sable (ES)", ["ESV > 60 (Propre)", "40 < ESV <= 60 (Acceptable)", "ESV <= 40 / EST"], disabled=not user_can_edit)
-            with col_s5:
-                gtr_val = st.selectbox("Classe GTR Sol", ["A1", "A2", "A3", "A4", "B1", "B2", "C1", "D1"], disabled=not user_can_edit)
+                w_p = st.number_input("Limite de plasticité wP (%)", value=20.0, step=0.5, disabled=not user_can_edit)
 
-            obs = "Conforme" if ip < 25 else "Non Conforme / Argileux"
+            ip = w_l - w_p
+            col_vbs, col_es, col_auto_gtr = st.columns(3)
+            with col_vbs:
+                vbs_val = st.number_input("VBS (facultatif)", value=0.5, step=0.1, disabled=not user_can_edit)
+            with col_es:
+                es_val = st.selectbox("Équivalent de sable (ES)", ["ESV > 60 (Propre)", "40 < ESV <= 60 (Acceptable)", "ESV <= 40 / EST"], disabled=not user_can_edit)
+            with col_auto_gtr:
+                classe_gtr_auto = classer_gtr(dmax_val, pass_80um, ip, vbs_val)
+                st.metric("Classe GTR (Auto)", classe_gtr_auto)
+
+            if is_gnf1:
+                obs = "Conforme GNF 1" if pass_80um <= 35.0 and ip < 25 else "Non Conforme GNF 1"
+            else:
+                obs = "Conforme GTR" if ip < 25 else "Non Conforme / Argileux"
+
             data_dict = {
-                "Type": "Sol",
+                "Type Matériau": type_mat,
+                "Dmax (mm)": f"{dmax_val}",
+                "Passant 80µm (%)": f"{pass_80um:.1f}",
                 "wL (%)": f"{w_l}", "wP (%)": f"{w_p}", "IP (%)": f"{ip:.1f}",
-                "ES": es_val, "Classe GTR": gtr_val, "Observation": obs
+                "VBS": f"{vbs_val}",
+                "ES": es_val,
+                "Classe GTR (Auto)": classe_gtr_auto,
+                "Observation": obs
             }
         else:
             st.subheader("Paramètres d'identification - Grave")
@@ -151,7 +197,7 @@ def show(supabase_client):
                     try:
                         supabase_client.table("pv_identification_materiaux").upsert({
                             "num_rapport": num_rapport,
-                            "type_materiau": type_mat.split()[0].upper(),
+                            "type_materiau": "SOL" if "Sol" in type_mat else "GRAVE",
                             "lieu": lieu,
                             "pk": pk,
                             "date_essai": str(date_essai),
@@ -203,7 +249,7 @@ def show(supabase_client):
                     df_s = pd.DataFrame(res.data)
                     m1, m2, m3 = st.columns(3)
                     m1.metric("Total PVs Ident.", len(df_s))
-                    m2.metric("Conformes", len(df_s[df_s["observation"]=="Conforme"]) if "observation" in df_s else 0)
+                    m2.metric("Conformes", len(df_s[df_s["observation"].str.contains("Conforme", na=False)]) if "observation" in df_s else 0)
                     
                     sol_count = len(df_s[df_s['type_materiau']=='SOL']) if 'type_materiau' in df_s else 0
                     grav_count = len(df_s[df_s['type_materiau']=='GRAVE']) if 'type_materiau' in df_s else 0
