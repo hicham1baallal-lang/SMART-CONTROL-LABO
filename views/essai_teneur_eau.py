@@ -107,14 +107,14 @@ def generate_pv_teneur_eau_pdf(header_info, points_data):
 
     type_p = header_info.get('type_proctor') or 'OPN'
     
-    pdf.cell(95, 7, f"  Nature du matériau : {header_info.get('nature_materiau') or ''}", 1, 0, "L")
-    pdf.cell(95, 7, f"  Type de Proctor : {type_p}", 1, 1, "L")
+    pdf.cell(95, 7, f"   Nature du matériau : {header_info.get('nature_materiau') or ''}", 1, 0, "L")
+    pdf.cell(95, 7, f"   Type de Proctor : {type_p}", 1, 1, "L")
 
-    pdf.cell(95, 7, f"  Lieu de prélèvement : {header_info.get('lieu_prelevement') or ''}", 1, 0, "L")
-    pdf.cell(95, 7, f"  Teneur en eau {type_p} (%) : {header_info.get('w_opn') or ''} %", 1, 1, "L")
+    pdf.cell(95, 7, f"   Lieu de prélèvement : {header_info.get('lieu_prelevement') or ''}", 1, 0, "L")
+    pdf.cell(95, 7, f"   Teneur en eau {type_p} (%) : {header_info.get('w_opn') or ''} %", 1, 1, "L")
 
-    pdf.cell(95, 7, f"  Prélèvement effectué le : {header_info.get('date_prelevement') or ''}", 1, 0, "L")
-    pdf.cell(95, 7, f"  PK / Section : {header_info.get('pk_zone') or ''}", 1, 1, "L")
+    pdf.cell(95, 7, f"   Prélèvement effectué le : {header_info.get('date_prelevement') or ''}", 1, 0, "L")
+    pdf.cell(95, 7, f"   PK / Section : {header_info.get('pk_zone') or ''}", 1, 1, "L")
     pdf.ln(8)
 
     # --- SECTION II : RÉSULTATS DES ESSAIS ---
@@ -141,8 +141,8 @@ def generate_pv_teneur_eau_pdf(header_info, points_data):
         pdf.cell(widths[0], row_height, str(p.get("ref_ech") or ""), 1, 0, "C")
         pdf.cell(widths, row_height, str(p.get("date_prel") or p.get("created_at") or "")[:10], 1, 0, "C")
         pdf.cell(widths, row_height, str(p.get("pk") or ""), 1, 0, "C")
-        pdf.cell(widths, row_height, f"{w_m:.1f}", 1, 0, "C")
-        pdf.cell(widths, row_height, f"{w_o:.1f}", 1, 0, "C")
+        pdf.cell(widths[3], row_height, f"{w_m:.1f}", 1, 0, "C")
+        pdf.cell(widths[4], row_height, f"{w_o:.1f}", 1, 0, "C")
         pdf.cell(widths[5], row_height, f"{ratio:.2f}", 1, 0, "C")
         pdf.cell(widths[6], row_height, str(p.get("etat_hydrique") or ""), 1, 0, "C")
         pdf.cell(widths[7], row_height, str(p.get("observation") or "Conforme"), 1, 1, "C")
@@ -288,30 +288,30 @@ def show(supabase_client, can_edit=False, is_admin=False):
                     if st.button("🗑️", key=f"del_{i}", help="Supprimer cet échantillon", disabled=not user_can_edit or len(st.session_state["teneur_eau_samples"]) <= 1):
                         to_delete_idx = i
 
-                m_eau = m_h - m_s
-                m_seche_nette = m_s - m_t
-                w_mesure = (m_eau / m_seche_nette * 100) if m_seche_nette > 0 else 0.0
+            m_eau = m_h - m_s
+            m_seche_nette = m_s - m_t
+            w_mesure = (m_eau / m_seche_nette * 100) if m_seche_nette > 0 else 0.0
 
-                etat_hydrique, obs, ratio_w = evaluer_etat_hydrique_gtr(
-                    w_mesure, w_opn, classe_gtr=classe_gtr, sous_classe=sous_classe_gtr
-                )
+            etat_hydrique, obs, ratio_w = evaluer_etat_hydrique_gtr(
+                w_mesure, w_opn, classe_gtr=classe_gtr, sous_classe=sous_classe_gtr
+            )
 
-                st.caption(f"📊 **w mesurée** = `{w_mesure:.1f} %` | **Ratio w/wOPN** = `{ratio_w:.2f}` | **État Hydrique (GTR)** = `{etat_hydrique}` | **Observation** = `{obs}`")
+            st.caption(f"📊 **w mesurée** = `{w_mesure:.1f} %` | **Ratio w/wOPN** = `{ratio_w:.2f}` | **État Hydrique (GTR)** = `{etat_hydrique}` | **Observation** = `{obs}`")
 
-                samples_calculated.append({
-                    "ref_ech": computed_ref,
-                    "date_prel": str(date_prelevement),
-                    "pk": pk_item,
-                    "couche": sample.get("couche", 1),
-                    "m_humide": m_h,
-                    "m_seche": m_s,
-                    "m_tare": m_t,
-                    "w_mesure": round(w_mesure, 1),
-                    "w_opn": w_opn,
-                    "ratio_w": round(ratio_w, 2),
-                    "etat_hydrique": etat_hydrique,
-                    "observation": obs
-                })
+            samples_calculated.append({
+                "ref_ech": computed_ref,
+                "date_prel": str(date_prelevement),
+                "pk": pk_item,
+                "couche": sample.get("couche", 1),
+                "m_humide": m_h,
+                "m_seche": m_s,
+                "m_tare": m_t,
+                "w_mesure": round(w_mesure, 1),
+                "w_opn": w_opn,
+                "ratio_w": round(ratio_w, 2),
+                "etat_hydrique": etat_hydrique,
+                "observation": obs
+            })
 
         if to_delete_idx is not None:
             st.session_state["teneur_eau_samples"].pop(to_delete_idx)
@@ -484,8 +484,8 @@ def show(supabase_client, can_edit=False, is_admin=False):
                                                     "m_tare": s.get("m_tare") or 30.0
                                                 } for s in samples_data
                                             ]
-                                        st.success("PV chargé dans l'onglet 'Saisie & Modification'.")
-                                        st.rerun()
+                                            st.success("PV chargé dans l'onglet 'Saisie & Modification'.")
+                                            st.rerun()
 
                                 with col_act3:
                                     can_delete_baallal = user_is_admin or ("BAALLAL" in user_name) or ("BAALLAL" in user_role)
