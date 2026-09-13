@@ -85,7 +85,7 @@ def evaluer_conformite_couche(couche, ev2_values, zone_pro=None):
 
     - couche : libellé de la couche/l'ouvrage (voir couche_options).
     - ev2_values : liste des valeurs EV2 (MPa) de chaque point mesuré.
-    - zone_pro : uniquement pour "Remblais contigus aux Ouvrages d'Art
+    - zone_pro : uniquement pour "Remblais contigus aux Ouvrages d\'Art
       (PRO)" -> "Partie supérieure (zone Q3)" ou "Plateforme", détermine le
       seuil applicable (100 MPa vs 80 MPa).
 
@@ -625,13 +625,14 @@ def show(supabase_client):
             st.info(f"✏️ **Mode Modification** - Essai ID #{editing_item['id']}")
             
             default_ref = editing_item.get("reference") or editing_item.get("ref_essai") or editing_item.get("ref") or "260/26/PLQ/01"
-            default_date = datetime.strptime(editing_item["date_essai"], "%Y-%m-%d").date() if isinstance(editing_item.get("date_essai"), str) else date.today()
+            default_date = datetime.strptime(str(editing_item["date_essai"]), "%Y-%m-%d").date() if isinstance(editing_item.get("date_essai"), str) else date.today()
             default_client = editing_item.get("client", "TGCC")
             default_empl = editing_item.get("emplacement", "")
             default_pk = editing_item.get("pk_profil", editing_item.get("pkl", ""))
             default_couche = editing_item.get("couche", "Sous-couche et Couche de forme ferroviaire (LGV)")
             default_mat = editing_item.get("nature_materiau", "")
-            default_tech = editing_item.get("technicien", current_user)
+            # Suppression du remplissage par défaut sur "BAALLAL" -> chaîne vide ou current_user non baallal, ou valeur épurée
+            default_tech = "" if str(editing_item.get("technicien", "")).upper() == "BAALLAL" else editing_item.get("technicien", "")
             default_obs = editing_item.get("observations", "")
             
             saved_points = editing_item.get("points_mesure")
@@ -647,33 +648,33 @@ def show(supabase_client):
             default_pk = "PK 1+200"
             default_couche = "Sous-couche et Couche de forme ferroviaire (LGV)"
             default_mat = "GNT 0/31.5 Classée B2"
-            default_tech = current_user
+            default_tech = "" if current_user.strip() == "BAALLAL" else current_user
             default_obs = ""
             default_points = [{"z1": 0.53, "z2": 0.52, "pk_point": "PK 1+200"}]
 
-        st.subheader("📝 " + ("Modifier l\'essai" if editing_item else "Saisie d\'un nouvel essai"))
+        st.subheader("📝 " + ("Modifier l'essai" if editing_item else "Saisie d'un nouvel essai"))
 
         col0, col1, col2 = st.columns(3)
 
         with col0:
-            reference = st.text_input("Référence de l\'essai", value=default_ref, key="plaque_reference")
+            reference = st.text_input("Référence de l'essai", value=default_ref, key="plaque_reference")
         with col1:
-            date_essai = st.date_input("Date de l\'essai", value=default_date, key="plaque_date")
+            date_essai = st.date_input("Date de l'essai", value=default_date, key="plaque_date")
             client = st.text_input("Client / Organisme", value=default_client, key="plaque_client")
         with col2:
             couche_options = [
                 "Sous-couche et Couche de forme",
-                "Remblais contigus aux Ouvrages d\'Art (PRO)",
+                "Remblais contigus aux Ouvrages d'Art (PRO)",
                 "Arase des terrassements / PST",
                 "Corps de remblai courant (avant PST)",
-                "Plateforme support d\'étaiements / cintres",
+                "Plateforme support d'étaiements / cintres",
                 "Autre"
             ]
             couche_idx = couche_options.index(default_couche) if default_couche in couche_options else 0
             couche = st.selectbox("Couche / Ouvrage testé", couche_options, index=couche_idx, key="plaque_couche")
 
             zone_pro = None
-            if couche == "Remblais contigus aux Ouvrages d\'Art (PRO)":
+            if couche == "Remblais contigus aux Ouvrages d'Art (PRO)":
                 default_zone_pro = editing_item.get("zone_pro", "Plateforme") if editing_item else "Plateforme"
                 zone_pro_options = ["Partie supérieure (zone Q3)", "Plateforme"]
                 zone_pro_idx = zone_pro_options.index(default_zone_pro) if default_zone_pro in zone_pro_options else 1
@@ -692,24 +693,26 @@ def show(supabase_client):
             technicien = st.text_input("Technicien LPEE", value=default_tech, key="plaque_tech")
 
         st.markdown("---")
-        st.subheader("2. Points de Mesure d\'essai à la plaque")
+        st.subheader("2. Points de Mesure d'essai à la plaque")
 
         if "plaque_points_count" not in st.session_state or editing_item:
             st.session_state["plaque_points_count"] = len(default_points)
 
-        col_add, col_rem, _ = st.columns()
+        col_add, col_rem, _ = st.columns(3)
         with col_add:
-            if st.button("➕ Ajouter un point"):
+            if st.button("➕ Ajouter un point", key="btn_add_pt_plaque"):
                 st.session_state["plaque_points_count"] += 1
+                st.rerun()
         with col_rem:
             if st.session_state["plaque_points_count"] > 1:
-                if st.button("➖ Supprimer un point"):
+                if st.button("➖ Supprimer un point", key="btn_rem_pt_plaque"):
                     st.session_state["plaque_points_count"] -= 1
+                    st.rerun()
 
         points_data = []
         for i in range(st.session_state["plaque_points_count"]):
             st.markdown(f"**Point de mesure N° {i+1}**")
-            p_col0, p_col1, p_col2 = st.columns()
+            p_col0, p_col1, p_col2 = st.columns(3)
             
             default_pk_point = default_points[i].get("pk_point", default_pk) if i < len(default_points) else default_pk
             default_z1_val = default_points[i]["z1"] if i < len(default_points) else 0.53
@@ -746,17 +749,17 @@ def show(supabase_client):
             res_col2.metric(f"EV2 [Point {i+1}]", f"{ev2_i:.2f} MPa")
             res_col3.metric(f"Coefficient K [Point {i+1}]", f"{k_ratio_i:.2f}")
 
-        active_z1 = points_data[0]["z1"]
-        active_z2 = points_data[0]["z2"]
-        ev1 = points_results[0]["ev1"]
-        ev2 = points_results[0]["ev2"]
-        k_ratio = points_results[0]["k_ratio"]
+        active_z1 = points_data[0]["z1"] if points_data else 0.53
+        active_z2 = points_data[0]["z2"] if points_data else 0.52
+        ev1 = points_results[0]["ev1"] if points_results else 0.0
+        ev2 = points_results[0]["ev2"] if points_results else 0.0
+        k_ratio = points_results[0]["k_ratio"] if points_results else 0.0
 
         observations = st.text_area("Commentaire / Remarques", value=default_obs, key="plaque_obs")
 
-        btn_col1, btn_col2 = st.columns()
+        btn_col1, btn_col2 = st.columns(2)
         with btn_col1:
-            button_label = "🔄 Mettre à jour l\'essai" if editing_item else "💾 Enregistrer l\'essai"
+            button_label = "🔄 Mettre à jour l'essai" if editing_item else "💾 Enregistrer l'essai"
             if st.button(button_label, key="btn_enregistrer_plaque", type="primary", use_container_width=True):
                 
                 try:
@@ -765,7 +768,7 @@ def show(supabase_client):
                         query_doublon = query_doublon.neq("id", editing_item["id"])
                     res_doublon = query_doublon.execute()
                     if res_doublon.data and len(res_doublon.data) > 0:
-                        st.error(f"🚫 **BLOCAGE** : La référence d\'essai **'{reference}'** existe déjà dans ce projet !")
+                        st.error(f"🚫 **BLOCAGE** : La référence d'essai **'{reference}'** existe déjà dans ce projet !")
                         st.stop()
                 except Exception:
                     pass
@@ -901,7 +904,7 @@ def show(supabase_client):
                     with col_sup:
                         with st.popover("🗑️ Supprimer cet essai", use_container_width=True):
                             st.warning(
-                                f"⚠️ Suppression définitive de l\'essai **#{essai_hist_selectionne['id']}** "
+                                f"⚠️ Suppression définitive de l'essai **#{essai_hist_selectionne['id']}** "
                                 f"(Réf: {essai_hist_selectionne.get('reference', '-')}). Cette action est irréversible."
                             )
                             confirm_del_plaque = st.checkbox(
@@ -998,7 +1001,7 @@ def show(supabase_client):
                             return f"{_NOMS_MOIS_FR.get(mois_num, mois_num)} {annee}"
                         except Exception:
                             return m
-                    choix_mois = st.selectbox("Période (Mois)", mois_options, key="filtre_mois", format_func=_formatter_mois)
+                    choix_mois = st.cat_sel = st.selectbox("Période (Mois)", mois_options, key="filtre_mois", format_func=_formatter_mois) if hasattr(st, 'selectbox') else None
                 with f_col2:
                     empl_options = ["Tous"] + sorted([str(e) for e in df_synth['emplacement'].dropna().unique().tolist()])
                     choix_empl = st.selectbox("Emplacement", empl_options, key="filtre_emplacement")
@@ -1015,9 +1018,9 @@ def show(supabase_client):
                     df_filtered = df_filtered[df_filtered['couche'] == choix_couche]
 
                 st.markdown("---")
-                col_m, col_btn = st.columns()
+                col_m, col_btn = st.columns(2)
                 with col_m:
-                    st.metric("Nombre d\'essais correspondants", len(df_filtered))
+                    st.metric("Nombre d'essais correspondants", len(df_filtered))
                 with col_btn:
                     if not df_filtered.empty:
                         nom_projet_actif = projets_config.nom_projet(projet_id_actif)
