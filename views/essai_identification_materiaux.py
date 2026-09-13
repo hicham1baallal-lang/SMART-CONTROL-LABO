@@ -207,7 +207,7 @@ def show(supabase_client):
             with col_plt:
                 st.markdown("#### Courbe Granulométrique (0.08mm → 80mm)")
                 fig, ax = plt.subplots(figsize=(5.2, 4.3))
-                sieve_labels = [f"Mod {int(m)}" if m % 1 == 0 else f"Mod {m}" for m in plot_df["Modules"]]
+                sieve_labels = [f"{t}mm" for t in plot_df["Tamis (mm)"]]
                 x_indices = np.arange(len(plot_df))
                 ax.plot(
                     x_indices, plot_df["% Passant"],
@@ -215,7 +215,7 @@ def show(supabase_client):
                 )
                 ax.set_xticks(x_indices)
                 ax.set_xticklabels(sieve_labels, rotation=75, ha='right', fontsize=7)
-                ax.set_xlabel("Série de tamis (Modules)")
+                ax.set_xlabel("Ouverture des tamis (mm)")
                 ax.set_ylabel("% Passant (%)")
                 ax.set_ylim(-2, 105)
                 ax.grid(True, which="both", linestyle=":", alpha=0.6)
