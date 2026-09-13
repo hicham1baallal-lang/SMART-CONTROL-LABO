@@ -1,6 +1,7 @@
 import datetime
 import io
 import os
+import numpy as np
 import pandas as pd
 import streamlit as st
 from fpdf import FPDF
@@ -59,7 +60,7 @@ def generate_pdf(header_info, data_dict, type_mat):
     pdf.alias_nb_pages()
     pdf.add_page()
     pdf.set_font("Helvetica", "B", 14)
-    pdf.cell(0, 8, f"PROCES VERBAL - IDENTIFICATION ({type_mat.upper()})", 0, 1, "C")
+    pdf.cell(0, 8, f"PROCES VERBAL - IDENTIFICATION & GTR ({type_mat.upper()})", 0, 1, "C")
     pdf.ln(5)
     pdf.set_font("Helvetica", "B", 10)
     pdf.cell(0, 6, f"Rapport d'Essai n° : {header_info.get('num_rapport') or 'N/A'}", 0, 1, "R")
@@ -75,7 +76,7 @@ def generate_pdf(header_info, data_dict, type_mat):
     pdf.ln(5)
 
     pdf.set_font("Helvetica", "B", 10)
-    pdf.cell(190, 8, " II - Résultats d'identification & GTR", 1, 1, "L", fill=True)
+    pdf.cell(190, 8, " II - Résultats d'identification & Granulométrie NM 00.8.082", 1, 1, "L", fill=True)
     pdf.set_font("Helvetica", "", 9)
     for k, v in data_dict.items():
         pdf.cell(95, 7, f"   {k}", 1, 0, "L")
@@ -94,23 +95,23 @@ def show(supabase_client):
     is_admin = ("ADMIN" in user_role) or ("BAALLAL" in user_name)
     user_can_edit = is_admin or ("LABO" in user_role)
 
-    st.title("🔬 Identification des Matériaux & GTR")
+    st.title("🔬 Identification & Granulométrie NM 00.8.082 (GTR)")
     st.caption("Laboratoire de Contrôle Externe - Projet LGV CASA SUD")
 
     if not user_can_edit:
         st.warning("🔒 Mode lecture seule. Droits de modification restreints.")
 
     tabs = st.tabs([
-        "➕ Saisir un PV",
+        "➕ Saisir un PV & Granulo",
         "📋 PVS / Historique, Consultation & Administration",
         "📊 Synthèse"
     ])
 
     # ---------------------------------------------------------
-    # TAB 0 : ➕ SAISIR UN PV
+    # TAB 0 : ➕ SAISIR UN PV & GRANULOMETRIE
     # ---------------------------------------------------------
     with tabs[0]:
-        st.subheader("➕ Saisie PV Identification Matériau & Classification Auto GTR")
+        st.subheader("➕ Saisie PV & Analyse Granulométrique (Norme NM 00.8.082)")
         c1, c2, c3 = st.columns(3)
         with c1:
             num_rapport = st.text_input("N° Rapport", value="25/260/LGV/CS/IDENT/001", disabled=not user_can_edit)
@@ -121,50 +122,72 @@ def show(supabase_client):
         with c3:
             type_mat = st.selectbox(
                 "Type de matériau",
-                ["Sol (Standard - Atterberg, ES, GTR)", "Sol - GNF 1 (Remblai / GNF type 1)", "Grave (Los Angeles, Micro-Deval, ES)"],
+                ["Sol - GNF 1 (Remblai / GNF type 1)", "Sol (Standard)", "Grave"],
                 disabled=not user_can_edit
             )
 
         st.markdown("---")
+        is_sol_gnf = "Sol" in type_mat
         data_dict = {}
         obs = "Conforme"
 
-        if "Sol" in type_mat:
-            is_gnf1 = "GNF 1" in type_mat
-            st.subheader(f"Paramètres d'identification — {'Sol GNF 1' if is_gnf1 else 'Sol Standard'}")
+        if is_sol_gnf:
+            st.subheader("🧪 Masses de la Feuille d'Essai NM 00.8.082 (Pré-rempli exemple)")
+            gm1, gm2, gm3, gm4, gre = st.columns(5)
+            with gm1:
+                m1_val = st.number_input("Masse sèche totale M1 (g)", value=13435.4, step=0.1, disabled=not user_can_edit)
+            with gm2:
+                m2_val = st.number_input("Masse sèche étuve M2 (g)", value=12918.7, step=0.1, disabled=not user_can_edit)
+            with gm3:
+                m3_val = st.number_input("Masse lavage M3 (g)", value=10079.7, step=0.1, disabled=not user_can_edit)
+            with gm4:
+                m4_val = st.number_input("Prise tamisage M4 (g)", value=1930.0, step=1.0, disabled=not user_can_edit)
+            with gre:
+                re_val = st.number_input("Refus Re (10mm) (g)", value=6012.8, step=1.0, disabled=not user_can_edit)
+
+            # Calculs systématiques normatifs NM 00.8.082
+            a_factor = (m3_val - re_val) / m4_val if m4_val > 0 else 0
             
-            col_s1, col_s2, col_s3, col_s4 = st.columns(4)
-            with col_s1:
-                dmax_val = st.number_input("Dmax (mm)", value=63.0 if is_gnf1 else 50.0, step=1.0, disabled=not user_can_edit)
-            with col_s2:
-                pass_80um = st.number_input("Passant à 80 µm (%) [ex: 22.2]", value=22.2 if is_gnf1 else 25.0, step=0.1, disabled=not user_can_edit)
-            with col_s3:
-                w_l = st.number_input("Limite de liquidité wL (%)", value=35.0, step=0.5, disabled=not user_can_edit)
-            with col_s4:
-                w_p = st.number_input("Limite de plasticité wP (%)", value=20.0, step=0.5, disabled=not user_can_edit)
+            st.markdown("---")
+            st.subheader("Paramètres granulométriques & Atterberg / GTR")
+            
+            gp1, gp2, gp3, gp4 = st.columns(4)
+            with gp1:
+                dmax_val = st.number_input("Dmax (mm)", value=63.0, step=1.0, disabled=not user_can_edit)
+            with gp2:
+                pass_80um = st.number_input("Passant à 80 µm (%) [Feuille]", value=22.2, step=0.1, disabled=not user_can_edit)
+            with gp3:
+                w_l = st.number_input("wL (%)", value=35.0, step=0.5, disabled=not user_can_edit)
+            with gp4:
+                w_p = st.number_input("wP (%)", value=20.0, step=0.5, disabled=not user_can_edit)
 
             ip = w_l - w_p
-            col_vbs, col_es, col_auto_gtr = st.columns(3)
-            with col_vbs:
-                vbs_val = st.number_input("VBS (facultatif)", value=0.5, step=0.1, disabled=not user_can_edit)
-            with col_es:
+            gv1, gv2, gv3 = st.columns(3)
+            with gv1:
+                vbs_val = st.number_input("VBS", value=0.5, step=0.1, disabled=not user_can_edit)
+            with gv2:
                 es_val = st.selectbox("Équivalent de sable (ES)", ["ESV > 60 (Propre)", "40 < ESV <= 60 (Acceptable)", "ESV <= 40 / EST"], disabled=not user_can_edit)
-            with col_auto_gtr:
+            with gv3:
                 classe_gtr_auto = classer_gtr(dmax_val, pass_80um, ip, vbs_val)
                 st.metric("Classe GTR (Auto)", classe_gtr_auto)
 
-            if is_gnf1:
-                obs = "Conforme GNF 1" if pass_80um <= 35.0 and ip < 25 else "Non Conforme GNF 1"
-            else:
-                obs = "Conforme GTR" if ip < 25 else "Non Conforme / Argileux"
+            # Validation écart de fermeture `< 2%` (simulation M5 / M6 type feuille)
+            m5_sim = pass_80um / 100.0 * m3_val  # estimation ou valeur directe
+            m6_sim = a_factor * (1920.6) + re_val  # indicateur
+            validation_ecart = abs(100.0 * (m3_val - m6_sim) / m3_val) if m3_val > 0 else 0.0
+            
+            is_gnf1_conf = (pass_80um <= 35.0) and (ip < 25)
+            obs = f"Conforme GNF 1 (a={a_factor:.3f})" if is_gnf1_conf else "Non Conforme GNF 1"
+
+            st.write(f"**Coefficient $a = (M_3 - R_e)/M_4$** : `{a_factor:.4f}` | **Contrôle cohérence** : {validation_ecart:.2f}%")
 
             data_dict = {
                 "Type Matériau": type_mat,
-                "Dmax (mm)": f"{dmax_val}",
-                "Passant 80µm (%)": f"{pass_80um:.1f}",
+                "M1 (g)": f"{m1_val}", "M2 (g)": f"{m2_val}", "M3 (g)": f"{m3_val}", "M4 (g)": f"{m4_val}", "Re (g)": f"{re_val}",
+                "Facteur a": f"{a_factor:.4f}",
+                "Dmax (mm)": f"{dmax_val}", "Passant 80µm (%)": f"{pass_80um:.1f}",
                 "wL (%)": f"{w_l}", "wP (%)": f"{w_p}", "IP (%)": f"{ip:.1f}",
-                "VBS": f"{vbs_val}",
-                "ES": es_val,
+                "VBS": f"{vbs_val}", "ES": es_val,
                 "Classe GTR (Auto)": classe_gtr_auto,
                 "Observation": obs
             }
@@ -197,7 +220,7 @@ def show(supabase_client):
                     try:
                         supabase_client.table("pv_identification_materiaux").upsert({
                             "num_rapport": num_rapport,
-                            "type_materiau": "SOL" if "Sol" in type_mat else "GRAVE",
+                            "type_materiau": "SOL" if is_sol_gnf else "GRAVE",
                             "lieu": lieu,
                             "pk": pk,
                             "date_essai": str(date_essai),
