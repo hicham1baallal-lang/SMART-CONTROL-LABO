@@ -145,8 +145,8 @@ def show(supabase_client):
             with col_e4:
                 m3_val = st.number_input("Masse après lavage M3 (g)", value=10079.7, step=0.1, disabled=not user_can_edit)
 
-            st.markdown("#### Tableau de Granulométrie (R_i pour ≥10 mm, r_i pour <10 mm)")
-            default_sieves = [
+            st.markdown("#### Tableau de Granulométrie (Tri décroissant : 80 mm → 0.08 mm)")
+            default_sieves_desc = [
                 (80, 0.0, 0.0), (63, 2141.3, 0.0), (50, 3884.8, 0.0), (40, 4638.1, 0.0),
                 (31.5, 4821.6, 0.0), (25, 0.0, 0.0), (20, 0.0, 0.0), (16, 0.0, 0.0),
                 (12.5, 0.0, 0.0), (10, 6012.8, 0.0),
@@ -156,17 +156,17 @@ def show(supabase_client):
                 (0.5, 0.0, 624.5), (0.4, 0.0, 683.8), (0.315, 0.0, 857.0), (0.25, 0.0, 1141.6),
                 (0.2, 0.0, 1403.9), (0.16, 0.0, 1642.3), (0.1, 0.0, 1809.4), (0.08, 0.0, 1919.2)
             ]
-            df_template = pd.DataFrame(default_sieves, columns=["Tamis (mm)", "R_i (g) [≥10mm]", "r_i (g) [<10mm]"])
+            df_template = pd.DataFrame(default_sieves_desc, columns=["Tamis (mm)", "R_i (g) [≥10mm]", "r_i (g) [<10mm]"])
             
             edited_sieve_df = st.data_editor(
                 df_template,
                 disabled=["Tamis (mm)"] if not user_can_edit else [],
                 use_container_width=True,
                 height=380,
-                key="sieve_editor_sol"
+                key="sieve_editor_sol_desc"
             )
 
-            # Calcul dynamique R_e (10mm) = somme des R_i pour tamis >= 10 mm (ou lecture spécifique)
+            # Calcul dynamique R_e (10mm) = somme des R_i pour tamis >= 10 mm
             mask_10_gt = edited_sieve_df["Tamis (mm)"] >= 10
             re_val = float(edited_sieve_df.loc[mask_10_gt, "R_i (g) [≥10mm]"].sum())
             me_val = m3_val - re_val
@@ -188,9 +188,7 @@ def show(supabase_client):
 
             st.markdown(f"**Refus R_e (10mm) calculé** : `{re_val:.1f} g` | **Prise Me (M3-Re)** : `{me_val:.1f} g` | **Coefficient a = Me/M4** : `{a_factor:.4f}` | **IP** : `{ip:.1f}%`")
 
-            # Application stricte de la règle :
-            # - Tamis >= 10 mm : refus cumulé strict des R_i (ordre décroissant)
-            # - Tamis < 10 mm : (ri * a) + Refus R_e (10mm)
+            # Assurer le tri décroissant (supérieur -> inférieur) et calcul cumulatif séquentiel
             work_df = edited_sieve_df.sort_values(by="Tamis (mm)", ascending=False).reset_index(drop=True)
             running_gt10 = 0.0
             cum_refus_list = []
@@ -210,7 +208,7 @@ def show(supabase_client):
             work_df["% Refus Cumulé"] = np.round((work_df["Refus Cumulé R (g)"] / m2_val) * 100.0, 1) if m2_val > 0 else 0.0
             work_df["% Passant"] = np.round(100.0 - work_df["% Refus Cumulé"], 1)
 
-            result_df = work_df.sort_values(by="Tamis (mm)", ascending=True).reset_index(drop=True)
+            result_df = work_df.copy() # Garde l'ordre supérieur -> inférieur affiché dans la photo
 
             col_tbl, col_plt = st.columns([1.1, 0.9])
             with col_tbl:
@@ -218,10 +216,12 @@ def show(supabase_client):
             with col_plt:
                 st.markdown("#### Courbe Granulométrique (0.08mm → 80mm)")
                 fig, ax = plt.subplots(figsize=(5.2, 4.3))
-                sieve_labels = [f"{t}mm" for t in result_df["Tamis (mm)"]]
-                x_indices = np.arange(len(result_df))
+                # Ordre croissant pour le trace de la courbe (0.08mm à droite ou gauche selon convention, mais ici ordre inverse 80->0.08 sur l'axe)
+                plot_curve_df = result_df.sort_values(by="Tamis (mm)", ascending=True).reset_index(drop=True)
+                sieve_labels = [f"{t}mm" for t in plot_curve_df["Tamis (mm)"]]
+                x_indices = np.arange(len(plot_curve_df))
                 ax.plot(
-                    x_indices, result_df["% Passant"],
+                    x_indices, plot_curve_df["% Passant"],
                     marker='o', markersize=4, linestyle='-', color='#1f77b4', linewidth=1.5
                 )
                 ax.set_xticks(x_indices)
@@ -359,7 +359,7 @@ def show(supabase_client):
                         df_s.to_excel(w, index=False, sheet_name='Synthese_Identification')
                     excel_buf.seek(0)
                     st.download_button(
-                        "📥 Télécharger la synthèse en Excel (.xlsx)",
+                        `📥 Télécharger la synthèse en Excel (.xlsx)`,
                         data=excel_buf,
                         file_name=f"synthese_identification_{datetime.date.today()}.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
