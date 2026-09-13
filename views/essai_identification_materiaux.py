@@ -110,8 +110,7 @@ def show(supabase_client):
     # ---------------------------------------------------------
     # TAB 0 : ➕ SAISIR UN PV & GRANULOMETRIE TYPE LPEE (SOL)
     # ---------------------------------------------------------
-    tabs_list = tabs
-    with tabs_list[0]:
+    with tabs[0]:
         st.subheader("➕ Saisie PV & Feuille d'Essai Granulométrique (Norme LPEE)")
         c1, c2, c3 = st.columns(3)
         with c1:
@@ -140,7 +139,7 @@ def show(supabase_client):
             with col_e1:
                 ref_ech = st.text_input("Référence Échantillon", value="ECH-SOL-0247", disabled=not user_can_edit)
             with col_e2:
-                m1_val = st.number_input("Masse sèche totale M1 (g)", value=13435.4, step=0.1, disabled=not user_can_edit)
+                m1_val = st.number_input("Masse totale M1 (g)", value=13435.4, step=0.1, disabled=not user_can_edit)
             with col_e3:
                 m2_val = st.number_input("Masse sèche étuve M2 (g)", value=12918.7, step=0.1, disabled=not user_can_edit)
             with col_e4:
@@ -161,8 +160,8 @@ def show(supabase_client):
 
             st.markdown(f"**Coefficient de raccordement $a = (M_3 - R_e)/M_4$** : `{a_factor:.4f}` | **IP** : `{ip:.1f}%`")
 
-            # Tableau interactif type LPEE (modules & tamis)
-            st.markdown("#### Tableau de Granulométrie par tamisage (Modules LPEE)")
+            # Tableau unique consolidé (édition & résultats cumulés)
+            st.markdown("#### Tableau de Granulométrie & Résultats par tamisage (Modules LPEE)")
             default_sieves = [
                 (50, 80, 0.0), (49, 63, 2141.3), (48, 50, 1743.5), (47, 40, 753.3),
                 (46, 31.5, 183.5), (45, 25, 250.3), (44, 20, 296.8), (43, 16, 287.1),
@@ -179,7 +178,8 @@ def show(supabase_client):
                 df_template,
                 disabled=["Modules", "Tamis (mm)"] if not user_can_edit else [],
                 use_container_width=True,
-                height=380
+                height=380,
+                key="sieve_editor_sol"
             )
 
             # Calculs automatiques
@@ -188,14 +188,15 @@ def show(supabase_client):
             pct_refus_cum = (cum_refus / m2_val) * 100.0 if m2_val > 0 else np.zeros_like(cum_refus)
             pct_passant = 100.0 - pct_refus_cum
 
-            edited_sieve_df["Refus Cumulé R (g)"] = np.round(cum_refus, 1)
-            edited_sieve_df["% Refus Cumulé"] = np.round(pct_refus_cum, 1)
-            edited_sieve_df["% Passant"] = np.round(pct_passant, 1)
+            result_df = edited_sieve_df.copy()
+            result_df["Refus Cumulé R (g)"] = np.round(cum_refus, 1)
+            result_df["% Refus Cumulé"] = np.round(pct_refus_cum, 1)
+            result_df["% Passant"] = np.round(pct_passant, 1)
 
-            st.dataframe(edited_sieve_df, use_container_width=True)
+            st.dataframe(result_df, use_container_width=True)
 
-            dmax_detected = float(edited_sieve_df[edited_sieve_df["Refus R_i / r_i (g)"] > 0]["Tamis (mm)"].max()) if any(edited_sieve_df["Refus R_i / r_i (g)"] > 0) else 50.0
-            row_80um = edited_sieve_df[edited_sieve_df["Tamis (mm)"] == 0.08]
+            dmax_detected = float(result_df[result_df["Refus R_i / r_i (g)"] > 0]["Tamis (mm)"].max()) if any(result_df["Refus R_i / r_i (g)"] > 0) else 50.0
+            row_80um = result_df[result_df["Tamis (mm)"] == 0.08]
             pass_80um_val = float(row_80um["% Passant"].values[0]) if not row_80um.empty else 22.2
 
             col_v1, col_v2, col_v3 = st.columns(3)
@@ -267,7 +268,7 @@ def show(supabase_client):
     # ---------------------------------------------------------
     # TAB 1 : 📋 PVS / HISTORIQUE, CONSULTATION & ADMINISTRATION
     # ---------------------------------------------------------
-    with tabs_list:
+    with tabs:
         st.subheader("📋 PVS / Historique, Consultation & Administration")
         if not supabase_client:
             st.info("💡 Client Supabase non configuré.")
@@ -294,7 +295,7 @@ def show(supabase_client):
     # ---------------------------------------------------------
     # TAB 2 : 📊 SYNTHÈSE
     # ---------------------------------------------------------
-    with tabs_list:
+    with tabs:
         st.subheader("📊 Synthèse Identification Matériaux")
         if not supabase_client:
             st.info("💡 Client Supabase non configuré.")
