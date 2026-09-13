@@ -43,11 +43,14 @@ def generate_pdf(header_info, data_dict, type_mat):
     
     pdf.set_fill_color(230, 230, 230)
     pdf.set_font("Helvetica", "B", 10)
-    pdf.cell(190, 8, " I - Informations générales", 1, 1, "L", fill=True)
+    pdf.cell(190, 8, " I - Informations de prélèvement (Communes à tous les matériaux)", 1, 1, "L", fill=True)
     pdf.set_font("Helvetica", "", 9)
-    pdf.cell(95, 7, f"   Lieu : {header_info.get('lieu') or ''}", 1, 0, "L")
-    pdf.cell(95, 7, f"   Date : {header_info.get('date_essai') or ''}", 1, 1, "L")
-    pdf.cell(190, 7, f"   Origine / PK : {header_info.get('pk') or ''}", 1, 1, "L")
+    pdf.cell(95, 7, f"   Client : {header_info.get('client') or ''}", 1, 0, "L")
+    pdf.cell(95, 7, f"   Chantier : {header_info.get('chantier') or ''}", 1, 1, "L")
+    pdf.cell(95, 7, f"   N° Dossier : {header_info.get('num_dossier') or ''}", 1, 0, "L")
+    pdf.cell(95, 7, f"   Date de prélèvement : {header_info.get('date_prelevement') or ''}", 1, 1, "L")
+    pdf.cell(95, 7, f"   Lieu de prélèvement : {header_info.get('lieu') or ''}", 1, 0, "L")
+    pdf.cell(95, 7, f"   Provenance échantillon : {header_info.get('provenance') or ''}", 1, 1, "L")
     pdf.ln(5)
 
     pdf.set_font("Helvetica", "B", 10)
@@ -76,6 +79,30 @@ def show(supabase_client):
     if not user_can_edit:
         st.warning("🔒 Mode lecture seule. Droits de modification restreints.")
 
+    # Initialisation des états par défaut pour la réinitialisation "Ajouter un autre prélèvement"
+    if "ident_client" not in st.session_state:
+        st.session_state["ident_client"] = "TGCC"
+        st.session_state["ident_chantier"] = "TRAVAUX D'EXECUTION DE TERRASSEMENT, OUVRAGES"
+        st.session_state["ident_dossier"] = "2025-260-05985-2025 0247"
+        st.session_state["ident_date_prel"] = datetime.date(2026, 7, 23)
+        st.session_state["ident_lieu"] = "Stock sur centrale à béton"
+        st.session_state["ident_provenance"] = "TG PREFA OULAD SALEH"
+        st.session_state["ident_num_rapport"] = "26/260/LGV/CS/1237"
+
+    col_btn_add, col_lbl_add = st.columns([1.5, 4.5])
+    with col_btn_add:
+        if st.button("➕ Ajouter un autre prélèvement", use_container_width=True, disabled=not user_can_edit):
+            st.session_state["ident_num_rapport"] = ""
+            st.session_state["ident_date_prel"] = datetime.date.today()
+            # Valeurs de pesée/tamisage réinitialisées par défaut
+            st.session_state["ident_wl"] = 35.0
+            st.session_state["ident_wp"] = 20.0
+            st.session_state["ident_la"] = 25.0
+            st.session_state["ident_md"] = 18.0
+            st.rerun()
+    with col_lbl_add:
+        st.caption("Garde le Client et le Chantier actuels, mais vide le N° Rapport, la date de prélèvement et toutes les valeurs de pesée/tamisage pour saisir un nouveau prélèvement.")
+
     tabs = st.tabs([
         "➕ Saisir un PV",
         "📋 PVS / Historique, Consultation & Administration",
@@ -86,26 +113,54 @@ def show(supabase_client):
     # TAB 0 : ➕ SAISIR UN PV
     # ---------------------------------------------------------
     with tabs[0]:
-        st.subheader("➕ Saisie PV Identification Matériau")
+        st.markdown("📍 **Informations de prélèvement (Communes à tous les matériaux)**")
+        c_com1, c_com2, c_com3 = st.columns(3)
+        with c_com1:
+            client = st.text_input("Client", value=st.session_state["ident_client"], disabled=not user_can_edit, key="input_client")
+        with c_com2:
+            chantier = st.text_input("Chantier", value=st.session_state["ident_chantier"], disabled=not user_can_edit, key="input_chantier")
+        with c_com3:
+            num_dossier = st.text_input("N° Dossier", value=st.session_state["ident_dossier"], disabled=not user_can_edit, key="input_dossier")
+
+        st.session_state["ident_client"] = client
+        st.session_state["ident_chantier"] = chantier
+        st.session_state["ident_dossier"] = num_dossier
+
+        c_com4, c_com5, c_com6 = st.columns(3)
+        with c_com4:
+            date_prelevement = st.date_input("Date de prélèvement", value=st.session_state["ident_date_prel"], disabled=not user_can_edit, key="input_date_prel")
+        with c_com5:
+            lieu = st.text_input("Lieu de prélèvement", value=st.session_state["ident_lieu"], disabled=not user_can_edit, key="input_lieu")
+        with c_com6:
+            provenance = st.text_input("Provenance échantillon", value=st.session_state["ident_provenance"], disabled=not user_can_edit, key="input_prov")
+
+        st.session_state["ident_date_prel"] = date_prelevement
+        st.session_state["ident_lieu"] = lieu
+        st.session_state["ident_provenance"] = provenance
+
+        c_rep1, c_rep2 = st.columns()
+        with c_rep1:
+            num_rapport = st.text_input("N° RAPPORT D'ESSAI N°", value=st.session_state["ident_num_rapport"], disabled=not user_can_edit, key="input_num_rapport")
+            st.session_state["ident_num_rapport"] = num_rapport
+            st.caption("Référence labo (Base) - Identique au N° Rapport")
+
+        pk_section = f"{lieu} / {provenance}"
+
+        st.markdown("---")
         c1, c2, c3 = st.columns(3)
-        with c1:
-            num_rapport = st.text_input("N° Rapport", value="25/260/LGV/CS/IDENT/001", disabled=not user_can_edit)
-            lieu = st.text_input("Lieu / Zone", value="Zone T4 / Carrière", disabled=not user_can_edit)
-        with c2:
-            pk = st.text_input("PK / Section", value="PK 8+540", disabled=not user_can_edit)
-            date_essai = st.date_input("Date Essai", value=datetime.date.today(), disabled=not user_can_edit)
         with c3:
             type_mat = st.selectbox("Type de matériau", ["Sol (Atterberg, ES, GTR)", "Grave (Los Angeles, Micro-Deval, ES)"], disabled=not user_can_edit)
 
-        st.markdown("---")
         data_dict = {}
         if "Sol" in type_mat:
             st.subheader("Paramètres d'identification - Sol")
             col_s1, col_s2, col_s3 = st.columns(3)
             with col_s1:
-                w_l = st.number_input("Limite de liquidité wL (%)", value=35.0, step=0.5, disabled=not user_can_edit)
+                w_l = st.number_input("Limite de liquidité wL (%)", value=st.session_state.get("ident_wl", 35.0), step=0.5, disabled=not user_can_edit, key="input_wl")
+                st.session_state["ident_wl"] = w_l
             with col_s2:
-                w_p = st.number_input("Limite de plasticité wP (%)", value=20.0, step=0.5, disabled=not user_can_edit)
+                w_p = st.number_input("Limite de plasticité wP (%)", value=st.session_state.get("ident_wp", 20.0), step=0.5, disabled=not user_can_edit, key="input_wp")
+                st.session_state["ident_wp"] = w_p
             with col_s3:
                 ip = w_l - w_p
                 st.metric("Indice de plasticité IP", f"{ip:.1f} %")
@@ -126,8 +181,10 @@ def show(supabase_client):
             st.subheader("Paramètres d'identification - Grave")
             col_g1, col_g2 = st.columns(2)
             with col_g1:
-                la = st.number_input("Los Angeles (LA)", value=25.0, step=1.0, disabled=not user_can_edit)
-                md = st.number_input("Micro-Deval humide (MDE)", value=18.0, step=1.0, disabled=not user_can_edit)
+                la = st.number_input("Los Angeles (LA)", value=st.session_state.get("ident_la", 25.0), step=1.0, disabled=not user_can_edit, key="input_la")
+                md = st.number_input("Micro-Deval humide (MDE)", value=st.session_state.get("ident_md", 18.0), step=1.0, disabled=not user_can_edit, key="input_md")
+                st.session_state["ident_la"] = la
+                st.session_state["ident_md"] = md
             with col_g2:
                 es_grav = st.selectbox("ES à 10% / Piston (Grave)", ["ES >= 75", "ES < 75"], disabled=not user_can_edit)
 
@@ -139,7 +196,17 @@ def show(supabase_client):
             }
 
         st.info(f"Observation automatique : **{obs}**")
-        header_info = {"num_rapport": num_rapport, "lieu": lieu, "pk": pk, "date_essai": str(date_essai)}
+        header_info = {
+            "num_rapport": num_rapport,
+            "client": client,
+            "chantier": chantier,
+            "num_dossier": num_dossier,
+            "date_prelevement": str(date_prelevement),
+            "lieu": lieu,
+            "provenance": provenance,
+            "date_essai": str(date_prelevement),
+            "pk": pk_section
+        }
 
         pdf_bytes = generate_pdf(header_info, data_dict, type_mat.split()[0])
         col_d1, col_d2 = st.columns(2)
@@ -152,9 +219,14 @@ def show(supabase_client):
                         supabase_client.table("pv_identification_materiaux").upsert({
                             "num_rapport": num_rapport,
                             "type_materiau": type_mat.split()[0].upper(),
+                            "client": client,
+                            "chantier": chantier,
+                            "num_dossier": num_dossier,
+                            "date_prelevement": str(date_prelevement),
                             "lieu": lieu,
-                            "pk": pk,
-                            "date_essai": str(date_essai),
+                            "provenance": provenance,
+                            "pk": pk_section,
+                            "date_essai": str(date_prelevement),
                             "details": data_dict,
                             "observation": obs
                         }).execute()
@@ -174,7 +246,7 @@ def show(supabase_client):
                 res = supabase_client.table("pv_identification_materiaux").select("*").order("date_essai", desc=True).execute()
                 if res.data:
                     df_hist = pd.DataFrame(res.data)
-                    search_q = st.text_input("Filtrer par N° Rapport ou Lieu :").lower()
+                    search_q = st.text_input("Filtrer par N° Rapport, Client ou Lieu :").lower()
                     if search_q:
                         df_hist = df_hist[df_hist.apply(lambda r: search_q in str(r.values).lower(), axis=1)]
                     st.dataframe(df_hist, use_container_width=True)
