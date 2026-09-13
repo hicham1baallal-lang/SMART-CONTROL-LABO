@@ -139,8 +139,8 @@ def generate_pv_teneur_eau_pdf(header_info, points_data):
         ratio = p.get('ratio_w') if p.get('ratio_w') is not None else (w_m / w_o if w_o > 0 else 0.0)
 
         pdf.cell(widths[0], row_height, str(p.get("ref_ech") or ""), 1, 0, "C")
-        pdf.cell(widths, row_height, str(p.get("date_prel") or p.get("created_at") or "")[:10], 1, 0, "C")
-        pdf.cell(widths, row_height, str(p.get("pk") or ""), 1, 0, "C")
+        pdf.cell(widths[1], row_height, str(p.get("date_prel") or p.get("created_at") or "")[:10], 1, 0, "C")
+        pdf.cell(widths[2], row_height, str(p.get("pk") or ""), 1, 0, "C")
         pdf.cell(widths[3], row_height, f"{w_m:.1f}", 1, 0, "C")
         pdf.cell(widths[4], row_height, f"{w_o:.1f}", 1, 0, "C")
         pdf.cell(widths[5], row_height, f"{ratio:.2f}", 1, 0, "C")
