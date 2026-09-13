@@ -255,10 +255,11 @@ def generer_pdf_pv(essai):
     
     if os.path.exists(logo_path):
         try:
-            img = Image(logo_path, width=45, height=45)
+            # Taille augmentée à width=65, height=65 (au lieu de 45x45) et adaptation de la largeur de colonne à 75
+            img = Image(logo_path, width=65, height=65)
             img.hAlign = 'LEFT'
             txt_header = Paragraph(header_text, org_style)
-            header_table = Table([[img, txt_header]], colWidths=[55, 470])
+            header_table = Table([[img, txt_header]], colWidths=[75, 450])
             header_table.setStyle(TableStyle([
                 ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
                 ('LEFTPADDING', (0,0), (-1,-1), 0),
@@ -631,7 +632,6 @@ def show(supabase_client):
             default_pk = editing_item.get("pk_profil", editing_item.get("pkl", ""))
             default_couche = editing_item.get("couche", "Sous-couche et Couche de forme ferroviaire (LGV)")
             default_mat = editing_item.get("nature_materiau", "")
-            # Suppression du remplissage par défaut sur "BAALLAL" -> chaîne vide ou current_user non baallal, ou valeur épurée
             default_tech = "" if str(editing_item.get("technicien", "")).upper() == "BAALLAL" else editing_item.get("technicien", "")
             default_obs = editing_item.get("observations", "")
             
