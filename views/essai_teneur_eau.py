@@ -4,6 +4,8 @@ import os
 import pandas as pd
 import streamlit as st
 from fpdf import FPDF
+import openpyxl
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
 # ==========================================
 # FONCTION DE CLASSIFICATION SELON LE GTR (CLASSES A & B)
@@ -168,6 +170,187 @@ def generate_pv_teneur_eau_pdf(header_info, points_data):
 # ==========================================
 # MODULE VUE STREAMLIT : TENEUR EN EAU
 # ==========================================
+# ==========================================
+# EXPORT EXCEL STYLÉ DE LA SYNTHÈSE (inspiré du module Essai à la Plaque)
+# ==========================================
+def generer_excel_synthese_teneur_eau(df, mois_str, empl_str, couche_str, nom_projet):
+    output = io.BytesIO()
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Synthèse Teneur en Eau"
+    ws.views.sheetView[0].showGridLines = True
+
+    ws.page_setup.orientation = ws.ORIENTATION_PORTRAIT
+    ws.page_setup.paperSize = ws.PAPERSIZE_A4
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 0
+
+    header_fill = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
+    header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+    title_font = Font(name="Calibri", size=13, bold=True, color="1F4E78")
+    subtitle_font = Font(name="Calibri", size=10, italic=True, color="595959")
+    bold_font = Font(name="Calibri", size=10, bold=True)
+    normal_font = Font(name="Calibri", size=10)
+
+    thin_border = Border(
+        left=Side(style='thin', color='D9D9D9'),
+        right=Side(style='thin', color='D9D9D9'),
+        top=Side(style='thin', color='D9D9D9'),
+        bottom=Side(style='thin', color='D9D9D9')
+    )
+    double_bottom_border = Border(
+        left=Side(style='thin', color='D9D9D9'),
+        right=Side(style='thin', color='D9D9D9'),
+        top=Side(style='thin', color='D9D9D9'),
+        bottom=Side(style='double', color='1F4E78')
+    )
+
+    ws['A1'] = "LABORATOIRE LPEE — CENTRE TECHNIQUE RÉGIONAL"
+    ws['A1'].font = title_font
+    ws.merge_cells('A1:G1')
+    ws['A1'].alignment = Alignment(horizontal='center')
+
+    ws['A2'] = "Norme : NF EN 1097-5 (Teneur en eau par étuvage)"
+    ws['A2'].font = bold_font
+    ws.merge_cells('A2:G2')
+    ws['A2'].alignment = Alignment(horizontal='center')
+
+    ws['A3'] = f"Projet : {nom_projet} | Filtres -> Mois: {mois_str} | Emplacement: {empl_str} | Couche: {couche_str}"
+    ws['A3'].font = subtitle_font
+    ws.merge_cells('A3:G3')
+    ws['A3'].alignment = Alignment(horizontal='center')
+
+    ws['A4'] = f"SYNTHÈSE DES ESSAIS DE TENEUR EN EAU — MENSUEL - {mois_str}"
+    ws['A4'].font = bold_font
+    ws.merge_cells('A4:G4')
+    ws['A4'].alignment = Alignment(horizontal='center')
+
+    headers = ["Date Essai", "Couche", "Emplacement", "PK / Référence", "w mesurée (%)", "w OPN (%)", "Ratio w/wOPN"]
+    for col_num, header_title in enumerate(headers, 1):
+        cell = ws.cell(row=6, column=col_num)
+        cell.value = header_title
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+        cell.border = thin_border
+
+    row_idx = 7
+    w_vals, wopn_vals, ratio_vals = [], [], []
+    date_col = "date_prel" if "date_prel" in df.columns else "created_at"
+    pk_col = "pk" if "pk" in df.columns else "ref_ech"
+
+    for _, row in df.iterrows():
+        ws.cell(row=row_idx, column=1, value=str(row.get(date_col, '') or '')[:10]).alignment = Alignment(horizontal='center', vertical='center')
+        ws.cell(row=row_idx, column=2, value=str(row.get('couche', '') or '')).alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+        ws.cell(row=row_idx, column=3, value=str(row.get('lieu_prelevement', '') or '')).alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+        ws.cell(row=row_idx, column=4, value=str(row.get(pk_col, '') or '')).alignment = Alignment(horizontal='center', vertical='center')
+
+        w_v = float(row.get('w_mesure', 0) or 0)
+        wopn_v = float(row.get('w_opn', 0) or 0)
+        ratio_v = float(row.get('ratio_w', 0) or 0)
+
+        w_vals.append(w_v)
+        wopn_vals.append(wopn_v)
+        ratio_vals.append(ratio_v)
+
+        c_w = ws.cell(row=row_idx, column=5, value=w_v)
+        c_w.number_format = '#,##0.00'
+        c_w.alignment = Alignment(horizontal='right', vertical='center')
+
+        c_wopn = ws.cell(row=row_idx, column=6, value=wopn_v)
+        c_wopn.number_format = '#,##0.00'
+        c_wopn.alignment = Alignment(horizontal='right', vertical='center')
+
+        c_ratio = ws.cell(row=row_idx, column=7, value=ratio_v)
+        c_ratio.number_format = '#,##0.00'
+        c_ratio.alignment = Alignment(horizontal='right', vertical='center')
+        c_ratio.fill = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
+
+        for c in range(1, 8):
+            ws.cell(row=row_idx, column=c).font = normal_font
+            ws.cell(row=row_idx, column=c).border = thin_border
+
+        row_idx += 1
+
+    if len(df) > 0:
+        avg_w = sum(w_vals) / len(w_vals)
+        avg_wopn = sum(wopn_vals) / len(wopn_vals)
+        avg_ratio = sum(ratio_vals) / len(ratio_vals)
+
+        ws.merge_cells(start_row=row_idx, start_column=1, end_row=row_idx, end_column=4)
+        m_cell = ws.cell(row=row_idx, column=1, value="MOYENNE DES ESSAIS")
+        m_cell.font = bold_font
+        m_cell.alignment = Alignment(horizontal='right', vertical='center')
+
+        for c in range(1, 5):
+            ws.cell(row=row_idx, column=c).border = double_bottom_border
+
+        c_avg1 = ws.cell(row=row_idx, column=5, value=avg_w)
+        c_avg1.font = bold_font
+        c_avg1.number_format = '#,##0.00'
+        c_avg1.alignment = Alignment(horizontal='right', vertical='center')
+        c_avg1.border = double_bottom_border
+
+        c_avg2 = ws.cell(row=row_idx, column=6, value=avg_wopn)
+        c_avg2.font = bold_font
+        c_avg2.number_format = '#,##0.00'
+        c_avg2.alignment = Alignment(horizontal='right', vertical='center')
+        c_avg2.border = double_bottom_border
+
+        c_avgk = ws.cell(row=row_idx, column=7, value=avg_ratio)
+        c_avgk.font = bold_font
+        c_avgk.number_format = '#,##0.00'
+        c_avgk.alignment = Alignment(horizontal='right', vertical='center')
+        c_avgk.border = double_bottom_border
+
+        row_idx += 2
+
+        ws.cell(row=row_idx, column=1, value="RÉSUMÉ STATISTIQUE QUALITÉ").font = bold_font
+        row_idx += 1
+
+        stat_headers = ["Indicateur", "w mesurée (%)", "w OPN (%)", "Ratio w/wOPN"]
+        for col_num, sh in enumerate(stat_headers, 1):
+            cell = ws.cell(row=row_idx, column=col_num)
+            cell.value = sh
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = Alignment(horizontal='center', vertical='center')
+            cell.border = thin_border
+        row_idx += 1
+
+        stats_data = [
+            ("Valeur Minimale", min(w_vals), min(wopn_vals), min(ratio_vals)),
+            ("Valeur Maximale", max(w_vals), max(wopn_vals), max(ratio_vals)),
+            ("Moyenne Générale", avg_w, avg_wopn, avg_ratio),
+            ("Nombre d\'essais", len(w_vals), len(wopn_vals), len(ratio_vals))
+        ]
+
+        for label, v1, v2, vk in stats_data:
+            ws.cell(row=row_idx, column=1, value=label).font = bold_font
+            ws.cell(row=row_idx, column=1).border = thin_border
+
+            for col_idx, val in enumerate([v1, v2, vk], 2):
+                c = ws.cell(row=row_idx, column=col_idx, value=val)
+                c.font = normal_font
+                c.number_format = '#,##0.00' if label != "Nombre d\'essais" else '#,##0'
+                c.alignment = Alignment(horizontal='right', vertical='center')
+                c.border = thin_border
+            row_idx += 1
+
+        row_idx += 3
+        ws.cell(row=row_idx, column=1, value="Responsable d\'essai").font = bold_font
+        ws.cell(row=row_idx, column=6, value="Chef du Laboratoire").font = bold_font
+
+    col_dimensions = {'A': 13, 'B': 24, 'C': 16, 'D': 16, 'E': 13, 'F': 12, 'G': 14}
+    for col_letter, width in col_dimensions.items():
+        ws.column_dimensions[col_letter].width = width
+
+    wb.save(output)
+    output.seek(0)
+    return output.getvalue()
+
+
 def show(supabase_client, can_edit=False, is_admin=False):
     user_name = str(st.session_state.get("user_name", st.session_state.get("username", ""))).upper()
     user_role = str(st.session_state.get("role", st.session_state.get("user_role", ""))).upper()
@@ -603,15 +786,15 @@ def show(supabase_client, can_edit=False, is_admin=False):
                     st.markdown("#### 📋 Données filtrées")
                     st.dataframe(df_filtered, use_container_width=True)
 
-                    # --- EXPORT EXCEL ---
-                    excel_buffer = io.BytesIO()
-                    with pd.ExcelWriter(excel_buffer, engine='openpyxl') as writer:
-                        df_filtered.to_excel(writer, sheet_name='Synthese_Teneur_Eau', index=False)
-                    excel_buffer.seek(0)
+                    # --- EXPORT EXCEL (stylé, inspiré du module Essai à la Plaque) ---
+                    nom_projet_synth = df_filtered["nature_materiau"].dropna().iloc[0] if "nature_materiau" in df_filtered.columns and not df_filtered["nature_materiau"].dropna().empty else "LGV CASA SUD"
+                    excel_data = generer_excel_synthese_teneur_eau(
+                        df_filtered, filtre_mois, filtre_emplacement, filtre_couche, nom_projet_synth
+                    )
 
                     st.download_button(
                         label="📥 Télécharger la synthèse en Excel (.xlsx)",
-                        data=excel_buffer,
+                        data=excel_data,
                         file_name=f"synthese_teneur_eau_{datetime.date.today()}.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                         type="primary",
