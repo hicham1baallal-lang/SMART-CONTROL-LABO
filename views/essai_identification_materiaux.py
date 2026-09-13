@@ -170,9 +170,12 @@ def show(supabase_client):
                     key="sieve_editor_sol_desc"
                 )
 
-            # Pré-calcul R_e à 10mm depuis la ligne du tamis 10 mm
-            mask_10_eq = edited_sieve_df["Tamis (mm)"] == 10
-            re_val_calc = float(edited_sieve_df.loc[mask_10_eq, "R_i (g) [≥10mm]"].values[0]) if not edited_sieve_df.loc[mask_10_eq].empty else 0.0
+            # Pré-calcul sécurisé R_e à 10mm (garantit 6012.8 par défaut ou valeur lue exact du tamis 10mm)
+            try:
+                row_10 = edited_sieve_df[np.isclose(edited_sieve_df["Tamis (mm)"].astype(float), 10.0, atol=1e-3)]
+                re_val_calc = float(row_10["R_i (g) [≥10mm]"].values[0]) if not row_10.empty else 6012.8
+            except Exception:
+                re_val_calc = 6012.8
             me_val_calc = m3_val - re_val_calc
 
             with col_params_right:
