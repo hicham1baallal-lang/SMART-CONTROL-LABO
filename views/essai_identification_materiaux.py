@@ -145,18 +145,18 @@ def show(supabase_client):
             with col_e4:
                 m3_val = st.number_input("Masse après lavage M3 (g)", value=10079.7, step=0.1, disabled=not user_can_edit)
 
-            st.markdown("#### Tableau de Granulométrie & Résultats par tamisage (Ouverture mm)")
+            st.markdown("#### Tableau de Granulométrie (R_i pour ≥10 mm, r_i pour <10 mm)")
             default_sieves = [
-                (80, 0.0), (63, 2141.3), (50, 1743.5), (40, 753.3),
-                (31.5, 183.5), (25, 250.3), (20, 296.8), (16, 287.1),
-                (14, 0.0), (12.5, 147.0), (10, 6012.8), (8, 72.4),
-                (6.3, 151.0), (5, 197.6), (4, 238.5), (3.15, 278.4),
-                (2.5, 321.6), (2, 361.1), (1.6, 401.9), (1.25, 445.4),
-                (1, 483.1), (0.8, 524.9), (0.63, 563.3), (0.5, 624.5),
-                (0.4, 683.8), (0.315, 857.0), (0.25, 1141.6), (0.2, 1403.9),
-                (0.16, 1642.3), (0.1, 1809.4), (0.08, 1919.2)
+                (80, 0.0, 0.0), (63, 2141.3, 0.0), (50, 1743.5, 0.0), (40, 753.3, 0.0),
+                (31.5, 183.5, 0.0), (25, 250.3, 0.0), (20, 296.8, 0.0), (16, 287.1, 0.0),
+                (14, 0.0, 0.0), (12.5, 147.0, 0.0), (10, 6012.8, 0.0),
+                (8, 0.0, 72.4), (6.3, 0.0, 151.0), (5, 0.0, 197.6), (4, 0.0, 238.5),
+                (3.15, 0.0, 278.4), (2.5, 0.0, 321.6), (2, 0.0, 361.1), (1.6, 0.0, 401.9),
+                (1.25, 0.0, 445.4), (1, 0.0, 483.1), (0.8, 0.0, 524.9), (0.63, 0.0, 563.3),
+                (0.5, 0.0, 624.5), (0.4, 0.0, 683.8), (0.315, 0.0, 857.0), (0.25, 0.0, 1141.6),
+                (0.2, 0.0, 1403.9), (0.16, 0.0, 1642.3), (0.1, 0.0, 1809.4), (0.08, 0.0, 1919.2)
             ]
-            df_template = pd.DataFrame(default_sieves, columns=["Tamis (mm)", "Refus R_i / r_i (g)"])
+            df_template = pd.DataFrame(default_sieves, columns=["Tamis (mm)", "R_i (g) [≥10mm]", "r_i (g) [<10mm]"])
             
             edited_sieve_df = st.data_editor(
                 df_template,
@@ -167,14 +167,14 @@ def show(supabase_client):
             )
 
             row_10mm = edited_sieve_df[edited_sieve_df["Tamis (mm)"] == 10]
-            re_val = float(row_10mm["Refus R_i / r_i (g)"].values[0]) if not row_10mm.empty else 0.0
+            re_val = float(row_10mm["R_i (g) [≥10mm]"].values[0]) if not row_10mm.empty else 0.0
             me_val = m3_val - re_val
 
             col_e5, col_e6, col_e6b, col_e7, col_e8 = st.columns(5)
             with col_e5:
                 m4_val = st.number_input("Prise tamisage M4 (g)", value=1930.0, step=1.0, disabled=not user_can_edit)
             with col_e6:
-                st.number_input("Refus Re (10mm) (g)", value=re_val, disabled=True, key="re_10mm_non_mod")
+                st.number_input("Refus R_e (10mm) (g)", value=re_val, disabled=True, key="re_10mm_non_mod")
             with col_e6b:
                 st.number_input("Prise Me (g) [M3-Re]", value=me_val, disabled=True, key="me_val_non_mod")
             with col_e7:
@@ -187,8 +187,12 @@ def show(supabase_client):
 
             st.markdown(f"**Refus R_e (10mm) calculé** : `{re_val:.1f} g` | **Prise Me (M3-Re)** : `{me_val:.1f} g` | **Coefficient a = Me/M4** : `{a_factor:.4f}` | **IP** : `{ip:.1f}%`")
 
-            refus_vals = edited_sieve_df["Refus R_i / r_i (g)"].values
-            cum_refus = np.cumsum(refus_vals)
+            R_vals = edited_sieve_df["R_i (g) [≥10mm]"].values
+            r_vals = edited_sieve_df["r_i (g) [<10mm]"].values
+            sieve_sz = edited_sieve_df["Tamis (mm)"].values
+
+            effective_refus = np.where(sieve_sz >= 10, R_vals, r_vals * a_factor)
+            cum_refus = np.cumsum(effective_refus)
             pct_refus_cum = (cum_refus / m2_val) * 100.0 if m2_val > 0 else np.zeros_like(cum_refus)
             pct_passant = 100.0 - pct_refus_cum
 
@@ -223,7 +227,7 @@ def show(supabase_client):
                 st.pyplot(fig, use_container_width=True)
                 plt.close(fig)
 
-            dmax_detected = float(result_df[result_df["Refus R_i / r_i (g)"] > 0]["Tamis (mm)"].max()) if any(result_df["Refus R_i / r_i (g)"] > 0) else 50.0
+            dmax_detected = float(result_df[(result_df["R_i (g) [≥10mm]"] > 0) | (result_df["r_i (g) [<10mm]"] > 0)]["Tamis (mm)"].max()) if any((result_df["R_i (g) [≥10mm]"] > 0) | (result_df["r_i (g) [<10mm]"] > 0)) else 50.0
             row_80um = result_df[result_df["Tamis (mm)"] == 0.08]
             pass_80um_val = float(row_80um["% Passant"].values[0]) if not row_80um.empty else 22.2
 
@@ -236,7 +240,7 @@ def show(supabase_client):
                 classe_gtr_auto = classer_gtr(dmax_detected, pass_80um_val, ip, vbs_val)
                 st.metric("Classe GTR (Auto)", classe_gtr_auto)
 
-            m6_sim = a_factor * (cum_refus[-1] if len(cum_refus)>0 else 0) + re_val
+            m6_sim = cum_refus[-1] if len(cum_refus) > 0 else 0
             val_ecart = abs(100.0 * (m3_val - m6_sim) / m3_val) if m3_val > 0 else 0.0
             is_gnf1_conf = (pass_80um_val <= 35.0) and (ip < 25)
             obs = f"Conforme GNF 1 (Passant 80µm={pass_80um_val:.1f}%)" if is_gnf1_conf else "Non Conforme / Hors fuseau"
