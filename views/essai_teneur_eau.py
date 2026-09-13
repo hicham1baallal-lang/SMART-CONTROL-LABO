@@ -1,4 +1,5 @@
 import datetime
+import io
 import os
 import pandas as pd
 import streamlit as st
@@ -58,7 +59,6 @@ def evaluer_etat_hydrique_gtr(w_mesure, w_opn, classe_gtr="Classe B", sous_class
 # ==========================================
 class LPEETeneurEauPDF(FPDF):
     def header(self):
-        # Utilisation du nom de fichier exact fourni : logo.png.jpg
         logo_path = "logo.png.jpg"
         if os.path.exists(logo_path):
             try:
@@ -139,11 +139,11 @@ def generate_pv_teneur_eau_pdf(header_info, points_data):
         ratio = p.get('ratio_w') if p.get('ratio_w') is not None else (w_m / w_o if w_o > 0 else 0.0)
 
         pdf.cell(widths[0], row_height, str(p.get("ref_ech") or ""), 1, 0, "C")
-        pdf.cell(widths[1], row_height, str(p.get("date_prel") or p.get("created_at") or "")[:10], 1, 0, "C")
-        pdf.cell(widths[2], row_height, str(p.get("pk") or ""), 1, 0, "C")
-        pdf.cell(widths[3], row_height, f"{w_m:.1f}", 1, 0, "C")
-        pdf.cell(widths[4], row_height, f"{w_o:.1f}", 1, 0, "C")
-        pdf.cell(widths[5], row_height, f"{ratio:.2f}", 1, 0, "C")
+        pdf.cell(widths, row_height, str(p.get("date_prel") or p.get("created_at") or "")[:10], 1, 0, "C")
+        pdf.cell(widths, row_height, str(p.get("pk") or ""), 1, 0, "C")
+        pdf.cell(widths, row_height, f"{w_m:.1f}", 1, 0, "C")
+        pdf.cell(widths, row_height, f"{w_o:.1f}", 1, 0, "C")
+        pdf.cell(widths, row_height, f"{ratio:.2f}", 1, 0, "C")
         pdf.cell(widths[6], row_height, str(p.get("etat_hydrique") or ""), 1, 0, "C")
         pdf.cell(widths[7], row_height, str(p.get("observation") or "Conforme"), 1, 1, "C")
 
@@ -252,7 +252,7 @@ def show(supabase_client, can_edit=False, is_admin=False):
                 {"pk": pk_zone, "couche": 1, "m_humide": 239.0, "m_seche": 217.5, "m_tare": 38.5},
             ]
 
-        col_b1, col_b2, col_b3 = st.columns([1.5, 1.5, 3])
+        col_b1, col_b2, col_b3 = st.columns()
         with col_b1:
             if st.button("➕ Ajouter un échantillon", disabled=not user_can_edit):
                 st.session_state["teneur_eau_samples"].append({
@@ -272,7 +272,7 @@ def show(supabase_client, can_edit=False, is_admin=False):
             computed_ref = f"{num_pv_seq}/{i+1}"
 
             with st.expander(f"📍 Échantillon N° {i+1} : {computed_ref}", expanded=True):
-                c1, c2, c3, c4, c5, c6 = st.columns([1.5, 2, 2, 2, 2, 1])
+                c1, c2, c3, c4, c5, c6 = st.columns()
                 with c1:
                     st.text_input("Référence", value=computed_ref, key=f"ref_{i}", disabled=True)
                 with c2:
@@ -380,7 +380,7 @@ def show(supabase_client, can_edit=False, is_admin=False):
     # ---------------------------------------------------------
     # TAB 2 : PVS / HISTORIQUE, CONSULTATION & ADMINISTRATION
     # ---------------------------------------------------------
-    with tabs[1]:
+    with tabs:
         st.subheader("📋 PVS / Historique, Consultation & Administration")
 
         if not supabase_client:
@@ -446,7 +446,7 @@ def show(supabase_client, can_edit=False, is_admin=False):
                                     else:
                                         st.warning("Aucun échantillon rattaché à ce PV.")
 
-                                col_act1, col_act2, col_act3 = st.columns([2, 1.5, 1.5])
+                                col_act1, col_act2, col_act3 = st.columns()
 
                                 with col_act1:
                                     pdf_reprint = generate_pv_teneur_eau_pdf(selected_pv, samples_data)
@@ -535,9 +535,9 @@ def show(supabase_client, can_edit=False, is_admin=False):
                 st.error(f"Erreur de chargement de la table brute : {e}")
 
     # ---------------------------------------------------------
-    # TAB 3 : SYNTHÈSE
+    # TAB 3 : SYNTHÈSE + EXPORT EXCEL
     # ---------------------------------------------------------
-    with tabs[2]:
+    with tabs:
         st.subheader("📊 Synthèse des Essais de Teneur en Eau")
 
         if not supabase_client:
@@ -602,6 +602,21 @@ def show(supabase_client, can_edit=False, is_admin=False):
 
                     st.markdown("#### 📋 Données filtrées")
                     st.dataframe(df_filtered, use_container_width=True)
+
+                    # --- EXPORT EXCEL ---
+                    excel_buffer = io.BytesIO()
+                    with pd.ExcelWriter(excel_buffer, engine='openpyxl') as writer:
+                        df_filtered.to_excel(writer, sheet_name='Synthese_Teneur_Eau', index=False)
+                    excel_buffer.seek(0)
+
+                    st.download_button(
+                        label="📥 Télécharger la synthèse en Excel (.xlsx)",
+                        data=excel_buffer,
+                        file_name=f"synthese_teneur_eau_{datetime.date.today()}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        type="primary",
+                        use_container_width=True
+                    )
 
                 else:
                     st.info("Aucune donnée disponible pour la synthèse.")
