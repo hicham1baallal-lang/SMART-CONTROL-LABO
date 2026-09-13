@@ -197,22 +197,25 @@ def show(supabase_client):
             result_df["% Refus Cumulé"] = np.round(pct_refus_cum, 1)
             result_df["% Passant"] = np.round(pct_passant, 1)
 
-            # Disposition côte à côte : Tableau / Courbe (avec série de tamis en abscisse)
+            # Tri par ordre croissant de taille de tamis (0.08mm à gauche -> 80mm à droite)
+            plot_df = result_df.sort_values(by="Tamis (mm)", ascending=True).reset_index(drop=True)
+
+            # Disposition côte à côte : Tableau / Courbe
             col_tbl, col_plt = st.columns([1.1, 0.9])
             with col_tbl:
                 st.dataframe(result_df, use_container_width=True, height=420)
             with col_plt:
-                st.markdown("#### Courbe Granulométrique")
-                fig, ax = plt.subplots(figsize=(5.0, 4.3))
-                sieve_labels = [f"Mod {int(m)} ({t}mm)" if m % 1 == 0 else f"T{t}mm" for m, t in zip(result_df["Modules"], result_df["Tamis (mm)"])]
-                x_indices = np.arange(len(result_df))
+                st.markdown("#### Courbe Granulométrique (0.08mm → 80mm)")
+                fig, ax = plt.subplots(figsize=(5.2, 4.3))
+                sieve_labels = [f"Mod {int(m)}" if m % 1 == 0 else f"Mod {m}" for m in plot_df["Modules"]]
+                x_indices = np.arange(len(plot_df))
                 ax.plot(
-                    x_indices, result_df["% Passant"],
+                    x_indices, plot_df["% Passant"],
                     marker='o', markersize=4, linestyle='-', color='#1f77b4', linewidth=1.5
                 )
                 ax.set_xticks(x_indices)
-                ax.set_xticklabels(sieve_labels, rotation=70, ha='right', fontsize=7)
-                ax.set_xlabel("Série de tamis (Modules / Ouverture)")
+                ax.set_xticklabels(sieve_labels, rotation=75, ha='right', fontsize=7)
+                ax.set_xlabel("Série de tamis (Modules)")
                 ax.set_ylabel("% Passant (%)")
                 ax.set_ylim(-2, 105)
                 ax.grid(True, which="both", linestyle=":", alpha=0.6)
