@@ -143,7 +143,7 @@ def generate_pv_teneur_eau_pdf(header_info, points_data):
         pdf.cell(widths, row_height, str(p.get("pk") or ""), 1, 0, "C")
         pdf.cell(widths, row_height, f"{w_m:.1f}", 1, 0, "C")
         pdf.cell(widths, row_height, f"{w_o:.1f}", 1, 0, "C")
-        pdf.cell(widths, row_height, f"{ratio:.2f}", 1, 0, "C")
+        pdf.cell(widths[5], row_height, f"{ratio:.2f}", 1, 0, "C")
         pdf.cell(widths[6], row_height, str(p.get("etat_hydrique") or ""), 1, 0, "C")
         pdf.cell(widths[7], row_height, str(p.get("observation") or "Conforme"), 1, 1, "C")
 
@@ -179,7 +179,7 @@ def show(supabase_client, can_edit=False, is_admin=False):
     st.title("💧 Essai de Teneur en Eau (NM EN 1097-5 / GTR)")
     st.caption("Laboratoire de Contrôle Externe - Projet LGV CASA SUD")
 
-    is_editing_mode = st.session_state.get("teneur_eau_edit_mode", False)
+    is_editing_mode = st.session_setate if "teneur_eau_edit_mode" in st.session_state else False
     if is_editing_mode:
         st.warning(f"✏️ **Mode Modification** activé pour le PV : `{st.session_state.get('teneur_eau_edit_num_rapport')}`")
 
