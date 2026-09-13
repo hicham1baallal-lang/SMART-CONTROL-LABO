@@ -145,12 +145,11 @@ def show(supabase_client):
             with col_e4:
                 m3_val = st.number_input("Masse après lavage M3 (g)", value=10079.7, step=0.1, disabled=not user_can_edit)
 
-            st.markdown("#### Tableau de Granulométrie (R_i pour ≥10 mm, r_i pour <10 mm — Tamis 14 mm supprimé)")
-            # Tamis 14 mm retiré de la liste ci-dessous
+            st.markdown("#### Tableau de Granulométrie (R_i pour ≥10 mm, r_i pour <10 mm)")
             default_sieves = [
-                (80, 0.0, 0.0), (63, 2141.3, 0.0), (50, 1743.5, 0.0), (40, 753.3, 0.0),
-                (31.5, 183.5, 0.0), (25, 250.3, 0.0), (20, 296.8, 0.0), (16, 287.1, 0.0),
-                (12.5, 147.0, 0.0), (10, 6012.8, 0.0),
+                (80, 0.0, 0.0), (63, 2141.3, 0.0), (50, 3884.8, 0.0), (40, 4638.1, 0.0),
+                (31.5, 4821.6, 0.0), (25, 0.0, 0.0), (20, 0.0, 0.0), (16, 0.0, 0.0),
+                (12.5, 0.0, 0.0), (10, 6012.8, 0.0),
                 (8, 0.0, 72.4), (6.3, 0.0, 151.0), (5, 0.0, 197.6), (4, 0.0, 238.5),
                 (3.15, 0.0, 278.4), (2.5, 0.0, 321.6), (2, 0.0, 361.1), (1.6, 0.0, 401.9),
                 (1.25, 0.0, 445.4), (1, 0.0, 483.1), (0.8, 0.0, 524.9), (0.63, 0.0, 563.3),
@@ -167,17 +166,18 @@ def show(supabase_client):
                 key="sieve_editor_sol"
             )
 
-            row_10mm = edited_sieve_df[edited_sieve_df["Tamis (mm)"] == 10]
-            re_val = float(row_10mm["R_i (g) [≥10mm]"].values[0]) if not row_10mm.empty else 0.0
+            # Calcul dynamique R_e (10mm) = somme des R_i pour tamis >= 10 mm (ou lecture spécifique)
+            mask_10_gt = edited_sieve_df["Tamis (mm)"] >= 10
+            re_val = float(edited_sieve_df.loc[mask_10_gt, "R_i (g) [≥10mm]"].sum())
             me_val = m3_val - re_val
 
             col_e5, col_e6, col_e6b, col_e7, col_e8 = st.columns(5)
             with col_e5:
                 m4_val = st.number_input("Prise tamisage M4 (g)", value=1930.0, step=1.0, disabled=not user_can_edit)
             with col_e6:
-                st.number_input("Refus R_e (10mm) (g)", value=re_val, disabled=True, key="re_10mm_non_mod")
+                st.number_input("Refus R_e (10mm) (g)", value=re_val, disabled=True, key="re_10mm_mod")
             with col_e6b:
-                st.number_input("Prise Me (g) [M3-Re]", value=me_val, disabled=True, key="me_val_non_mod")
+                st.number_input("Prise Me (g) [M3-Re]", value=me_val, disabled=True, key="me_val_mod")
             with col_e7:
                 w_l = st.number_input("wL (%)", value=35.0, step=0.5, disabled=not user_can_edit)
             with col_e8:
@@ -188,44 +188,40 @@ def show(supabase_client):
 
             st.markdown(f"**Refus R_e (10mm) calculé** : `{re_val:.1f} g` | **Prise Me (M3-Re)** : `{me_val:.1f} g` | **Coefficient a = Me/M4** : `{a_factor:.4f}` | **IP** : `{ip:.1f}%`")
 
-            R_vals = edited_sieve_df["R_i (g) [≥10mm]"].values
-            r_vals = edited_sieve_df["r_i (g) [<10mm]"].values
-            sieve_sz = edited_sieve_df["Tamis (mm)"].values
-
-            # Logique demandée :
-            # - Pour les tamis >= 10 mm : refus cumulé strict de R_i sommé
-            # - Pour les tamis < 10 mm : (ri * a_factor) + Refus R_e(10mm)
-            cum_refus = np.zeros_like(sieve_sz, dtype=float)
-            running_r_gt10 = 0.0
-            for i, sz in enumerate(sieve_sz):
+            # Application stricte de la règle :
+            # - Tamis >= 10 mm : refus cumulé strict des R_i (ordre décroissant)
+            # - Tamis < 10 mm : (ri * a) + Refus R_e (10mm)
+            work_df = edited_sieve_df.sort_values(by="Tamis (mm)", ascending=False).reset_index(drop=True)
+            running_gt10 = 0.0
+            cum_refus_list = []
+            
+            for idx, row in work_df.iterrows():
+                sz = row["Tamis (mm)"]
+                r_i_val = row["R_i (g) [≥10mm]"]
+                r_fine_val = row["r_i (g) [<10mm]"]
                 if sz >= 10:
-                    running_r_gt10 += R_vals[i]
-                    cum_refus[i] = running_r_gt10
+                    running_gt10 += r_i_val
+                    cum_val = running_gt10
                 else:
-                    cum_refus[i] = (r_vals[i] * a_factor) + re_val
+                    cum_val = (r_fine_val * a_factor) + re_val
+                cum_refus_list.append(cum_val)
+            
+            work_df["Refus Cumulé R (g)"] = np.round(cum_refus_list, 1)
+            work_df["% Refus Cumulé"] = np.round((work_df["Refus Cumulé R (g)"] / m2_val) * 100.0, 1) if m2_val > 0 else 0.0
+            work_df["% Passant"] = np.round(100.0 - work_df["% Refus Cumulé"], 1)
 
-            pct_refus_cum = (cum_refus / m2_val) * 100.0 if m2_val > 0 else np.zeros_like(cum_refus)
-            pct_passant = 100.0 - pct_refus_cum
+            result_df = work_df.sort_values(by="Tamis (mm)", ascending=True).reset_index(drop=True)
 
-            result_df = edited_sieve_df.copy()
-            result_df["Refus Cumulé R (g)"] = np.round(cum_refus, 1)
-            result_df["% Refus Cumulé"] = np.round(pct_refus_cum, 1)
-            result_df["% Passant"] = np.round(pct_passant, 1)
-
-            # Tri par ordre croissant de taille de tamis (0.08mm à gauche -> 80mm à droite)
-            plot_df = result_df.sort_values(by="Tamis (mm)", ascending=True).reset_index(drop=True)
-
-            # Disposition côte à côte : Tableau / Courbe
             col_tbl, col_plt = st.columns([1.1, 0.9])
             with col_tbl:
                 st.dataframe(result_df, use_container_width=True, height=420)
             with col_plt:
                 st.markdown("#### Courbe Granulométrique (0.08mm → 80mm)")
                 fig, ax = plt.subplots(figsize=(5.2, 4.3))
-                sieve_labels = [f"{t}mm" for t in plot_df["Tamis (mm)"]]
-                x_indices = np.arange(len(plot_df))
+                sieve_labels = [f"{t}mm" for t in result_df["Tamis (mm)"]]
+                x_indices = np.arange(len(result_df))
                 ax.plot(
-                    x_indices, plot_df["% Passant"],
+                    x_indices, result_df["% Passant"],
                     marker='o', markersize=4, linestyle='-', color='#1f77b4', linewidth=1.5
                 )
                 ax.set_xticks(x_indices)
@@ -251,7 +247,8 @@ def show(supabase_client):
                 classe_gtr_auto = classer_gtr(dmax_detected, pass_80um_val, ip, vbs_val)
                 st.metric("Classe GTR (Auto)", classe_gtr_auto)
 
-            m6_sim = cum_refus[sieve_sz == 10][0] if len(cum_refus[sieve_sz == 10]) > 0 else 0
+            row_10_check = result_df[result_df["Tamis (mm)"] == 10]
+            m6_sim = float(row_10_check["Refus Cumulé R (g)"].values[0]) if not row_10_check.empty else 0.0
             val_ecart = abs(100.0 * (m3_val - m6_sim) / m3_val) if m3_val > 0 else 0.0
             is_gnf1_conf = (pass_80um_val <= 35.0) and (ip < 25)
             obs = f"Conforme GNF 1 (Passant 80µm={pass_80um_val:.1f}%)" if is_gnf1_conf else "Non Conforme / Hors fuseau"
