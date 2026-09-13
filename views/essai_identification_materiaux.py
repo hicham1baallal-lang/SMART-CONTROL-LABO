@@ -135,7 +135,6 @@ def show(supabase_client):
         if is_sol:
             st.markdown("### 📄 Feuille d'Essai type LPEE — Analyse Granulométrique (Sol)")
             
-            # Paramètres généraux en-tête feuille (Masse totale M1, Masse sèche M2, M3)
             col_e1, col_e2, col_e3, col_e4 = st.columns(4)
             with col_e1:
                 ref_ech = st.text_input("Référence Échantillon", value="ECH-SOL-0247", disabled=not user_can_edit)
@@ -146,7 +145,6 @@ def show(supabase_client):
             with col_e4:
                 m3_val = st.number_input("Masse après lavage M3 (g)", value=10079.7, step=0.1, disabled=not user_can_edit)
 
-            # Tableau interactif type LPEE (modules & tamis) AVANT pour calculer le Re (10mm) dynamiquement
             st.markdown("#### Tableau de Granulométrie & Résultats par tamisage (Modules LPEE)")
             default_sieves = [
                 (50, 80, 0.0), (49, 63, 2141.3), (48, 50, 1743.5), (47, 40, 753.3),
@@ -168,12 +166,10 @@ def show(supabase_client):
                 key="sieve_editor_sol"
             )
 
-            # Extraction automatique et systématique de Re (10mm) depuis le tableau (tamis == 10) et calcul de Me = M3 - Re
             row_10mm = edited_sieve_df[edited_sieve_df["Tamis (mm)"] == 10]
             re_val = float(row_10mm["Refus R_i / r_i (g)"].values[0]) if not row_10mm.empty else 0.0
             me_val = m3_val - re_val
 
-            # Ligne de synthèse paramétrique avec Refus Re (10mm) et Prise Me non modifiables
             col_e5, col_e6, col_e6b, col_e7, col_e8 = st.columns(5)
             with col_e5:
                 m4_val = st.number_input("Prise tamisage M4 (g)", value=1930.0, step=1.0, disabled=not user_can_edit)
@@ -191,7 +187,6 @@ def show(supabase_client):
 
             st.markdown(f"**Refus R_e (10mm) calculé** : `{re_val:.1f} g` | **Prise Me (M3-Re)** : `{me_val:.1f} g` | **Coefficient a = Me/M4** : `{a_factor:.4f}` | **IP** : `{ip:.1f}%`")
 
-            # Calculs automatiques
             refus_vals = edited_sieve_df["Refus R_i / r_i (g)"].values
             cum_refus = np.cumsum(refus_vals)
             pct_refus_cum = (cum_refus / m2_val) * 100.0 if m2_val > 0 else np.zeros_like(cum_refus)
@@ -202,25 +197,27 @@ def show(supabase_client):
             result_df["% Refus Cumulé"] = np.round(pct_refus_cum, 1)
             result_df["% Passant"] = np.round(pct_passant, 1)
 
-            # Disposition côte à côte : Tableau à gauche / Courbe granulométrique à droite
+            # Disposition côte à côte : Tableau / Courbe
             col_tbl, col_plt = st.columns([1.1, 0.9])
             with col_tbl:
                 st.dataframe(result_df, use_container_width=True, height=420)
             with col_plt:
                 st.markdown("#### Courbe Granulométrique")
                 fig, ax = plt.subplots(figsize=(4.8, 4.2))
+                plot_data = result_df[result_df["Tamis (mm)"] > 0].sort_values(by="Tamis (mm)", ascending=True)
                 ax.plot(
-                    result_df["Tamis (mm)"], result_df["% Passant"],
+                    plot_data["Tamis (mm)"], plot_data["% Passant"],
                     marker='o', markersize=3.5, linestyle='-', color='#1f77b4', linewidth=1.5
                 )
                 ax.set_xscale('log')
-                ax.invert_xaxis()  # grands diamètres à gauche, petits à droite (norme géotechnique)
+                ax.set_xlim(left=plot_data["Tamis (mm)"].max() * 1.1, right=plot_data["Tamis (mm)"].min() * 0.9)
                 ax.set_xlabel("Ouverture des tamis (mm - log)")
-                ax.set_ylabel("% Passant")
+                ax.set_ylabel("% Passant (%)")
                 ax.set_ylim(-2, 105)
                 ax.grid(True, which="both", linestyle=":", alpha=0.6)
                 fig.tight_layout()
-                st.pyplot(fig)
+                st.pyplot(fig, use_container_width=True)
+                plt.close(fig)
 
             dmax_detected = float(result_df[result_df["Refus R_i / r_i (g)"] > 0]["Tamis (mm)"].max()) if any(result_df["Refus R_i / r_i (g)"] > 0) else 50.0
             row_80um = result_df[result_df["Tamis (mm)"] == 0.08]
