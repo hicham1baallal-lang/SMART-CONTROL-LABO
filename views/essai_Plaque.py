@@ -616,7 +616,7 @@ def show(supabase_client):
         return
     st.caption(f"📁 Projet actif : **{projets_config.nom_projet(projet_id_actif)}**")
 
-    tab_saisie, tab_pv, tab_synthese = st.tabs(["📝 Saisie & Historique", "PV/PDF", "Synthèse"])
+    tab_saisie, tab_hist_admin, tab_synthese = st.tabs(["➕ Saisie un PV", "Historique, Consultation & Administration", "Synthèse"])
 
     with tab_saisie:
         editing_item = st.session_state.get("edit_plaque_item", None)
@@ -697,7 +697,7 @@ def show(supabase_client):
         if "plaque_points_count" not in st.session_state or editing_item:
             st.session_state["plaque_points_count"] = len(default_points)
 
-        col_add, col_rem, _ = st.columns([1, 1, 3])
+        col_add, col_rem, _ = st.columns()
         with col_add:
             if st.button("➕ Ajouter un point"):
                 st.session_state["plaque_points_count"] += 1
@@ -709,7 +709,7 @@ def show(supabase_client):
         points_data = []
         for i in range(st.session_state["plaque_points_count"]):
             st.markdown(f"**Point de mesure N° {i+1}**")
-            p_col0, p_col1, p_col2 = st.columns([1, 1, 1])
+            p_col0, p_col1, p_col2 = st.columns()
             
             default_pk_point = default_points[i].get("pk_point", default_pk) if i < len(default_points) else default_pk
             default_z1_val = default_points[i]["z1"] if i < len(default_points) else 0.53
@@ -754,7 +754,7 @@ def show(supabase_client):
 
         observations = st.text_area("Commentaire / Remarques", value=default_obs, key="plaque_obs")
 
-        btn_col1, btn_col2 = st.columns([3, 1])
+        btn_col1, btn_col2 = st.columns()
         with btn_col1:
             button_label = "🔄 Mettre à jour l\'essai" if editing_item else "💾 Enregistrer l\'essai"
             if st.button(button_label, key="btn_enregistrer_plaque", type="primary", use_container_width=True):
@@ -857,8 +857,8 @@ def show(supabase_client):
                 st.session_state["edit_plaque_item"] = None
                 st.rerun()
 
-        st.markdown("---")
-        st.subheader("📋 Historique des Essais Enregistrés")
+    with tab_hist_admin:
+        st.subheader("📋 Historique, Consultation & Administration")
         try:
             data_plaque = charger_essais_plaque(projet_id_actif)
             if data_plaque and len(data_plaque) > 0:
@@ -885,7 +885,7 @@ def show(supabase_client):
                     for item in data_plaque
                 }
                 choix_hist_str = st.selectbox(
-                    "Sélectionner un essai", options=list(options_hist.keys()), key="hist_plaque_select"
+                    "Sélectionner un essai pour administration", options=list(options_hist.keys()), key="hist_plaque_select"
                 )
                 essai_hist_selectionne = options_hist[choix_hist_str]
 
@@ -894,6 +894,7 @@ def show(supabase_client):
                     if can_edit:
                         if st.button("✏️ Modifier cet essai", use_container_width=True, key="btn_edit_plaque_hist"):
                             st.session_state["edit_plaque_item"] = essai_hist_selectionne
+                            st.info("ℹ️ Mode modification activé. Revenez sur l'onglet '➕ Saisie un PV' pour éditer les valeurs.")
                             st.rerun()
 
                 if is_baallal_admin:
@@ -933,13 +934,13 @@ def show(supabase_client):
         except Exception as e:
             st.warning(f"Erreur historique : {e}")
 
-    with tab_pv:
+        st.markdown("---")
         st.subheader("📄 Génération de PV et Synthèse PDF")
         try:
             data_plaque = charger_essais_plaque(projet_id_actif)
             if data_plaque and len(data_plaque) > 0:
                 options_essais = {f"ID #{item['id']} - Réf: {item.get('reference', 'Sans réf')} ({item.get('date_essai', '')})": item for item in data_plaque}
-                choix_essai_str = st.selectbox("Sélectionner l\'essai à éditer en PV :", options=list(options_essais.keys()))
+                choix_essai_str = st.selectbox("Sélectionner l'essai à éditer en PV :", options=list(options_essais.keys()), key="pv_pdf_select_essai")
                 essai_selectionne = options_essais[choix_essai_str]
 
                 st.markdown("---")
@@ -1014,7 +1015,7 @@ def show(supabase_client):
                     df_filtered = df_filtered[df_filtered['couche'] == choix_couche]
 
                 st.markdown("---")
-                col_m, col_btn = st.columns([2, 1])
+                col_m, col_btn = st.columns()
                 with col_m:
                     st.metric("Nombre d\'essais correspondants", len(df_filtered))
                 with col_btn:
