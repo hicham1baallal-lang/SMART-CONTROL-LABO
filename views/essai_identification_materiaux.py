@@ -166,7 +166,6 @@ def show(supabase_client):
                 key="sieve_editor_sol_desc"
             )
 
-            # Calcul dynamique R_e (10mm) = somme des R_i pour tamis >= 10 mm
             mask_10_gt = edited_sieve_df["Tamis (mm)"] >= 10
             re_val = float(edited_sieve_df.loc[mask_10_gt, "R_i (g) [≥10mm]"].sum())
             me_val = m3_val - re_val
@@ -188,7 +187,6 @@ def show(supabase_client):
 
             st.markdown(f"**Refus R_e (10mm) calculé** : `{re_val:.1f} g` | **Prise Me (M3-Re)** : `{me_val:.1f} g` | **Coefficient a = Me/M4** : `{a_factor:.4f}` | **IP** : `{ip:.1f}%`")
 
-            # Assurer le tri décroissant (supérieur -> inférieur) et calcul cumulatif séquentiel
             work_df = edited_sieve_df.sort_values(by="Tamis (mm)", ascending=False).reset_index(drop=True)
             running_gt10 = 0.0
             cum_refus_list = []
@@ -208,7 +206,7 @@ def show(supabase_client):
             work_df["% Refus Cumulé"] = np.round((work_df["Refus Cumulé R (g)"] / m2_val) * 100.0, 1) if m2_val > 0 else 0.0
             work_df["% Passant"] = np.round(100.0 - work_df["% Refus Cumulé"], 1)
 
-            result_df = work_df.copy() # Garde l'ordre supérieur -> inférieur affiché dans la photo
+            result_df = work_df.copy()
 
             col_tbl, col_plt = st.columns([1.1, 0.9])
             with col_tbl:
@@ -216,7 +214,6 @@ def show(supabase_client):
             with col_plt:
                 st.markdown("#### Courbe Granulométrique (0.08mm → 80mm)")
                 fig, ax = plt.subplots(figsize=(5.2, 4.3))
-                # Ordre croissant pour le trace de la courbe (0.08mm à droite ou gauche selon convention, mais ici ordre inverse 80->0.08 sur l'axe)
                 plot_curve_df = result_df.sort_values(by="Tamis (mm)", ascending=True).reset_index(drop=True)
                 sieve_labels = [f"{t}mm" for t in plot_curve_df["Tamis (mm)"]]
                 x_indices = np.arange(len(plot_curve_df))
@@ -359,7 +356,7 @@ def show(supabase_client):
                         df_s.to_excel(w, index=False, sheet_name='Synthese_Identification')
                     excel_buf.seek(0)
                     st.download_button(
-                        `📥 Télécharger la synthèse en Excel (.xlsx)`,
+                        "📥 Télécharger la synthèse en Excel (.xlsx)",
                         data=excel_buf,
                         file_name=f"synthese_identification_{datetime.date.today()}.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
