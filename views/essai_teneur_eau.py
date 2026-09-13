@@ -179,7 +179,7 @@ def show(supabase_client, can_edit=False, is_admin=False):
     st.title("💧 Essai de Teneur en Eau (NM EN 1097-5 / GTR)")
     st.caption("Laboratoire de Contrôle Externe - Projet LGV CASA SUD")
 
-    is_editing_mode = st.session_setate if "teneur_eau_edit_mode" in st.session_state else False
+    is_editing_mode = st.session_state.get("teneur_eau_edit_mode", False)
     if is_editing_mode:
         st.warning(f"✏️ **Mode Modification** activé pour le PV : `{st.session_state.get('teneur_eau_edit_num_rapport')}`")
 
@@ -252,7 +252,7 @@ def show(supabase_client, can_edit=False, is_admin=False):
                 {"pk": pk_zone, "couche": 1, "m_humide": 239.0, "m_seche": 217.5, "m_tare": 38.5},
             ]
 
-        col_b1, col_b2, col_b3 = st.columns()
+        col_b1, col_b2, col_b3 = st.columns(3)
         with col_b1:
             if st.button("➕ Ajouter un échantillon", disabled=not user_can_edit):
                 st.session_state["teneur_eau_samples"].append({
@@ -272,7 +272,7 @@ def show(supabase_client, can_edit=False, is_admin=False):
             computed_ref = f"{num_pv_seq}/{i+1}"
 
             with st.expander(f"📍 Échantillon N° {i+1} : {computed_ref}", expanded=True):
-                c1, c2, c3, c4, c5, c6 = st.columns()
+                c1, c2, c3, c4, c5, c6 = st.columns(6)
                 with c1:
                     st.text_input("Référence", value=computed_ref, key=f"ref_{i}", disabled=True)
                 with c2:
@@ -446,7 +446,7 @@ def show(supabase_client, can_edit=False, is_admin=False):
                                     else:
                                         st.warning("Aucun échantillon rattaché à ce PV.")
 
-                                col_act1, col_act2, col_act3 = st.columns()
+                                col_act1, col_act2, col_act3 = st.columns(3)
 
                                 with col_act1:
                                     pdf_reprint = generate_pv_teneur_eau_pdf(selected_pv, samples_data)
