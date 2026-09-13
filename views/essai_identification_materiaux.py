@@ -145,7 +145,7 @@ def show(supabase_client):
             with col_e4:
                 m3_val = st.number_input("Masse après lavage M3 (g)", value=10079.7, step=0.1, disabled=not user_can_edit)
 
-            st.markdown("#### Tableau de Granulométrie (Tri décroissant : 80 mm → 0.08 mm)")
+            st.markdown("#### Tableau de Granulométrie & Paramètres associés")
             default_sieves_desc = [
                 (80, 0.0, 0.0), (63, 2141.3, 0.0), (50, 3884.8, 0.0), (40, 4638.1, 0.0),
                 (31.5, 4821.6, 0.0), (25, 5032.0, 0.0), (20, 5282.0, 0.0), (16, 5579.0, 0.0),
@@ -158,35 +158,42 @@ def show(supabase_client):
             ]
             df_template = pd.DataFrame(default_sieves_desc, columns=["Tamis (mm)", "R_i (g) [≥10mm]", "r_i (g) [<10mm]"])
             
-            edited_sieve_df = st.data_editor(
-                df_template,
-                disabled=["Tamis (mm)"] if not user_can_edit else [],
-                use_container_width=True,
-                height=380,
-                key="sieve_editor_sol_desc"
-            )
+            # Layout côte à côte : Tableau à gauche / Paramètres à droite
+            col_main_tbl, col_params_right = st.columns([1.3, 0.9])
+            
+            with col_main_tbl:
+                edited_sieve_df = st.data_editor(
+                    df_template,
+                    disabled=["Tamis (mm)"] if not user_can_edit else [],
+                    use_container_width=True,
+                    height=520,
+                    key="sieve_editor_sol_desc"
+                )
 
-            # R_e à 10mm pris directement depuis la ligne du tamis 10 mm
+            # Pré-calcul R_e à 10mm depuis la ligne du tamis 10 mm
             mask_10_eq = edited_sieve_df["Tamis (mm)"] == 10
-            re_val = float(edited_sieve_df.loc[mask_10_eq, "R_i (g) [≥10mm]"].values[0]) if not edited_sieve_df.loc[mask_10_eq].empty else 0.0
-            me_val = m3_val - re_val
+            re_val_calc = float(edited_sieve_df.loc[mask_10_eq, "R_i (g) [≥10mm]"].values[0]) if not edited_sieve_df.loc[mask_10_eq].empty else 0.0
+            me_val_calc = m3_val - re_val_calc
 
-            col_e5, col_e6, col_e6b, col_e7, col_e8 = st.columns(5)
-            with col_e5:
+            with col_params_right:
+                st.markdown("##### ⚙️ Paramètres d'analyse")
                 m4_val = st.number_input("Prise tamisage M4 (g)", value=1930.0, step=1.0, disabled=not user_can_edit)
-            with col_e6:
-                st.number_input("Refus R_e (10mm) (g)", value=re_val, disabled=True, key="re_10mm_mod")
-            with col_e6b:
-                st.number_input("Prise Me (g) [M3-Re]", value=me_val, disabled=True, key="me_val_mod")
-            with col_e7:
+                re_val = st.number_input("Refus R_e (10mm) (g)", value=re_val_calc, disabled=True, key="re_10mm_mod")
+                me_val = st.number_input("Prise Me (g) [M3-Re]", value=me_val_calc, disabled=True, key="me_val_mod")
                 w_l = st.number_input("wL (%)", value=35.0, step=0.5, disabled=not user_can_edit)
-            with col_e8:
                 w_p = st.number_input("wP (%)", value=20.0, step=0.5, disabled=not user_can_edit)
 
-            a_factor = me_val / m4_val if m4_val > 0 else 0
-            ip = w_l - w_p
-
-            st.markdown(f"**Refus R_e (10mm)** : `{re_val:.1f} g` | **Prise Me (M3-Re)** : `{me_val:.1f} g` | **Coefficient a = Me/M4** : `{a_factor:.4f}` | **IP** : `{ip:.1f}%`")
+                a_factor = me_val / m4_val if m4_val > 0 else 0
+                ip = w_l - w_p
+                st.markdown(
+                    f"""
+                    <div style="background-color: #f0f2f6; padding: 10px; border-radius: 6px; font-size: 0.85em;">
+                        <b>Coeff. a = Me/M4</b> : {a_factor:.4f}<br>
+                        <b>IP</b> : {ip:.1f}%
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
 
             work_df = edited_sieve_df.sort_values(by="Tamis (mm)", ascending=False).reset_index(drop=True)
             cum_refus_list = []
@@ -208,11 +215,11 @@ def show(supabase_client):
 
             result_df = work_df.copy()
 
-            col_tbl, col_plt = st.columns([1.1, 0.9])
-            with col_tbl:
+            st.markdown("#### Résultats & Courbe Granulométrique")
+            col_tbl_res, col_plt = st.columns([1.1, 0.9])
+            with col_tbl_res:
                 st.dataframe(result_df, use_container_width=True, height=420)
             with col_plt:
-                st.markdown("#### Courbe Granulométrique (0.08mm → 80mm)")
                 fig, ax = plt.subplots(figsize=(5.2, 4.3))
                 plot_curve_df = result_df.sort_values(by="Tamis (mm)", ascending=True).reset_index(drop=True)
                 sieve_labels = [f"{t}mm" for t in plot_curve_df["Tamis (mm)"]]
