@@ -6,6 +6,8 @@ import streamlit as st
 from fpdf import FPDF
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from openpyxl.worksheet.page import PageMargins
+from openpyxl.drawing.image import Image as XLImage
 
 # ==========================================
 # FONCTION DE CLASSIFICATION SELON LE GTR (CLASSES A & B)
@@ -173,6 +175,22 @@ def generate_pv_teneur_eau_pdf(header_info, points_data):
 # ==========================================
 # EXPORT EXCEL STYLÉ DE LA SYNTHÈSE (inspiré du module Essai à la Plaque)
 # ==========================================
+def _trouver_logo_lpee():
+    """Cherche le logo LPEE (logo.png.jpg, comme utilisé dans la barre
+    latérale de app.py) à quelques emplacements usuels du dépôt. Retourne
+    le chemin trouvé, ou None si absent — l'export reste alors fonctionnel,
+    simplement sans logo."""
+    candidats = [
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "logo.png.jpg"),
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "logo.png.jpg"),
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "logo.png"),
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "logo.png"),
+        "logo.png.jpg",
+        "logo.png",
+    ]
+    return next((p for p in candidats if os.path.isfile(p)), None)
+
+
 def generer_excel_synthese_teneur_eau(df, mois_str, empl_str, couche_str, nom_projet):
     output = io.BytesIO()
     wb = openpyxl.Workbook()
@@ -180,11 +198,21 @@ def generer_excel_synthese_teneur_eau(df, mois_str, empl_str, couche_str, nom_pr
     ws.title = "Synthèse Teneur en Eau"
     ws.views.sheetView[0].showGridLines = True
 
+    # ------------------------------------------------------------------
+    # Mise en page A4 portrait : ajustée à la largeur ET à la hauteur pour
+    # que l'impression remplisse une seule page, centrée, avec des marges
+    # raisonnables (plutôt que de partir sur plusieurs pages ou de laisser
+    # un contenu minuscule dans un coin de la feuille).
+    # ------------------------------------------------------------------
     ws.page_setup.orientation = ws.ORIENTATION_PORTRAIT
     ws.page_setup.paperSize = ws.PAPERSIZE_A4
     ws.sheet_properties.pageSetUpPr.fitToPage = True
     ws.page_setup.fitToWidth = 1
-    ws.page_setup.fitToHeight = 0
+    ws.page_setup.fitToHeight = 1
+
+    ws.page_margins = PageMargins(left=0.4, right=0.4, top=0.5, bottom=0.5, header=0.2, footer=0.2)
+    ws.print_options.horizontalCentered = True
+    ws.print_options.verticalCentered = False
 
     header_fill = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
     header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
@@ -206,29 +234,46 @@ def generer_excel_synthese_teneur_eau(df, mois_str, empl_str, couche_str, nom_pr
         bottom=Side(style='double', color='1F4E78')
     )
 
-    ws['A1'] = "LABORATOIRE LPEE — CENTRE TECHNIQUE RÉGIONAL"
-    ws['A1'].font = title_font
-    ws.merge_cells('A1:G1')
-    ws['A1'].alignment = Alignment(horizontal='center')
+    # Les colonnes de contenu occupent désormais B:H (au lieu de A:G) pour
+    # laisser la colonne A libre pour le logo LPEE.
+    COL0 = 2  # décalage : colonne B = 2
 
-    ws['A2'] = "Norme : NF EN 1097-5 (Teneur en eau par étuvage)"
-    ws['A2'].font = bold_font
-    ws.merge_cells('A2:G2')
-    ws['A2'].alignment = Alignment(horizontal='center')
+    # --- Logo LPEE (colonne A, lignes 1 à 4) ---
+    logo_path = _trouver_logo_lpee()
+    if logo_path:
+        try:
+            logo_img = XLImage(logo_path)
+            ratio = logo_img.width / logo_img.height if logo_img.height else 1
+            logo_img.height = 70
+            logo_img.width = 70 * ratio
+            ws.add_image(logo_img, "A1")
+        except Exception:
+            pass  # logo illisible/corrompu -> export sans logo, sans bloquer
 
-    ws['A3'] = f"Projet : {nom_projet} | Filtres -> Mois: {mois_str} | Emplacement: {empl_str} | Couche: {couche_str}"
-    ws['A3'].font = subtitle_font
-    ws.merge_cells('A3:G3')
-    ws['A3'].alignment = Alignment(horizontal='center')
+    ws.row_dimensions[1].height = 20
+    ws.row_dimensions[2].height = 16
+    ws.row_dimensions[3].height = 15
+    ws.row_dimensions[4].height = 16
 
-    ws['A4'] = f"SYNTHÈSE DES ESSAIS DE TENEUR EN EAU — MENSUEL - {mois_str}"
-    ws['A4'].font = bold_font
-    ws.merge_cells('A4:G4')
-    ws['A4'].alignment = Alignment(horizontal='center')
+    ws.cell(row=1, column=COL0, value="LABORATOIRE LPEE — CENTRE TECHNIQUE RÉGIONAL").font = title_font
+    ws.merge_cells(start_row=1, start_column=COL0, end_row=1, end_column=COL0 + 6)
+    ws.cell(row=1, column=COL0).alignment = Alignment(horizontal='center', vertical='center')
+
+    ws.cell(row=2, column=COL0, value="Norme : NF EN 1097-5 (Teneur en eau par étuvage)").font = bold_font
+    ws.merge_cells(start_row=2, start_column=COL0, end_row=2, end_column=COL0 + 6)
+    ws.cell(row=2, column=COL0).alignment = Alignment(horizontal='center', vertical='center')
+
+    ws.cell(row=3, column=COL0, value=f"Projet : {nom_projet} | Filtres -> Mois: {mois_str} | Emplacement: {empl_str} | Couche: {couche_str}").font = subtitle_font
+    ws.merge_cells(start_row=3, start_column=COL0, end_row=3, end_column=COL0 + 6)
+    ws.cell(row=3, column=COL0).alignment = Alignment(horizontal='center', vertical='center')
+
+    ws.cell(row=4, column=COL0, value=f"SYNTHÈSE DES ESSAIS DE TENEUR EN EAU — MENSUEL - {mois_str}").font = bold_font
+    ws.merge_cells(start_row=4, start_column=COL0, end_row=4, end_column=COL0 + 6)
+    ws.cell(row=4, column=COL0).alignment = Alignment(horizontal='center', vertical='center')
 
     headers = ["Date Essai", "Couche", "Emplacement", "PK / Référence", "w mesurée (%)", "w OPN (%)", "Ratio w/wOPN"]
-    for col_num, header_title in enumerate(headers, 1):
-        cell = ws.cell(row=6, column=col_num)
+    for i, header_title in enumerate(headers):
+        cell = ws.cell(row=6, column=COL0 + i)
         cell.value = header_title
         cell.font = header_font
         cell.fill = header_fill
@@ -241,10 +286,10 @@ def generer_excel_synthese_teneur_eau(df, mois_str, empl_str, couche_str, nom_pr
     pk_col = "pk" if "pk" in df.columns else "ref_ech"
 
     for _, row in df.iterrows():
-        ws.cell(row=row_idx, column=1, value=str(row.get(date_col, '') or '')[:10]).alignment = Alignment(horizontal='center', vertical='center')
-        ws.cell(row=row_idx, column=2, value=str(row.get('couche', '') or '')).alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
-        ws.cell(row=row_idx, column=3, value=str(row.get('lieu_prelevement', '') or '')).alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
-        ws.cell(row=row_idx, column=4, value=str(row.get(pk_col, '') or '')).alignment = Alignment(horizontal='center', vertical='center')
+        ws.cell(row=row_idx, column=COL0 + 0, value=str(row.get(date_col, '') or '')[:10]).alignment = Alignment(horizontal='center', vertical='center')
+        ws.cell(row=row_idx, column=COL0 + 1, value=str(row.get('couche', '') or '')).alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+        ws.cell(row=row_idx, column=COL0 + 2, value=str(row.get('lieu_prelevement', '') or '')).alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+        ws.cell(row=row_idx, column=COL0 + 3, value=str(row.get(pk_col, '') or '')).alignment = Alignment(horizontal='center', vertical='center')
 
         w_v = float(row.get('w_mesure', 0) or 0)
         wopn_v = float(row.get('w_opn', 0) or 0)
@@ -254,20 +299,20 @@ def generer_excel_synthese_teneur_eau(df, mois_str, empl_str, couche_str, nom_pr
         wopn_vals.append(wopn_v)
         ratio_vals.append(ratio_v)
 
-        c_w = ws.cell(row=row_idx, column=5, value=w_v)
+        c_w = ws.cell(row=row_idx, column=COL0 + 4, value=w_v)
         c_w.number_format = '#,##0.00'
         c_w.alignment = Alignment(horizontal='right', vertical='center')
 
-        c_wopn = ws.cell(row=row_idx, column=6, value=wopn_v)
+        c_wopn = ws.cell(row=row_idx, column=COL0 + 5, value=wopn_v)
         c_wopn.number_format = '#,##0.00'
         c_wopn.alignment = Alignment(horizontal='right', vertical='center')
 
-        c_ratio = ws.cell(row=row_idx, column=7, value=ratio_v)
+        c_ratio = ws.cell(row=row_idx, column=COL0 + 6, value=ratio_v)
         c_ratio.number_format = '#,##0.00'
         c_ratio.alignment = Alignment(horizontal='right', vertical='center')
         c_ratio.fill = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
 
-        for c in range(1, 8):
+        for c in range(COL0, COL0 + 7):
             ws.cell(row=row_idx, column=c).font = normal_font
             ws.cell(row=row_idx, column=c).border = thin_border
 
@@ -278,27 +323,27 @@ def generer_excel_synthese_teneur_eau(df, mois_str, empl_str, couche_str, nom_pr
         avg_wopn = sum(wopn_vals) / len(wopn_vals)
         avg_ratio = sum(ratio_vals) / len(ratio_vals)
 
-        ws.merge_cells(start_row=row_idx, start_column=1, end_row=row_idx, end_column=4)
-        m_cell = ws.cell(row=row_idx, column=1, value="MOYENNE DES ESSAIS")
+        ws.merge_cells(start_row=row_idx, start_column=COL0, end_row=row_idx, end_column=COL0 + 3)
+        m_cell = ws.cell(row=row_idx, column=COL0, value="MOYENNE DES ESSAIS")
         m_cell.font = bold_font
         m_cell.alignment = Alignment(horizontal='right', vertical='center')
 
-        for c in range(1, 5):
+        for c in range(COL0, COL0 + 4):
             ws.cell(row=row_idx, column=c).border = double_bottom_border
 
-        c_avg1 = ws.cell(row=row_idx, column=5, value=avg_w)
+        c_avg1 = ws.cell(row=row_idx, column=COL0 + 4, value=avg_w)
         c_avg1.font = bold_font
         c_avg1.number_format = '#,##0.00'
         c_avg1.alignment = Alignment(horizontal='right', vertical='center')
         c_avg1.border = double_bottom_border
 
-        c_avg2 = ws.cell(row=row_idx, column=6, value=avg_wopn)
+        c_avg2 = ws.cell(row=row_idx, column=COL0 + 5, value=avg_wopn)
         c_avg2.font = bold_font
         c_avg2.number_format = '#,##0.00'
         c_avg2.alignment = Alignment(horizontal='right', vertical='center')
         c_avg2.border = double_bottom_border
 
-        c_avgk = ws.cell(row=row_idx, column=7, value=avg_ratio)
+        c_avgk = ws.cell(row=row_idx, column=COL0 + 6, value=avg_ratio)
         c_avgk.font = bold_font
         c_avgk.number_format = '#,##0.00'
         c_avgk.alignment = Alignment(horizontal='right', vertical='center')
@@ -306,12 +351,12 @@ def generer_excel_synthese_teneur_eau(df, mois_str, empl_str, couche_str, nom_pr
 
         row_idx += 2
 
-        ws.cell(row=row_idx, column=1, value="RÉSUMÉ STATISTIQUE QUALITÉ").font = bold_font
+        ws.cell(row=row_idx, column=COL0, value="RÉSUMÉ STATISTIQUE QUALITÉ").font = bold_font
         row_idx += 1
 
         stat_headers = ["Indicateur", "w mesurée (%)", "w OPN (%)", "Ratio w/wOPN"]
-        for col_num, sh in enumerate(stat_headers, 1):
-            cell = ws.cell(row=row_idx, column=col_num)
+        for i, sh in enumerate(stat_headers):
+            cell = ws.cell(row=row_idx, column=COL0 + i)
             cell.value = sh
             cell.font = header_font
             cell.fill = header_fill
@@ -327,11 +372,11 @@ def generer_excel_synthese_teneur_eau(df, mois_str, empl_str, couche_str, nom_pr
         ]
 
         for label, v1, v2, vk in stats_data:
-            ws.cell(row=row_idx, column=1, value=label).font = bold_font
-            ws.cell(row=row_idx, column=1).border = thin_border
+            ws.cell(row=row_idx, column=COL0, value=label).font = bold_font
+            ws.cell(row=row_idx, column=COL0).border = thin_border
 
-            for col_idx, val in enumerate([v1, v2, vk], 2):
-                c = ws.cell(row=row_idx, column=col_idx, value=val)
+            for i, val in enumerate([v1, v2, vk]):
+                c = ws.cell(row=row_idx, column=COL0 + 1 + i, value=val)
                 c.font = normal_font
                 c.number_format = '#,##0.00' if label != "Nombre d\'essais" else '#,##0'
                 c.alignment = Alignment(horizontal='right', vertical='center')
@@ -339,12 +384,18 @@ def generer_excel_synthese_teneur_eau(df, mois_str, empl_str, couche_str, nom_pr
             row_idx += 1
 
         row_idx += 3
-        ws.cell(row=row_idx, column=1, value="Responsable d\'essai").font = bold_font
-        ws.cell(row=row_idx, column=6, value="Chef du Laboratoire").font = bold_font
+        ws.cell(row=row_idx, column=COL0, value="Responsable d\'essai").font = bold_font
+        ws.cell(row=row_idx, column=COL0 + 5, value="Chef du Laboratoire").font = bold_font
+        row_idx += 1
 
-    col_dimensions = {'A': 13, 'B': 24, 'C': 16, 'D': 16, 'E': 13, 'F': 12, 'G': 14}
+    col_dimensions = {'A': 11, 'B': 13, 'C': 24, 'D': 16, 'E': 16, 'F': 13, 'G': 12, 'H': 14}
     for col_letter, width in col_dimensions.items():
         ws.column_dimensions[col_letter].width = width
+
+    # Zone d'impression explicite = uniquement le contenu réellement rempli,
+    # pour que l'impression remplisse la page sans marge morte superflue.
+    derniere_ligne = max(row_idx, 6)
+    ws.print_area = f"A1:H{derniere_ligne}"
 
     wb.save(output)
     output.seek(0)
