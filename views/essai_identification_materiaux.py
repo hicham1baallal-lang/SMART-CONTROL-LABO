@@ -197,21 +197,22 @@ def show(supabase_client):
             result_df["% Refus Cumulé"] = np.round(pct_refus_cum, 1)
             result_df["% Passant"] = np.round(pct_passant, 1)
 
-            # Disposition côte à côte : Tableau / Courbe
+            # Disposition côte à côte : Tableau / Courbe (avec série de tamis en abscisse)
             col_tbl, col_plt = st.columns([1.1, 0.9])
             with col_tbl:
                 st.dataframe(result_df, use_container_width=True, height=420)
             with col_plt:
                 st.markdown("#### Courbe Granulométrique")
-                fig, ax = plt.subplots(figsize=(4.8, 4.2))
-                plot_data = result_df[result_df["Tamis (mm)"] > 0].sort_values(by="Tamis (mm)", ascending=True)
+                fig, ax = plt.subplots(figsize=(5.0, 4.3))
+                sieve_labels = [f"Mod {int(m)} ({t}mm)" if m % 1 == 0 else f"T{t}mm" for m, t in zip(result_df["Modules"], result_df["Tamis (mm)"])]
+                x_indices = np.arange(len(result_df))
                 ax.plot(
-                    plot_data["Tamis (mm)"], plot_data["% Passant"],
-                    marker='o', markersize=3.5, linestyle='-', color='#1f77b4', linewidth=1.5
+                    x_indices, result_df["% Passant"],
+                    marker='o', markersize=4, linestyle='-', color='#1f77b4', linewidth=1.5
                 )
-                ax.set_xscale('log')
-                ax.set_xlim(left=plot_data["Tamis (mm)"].max() * 1.1, right=plot_data["Tamis (mm)"].min() * 0.9)
-                ax.set_xlabel("Ouverture des tamis (mm - log)")
+                ax.set_xticks(x_indices)
+                ax.set_xticklabels(sieve_labels, rotation=70, ha='right', fontsize=7)
+                ax.set_xlabel("Série de tamis (Modules / Ouverture)")
                 ax.set_ylabel("% Passant (%)")
                 ax.set_ylim(-2, 105)
                 ax.grid(True, which="both", linestyle=":", alpha=0.6)
