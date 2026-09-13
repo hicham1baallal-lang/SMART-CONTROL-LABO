@@ -148,8 +148,8 @@ def show(supabase_client):
             st.markdown("#### Tableau de Granulométrie (Tri décroissant : 80 mm → 0.08 mm)")
             default_sieves_desc = [
                 (80, 0.0, 0.0), (63, 2141.3, 0.0), (50, 3884.8, 0.0), (40, 4638.1, 0.0),
-                (31.5, 4821.6, 0.0), (25, 0.0, 0.0), (20, 0.0, 0.0), (16, 0.0, 0.0),
-                (12.5, 0.0, 0.0), (10, 6012.8, 0.0),
+                (31.5, 4821.6, 0.0), (25, 5032.0, 0.0), (20, 5282.0, 0.0), (16, 5579.0, 0.0),
+                (12.5, 5866.0, 0.0), (10, 6012.8, 0.0),
                 (8, 0.0, 72.4), (6.3, 0.0, 151.0), (5, 0.0, 197.6), (4, 0.0, 238.5),
                 (3.15, 0.0, 278.4), (2.5, 0.0, 321.6), (2, 0.0, 361.1), (1.6, 0.0, 401.9),
                 (1.25, 0.0, 445.4), (1, 0.0, 483.1), (0.8, 0.0, 524.9), (0.63, 0.0, 563.3),
@@ -166,8 +166,9 @@ def show(supabase_client):
                 key="sieve_editor_sol_desc"
             )
 
-            mask_10_gt = edited_sieve_df["Tamis (mm)"] >= 10
-            re_val = float(edited_sieve_df.loc[mask_10_gt, "R_i (g) [≥10mm]"].sum())
+            # R_e à 10mm pris directement depuis la ligne du tamis 10 mm
+            mask_10_eq = edited_sieve_df["Tamis (mm)"] == 10
+            re_val = float(edited_sieve_df.loc[mask_10_eq, "R_i (g) [≥10mm]"].values[0]) if not edited_sieve_df.loc[mask_10_eq].empty else 0.0
             me_val = m3_val - re_val
 
             col_e5, col_e6, col_e6b, col_e7, col_e8 = st.columns(5)
@@ -185,10 +186,9 @@ def show(supabase_client):
             a_factor = me_val / m4_val if m4_val > 0 else 0
             ip = w_l - w_p
 
-            st.markdown(f"**Refus R_e (10mm) calculé** : `{re_val:.1f} g` | **Prise Me (M3-Re)** : `{me_val:.1f} g` | **Coefficient a = Me/M4** : `{a_factor:.4f}` | **IP** : `{ip:.1f}%`")
+            st.markdown(f"**Refus R_e (10mm)** : `{re_val:.1f} g` | **Prise Me (M3-Re)** : `{me_val:.1f} g` | **Coefficient a = Me/M4** : `{a_factor:.4f}` | **IP** : `{ip:.1f}%`")
 
             work_df = edited_sieve_df.sort_values(by="Tamis (mm)", ascending=False).reset_index(drop=True)
-            running_gt10 = 0.0
             cum_refus_list = []
             
             for idx, row in work_df.iterrows():
@@ -196,8 +196,8 @@ def show(supabase_client):
                 r_i_val = row["R_i (g) [≥10mm]"]
                 r_fine_val = row["r_i (g) [<10mm]"]
                 if sz >= 10:
-                    running_gt10 += r_i_val
-                    cum_val = running_gt10
+                    # Affectation directe de R_i pour chaque tamis >= 10 mm
+                    cum_val = r_i_val
                 else:
                     cum_val = (r_fine_val * a_factor) + re_val
                 cum_refus_list.append(cum_val)
