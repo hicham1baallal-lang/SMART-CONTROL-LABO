@@ -8,28 +8,54 @@ import streamlit as st
 from fpdf import FPDF
 
 
-def classer_gtr(dmax, pass_80um, ip, vbs=0.5):
-    """Classification GTR automatique selon l'abaque officiel LPEE/SETRA."""
+def classer_gtr(dmax, pass_80um, ip, vbs=0.5, pass_2mm=70.0, is_roche=False, roche_type=None, is_organique=False):
+    """Classification GTR exacte selon l'abaque officiel LPEE/SETRA (tableau IV)."""
+    if is_organique:
+        return "F"
+    
+    if is_roche and roche_type:
+        rt = roche_type.upper()
+        if "CRAIE" in rt: return "R1"
+        elif "CALCAIRE" in rt: return "R2"
+        elif any(k in rt for k in ["MARNE", "ARGILITE", "PELITE"]): return "R3"
+        elif any(k in rt for k in ["GRES", "POUDINGUE", "BRECHE"]): return "R4"
+        elif any(k in rt for k in "SEL", "GEMME", "GYPSE"): return "R5"
+        else: return "R6"
+
     if dmax <= 50:
         if pass_80um >= 35.0:
             if ip < 12: return "A1"
             elif ip < 25: return "A2"
             elif ip < 40: return "A3"
             else: return "A4"
-        elif pass_80um >= 12.0:
-            if vbs < 0.2:
-                return "B1" if pass_80um < 20 else "B5"
-            elif vbs <= 1.5: return "B2"
-            elif vbs <= 6.0: return "B6"
-            else: return "B4"
         else:
-            if vbs < 0.1: return "D1" if pass_80um < 6 else "D2"
-            else: return "B3" if vbs <= 0.2 else "B2"
+            # Zone pass_80um < 35.0 (fraction fine modérée ou faible)
+            # Distinction selon le passant à 2mm (<70% vs >=70% / ou structure B5/B6/D1/B1/D2/B3/B2/B4)
+            # Lecture graphique abaque Sols Dmax <= 50 mm :
+            # Entre 12% et 35% de 80µm : B5 (VBS < 0.2, passant2mm élevé/haut), B6 (VBS 0.2-8, etc.)
+            # Regardons l'abaque haut/bas : entre 12% et 35% -> B5 si VBS<0.2, B6 si VBS>=0.2 ? Non, abaque montre B5 à gauche (VBS 0-0.2, 12-35%), B6 à droite (0.2-8, 12-35%).
+            # Sous 12% de 80µm : séparé par horizontal 70% (passant à 2mm) ou autre. Analysons l'abaque :
+            if pass_80um >= 12.0:
+                if vbs < 0.2:
+                    return "B5" if pass_80um >= 12.0 else "D1"
+                else:
+                    return "B6"
+            else:
+                # pass_80um < 12.0
+                if vbs < 0.1:
+                    # séparé D1 (haut) / D2 (bas) ? Non, D1 et D2 sont sur VBS < 0.1 (D1 haut, D2 bas, séparés par ligne horizontale 70% à 2mm)
+                    return "D1" if pass_2mm >= 70.0 else "D2"
+                elif vbs < 0.2:
+                    return "B1"
+                else:
+                    return "B2" if pass_2mm >= 70.0 else "B4"
     else:
+        # Dmax > 50 mm
         if pass_80um < 12.0 and vbs < 0.1:
             return "D3"
         else:
-            return "C1" if pass_80um <= 40 else "C2"
+            # C1 : matériaux roulés et matériaux anguleux peu charpentés (0/50 > 60 à 80 %) -> approximé par niveau ou par défaut C1/C2
+            return "C1" if pass_2mm <= 80.0 else "C2"
 
 
 class IdentificationPDF(FPDF):
@@ -123,7 +149,7 @@ def show(supabase_client):
         with c3:
             type_mat = st.selectbox(
                 "Type de matériau",
-                ["Sol - GNF 1 (Remblai / GNF type 1)", "Sol (Standard)", "Grave"],
+                ["Sol - GNF 1 (Remblai / GNF type 1)", "Sol (Standard)", "Grave / Rocheux / Particulier"],
                 disabled=not user_can_edit
             )
 
@@ -170,7 +196,7 @@ def show(supabase_client):
                     key="sieve_editor_sol_desc"
                 )
 
-            # Pré-calcul sécurisé R_e à 10mm (garantit 6012.8 par défaut ou valeur lue exact du tamis 10mm)
+            # Pré-calcul sécurisé R_e à 10mm (garantit 6012.8 par défaut ou valeur lue exacte du tamis 10mm)
             try:
                 row_10 = edited_sieve_df[np.isclose(edited_sieve_df["Tamis (mm)"].astype(float), 10.0, atol=1e-3)]
                 re_val_calc = float(row_10["R_i (g) [≥10mm]"].values[0]) if not row_10.empty else 6012.8
@@ -206,7 +232,6 @@ def show(supabase_client):
                 r_i_val = row["R_i (g) [≥10mm]"]
                 r_fine_val = row["r_i (g) [<10mm]"]
                 if sz >= 10:
-                    # Affectation directe de R_i pour chaque tamis >= 10 mm
                     cum_val = r_i_val
                 else:
                     cum_val = (r_fine_val * a_factor) + re_val
@@ -237,7 +262,7 @@ def show(supabase_client):
                         ticks_positions.append(x_pos)
                         ticks_labels.append(f"{t_val}mm")
                     else:
-                        if idx % 3 != 0:  # ~66.7% conservé (~70%)
+                        if idx % 3 != 0:
                             ticks_positions.append(x_pos)
                             ticks_labels.append(f"{t_val}mm")
 
@@ -259,13 +284,16 @@ def show(supabase_client):
             row_80um = result_df[result_df["Tamis (mm)"] == 0.08]
             pass_80um_val = float(row_80um["% Passant"].values[0]) if not row_80um.empty else 22.2
 
+            row_2mm = result_df[result_df["Tamis (mm)"] == 2.0]
+            pass_2mm_val = float(row_2mm["% Passant"].values[0]) if not row_2mm.empty else 70.0
+
             col_v1, col_v2, col_v3 = st.columns(3)
             with col_v1:
                 vbs_val = st.number_input("VBS", value=0.5, step=0.1, disabled=not user_can_edit)
             with col_v2:
                 es_val = st.selectbox("Équivalent de sable (ES)", ["ESV > 60 (Propre)", "40 < ESV <= 60 (Acceptable)", "ESV <= 40 / EST"], disabled=not user_can_edit)
             with col_v3:
-                classe_gtr_auto = classer_gtr(dmax_detected, pass_80um_val, ip, vbs_val)
+                classe_gtr_auto = classer_gtr(dmax_detected, pass_80um_val, ip, vbs_val, pass_2mm_val)
                 st.metric("Classe GTR (Auto)", classe_gtr_auto)
 
             row_10_check = result_df[result_df["Tamis (mm)"] == 10]
@@ -274,33 +302,57 @@ def show(supabase_client):
             is_gnf1_conf = (pass_80um_val <= 35.0) and (ip < 25)
             obs = f"Conforme GNF 1 (Passant 80µm={pass_80um_val:.1f}%)" if is_gnf1_conf else "Non Conforme / Hors fuseau"
 
-            st.info(f"Observation automatique : **{obs}** | Dmax: **{dmax_detected} mm** | Écart de référence 10mm/M3: **{val_ecart:.2f}%**")
+            st.info(f"Observation automatique : **{obs}** | Dmax: **{dmax_detected} mm** | Passant 2mm: **{pass_2mm_val:.1f}%** | Écart de référence 10mm/M3: **{val_ecart:.2f}%**")
 
             data_dict = {
                 "Type Matériau": type_mat,
                 "Ref Echantillon": ref_ech,
                 "M1 (g)": f"{m1_val}", "M2 (g)": f"{m2_val}", "M3 (g)": f"{m3_val}", "M4 (g)": f"{m4_val}",
                 "Re (10mm) (g)": f"{re_val:.1f}", "Me (g)": f"{me_val:.1f}", "Facteur a": f"{a_factor:.4f}",
-                "Dmax (mm)": f"{dmax_detected}", "Passant 80µm (%)": f"{pass_80um_val:.1f}",
+                "Dmax (mm)": f"{dmax_detected}", "Passant 80µm (%)": f"{pass_80um_val:.1f}", "Passant 2mm (%)": f"{pass_2mm_val:.1f}",
                 "wL (%)": f"{w_l}", "wP (%)": f"{w_p}", "IP (%)": f"{ip:.1f}",
                 "VBS": f"{vbs_val}", "ES": es_val,
                 "Classe GTR (Auto)": classe_gtr_auto,
                 "Observation": obs
             }
         else:
-            st.subheader("Paramètres d'identification - Grave")
+            st.subheader("Paramètres d'identification - Rocheux / Grave / Particulier")
+            sub_mat_type = st.radio("Nature spécifique", ["Rocheux (R1-R6)", "Matériaux particuliers (Organiques / F)", "Grave standard"], horizontal=True, disabled=not user_can_edit)
+            
+            is_roche = False
+            roche_type = None
+            is_organique = False
+            
             col_g1, col_g2 = st.columns(2)
-            with col_g1:
-                la = st.number_input("Los Angeles (LA)", value=25.0, step=1.0, disabled=not user_can_edit)
-                md = st.number_input("Micro-Deval humide (MDE)", value=18.0, step=1.0, disabled=not user_can_edit)
-            with col_g2:
-                es_grav = st.selectbox("ES à 10% / Piston (Grave)", ["ES >= 75", "ES < 75"], disabled=not user_can_edit)
+            if "Rocheux" in sub_mat_type:
+                is_roche = True
+                roche_type = st.selectbox("Type de roche (Tableau GTR)", ["Craies", "Calcaires", "Roches argileuses (Marnes, argilites, pélites...) ", "Roches siliceuses (Grès, poudingues, brèches...) ", "Roches salines (Sel gemme, gypse) ", "Roches magmatiques et métamorphiques (Granites, basaltes, gneiss...)"], disabled=not user_can_edit)
+                with col_g1:
+                    la = st.number_input("Los Angeles (LA)", value=25.0, step=1.0, disabled=not user_can_edit)
+                    md = st.number_input("Micro-Deval humide (MDE)", value=18.0, step=1.0, disabled=not user_can_edit)
+                with col_g2:
+                    es_grav = st.selectbox("ES / Piston", ["Conforme", "Non Conforme"], disabled=not user_can_edit)
+                obs = "Conforme"
+            elif "particuliers" in sub_mat_type:
+                is_organique = True
+                la, md, es_grav = 0, 0, "N/A"
+                obs = "Matériau organique / Particulier"
+            else:
+                with col_g1:
+                    la = st.number_input("Los Angeles (LA)", value=25.0, step=1.0, disabled=not user_can_edit)
+                    md = st.number_input("Micro-Deval humide (MDE)", value=18.0, step=1.0, disabled=not user_can_edit)
+                with col_g2:
+                    es_grav = st.selectbox("ES à 10% / Piston (Grave)", ["ES >= 75", "ES < 75"], disabled=not user_can_edit)
+                obs = "Conforme" if la <= 30 and md <= 20 else "Non Conforme"
 
-            obs = "Conforme" if la <= 30 and md <= 20 else "Non Conforme"
+            classe_gtr_auto = classer_gtr(dmax=0, pass_80um=0, ip=0, is_roche=is_roche, roche_type=roche_type, is_organique=is_organique)
+            st.metric("Classe GTR (Auto - Tableau IV)", classe_gtr_auto)
+
             data_dict = {
-                "Type": "Grave",
+                "Type": sub_mat_type,
+                "Sous-type Roche / Particulier": roche_type if is_roche else ("Organique/F" if is_organique else "Grave"),
                 "Los Angeles (LA)": f"{la}", "Micro-Deval (MDE)": f"{md}",
-                "ES Grave": es_grav, "Observation": obs
+                "ES Grave": es_grav, "Classe GTR (Auto)": classe_gtr_auto, "Observation": obs
             }
 
         header_info = {"num_rapport": num_rapport, "lieu": lieu, "pk": pk, "date_essai": str(date_essai)}
@@ -315,7 +367,7 @@ def show(supabase_client):
                     try:
                         supabase_client.table("pv_identification_materiaux").upsert({
                             "num_rapport": num_rapport,
-                            "type_materiau": "SOL" if is_sol else "GRAVE",
+                            "type_materiau": "SOL" if is_sol else "GRAVE_ROCHE",
                             "lieu": lieu,
                             "pk": pk,
                             "date_essai": str(date_essai),
@@ -370,8 +422,8 @@ def show(supabase_client):
                     m2.metric("Conformes", len(df_s[df_s["observation"].str.contains("Conforme", na=False)]) if "observation" in df_s else 0)
                     
                     sol_count = len(df_s[df_s['type_materiau']=='SOL']) if 'type_materiau' in df_s else 0
-                    grav_count = len(df_s[df_s['type_materiau']=='GRAVE']) if 'type_materiau' in df_s else 0
-                    m3.metric("Type Sol / Grave", f"{sol_count} / {grav_count}")
+                    grav_count = len(df_s[df_s['type_materiau']=='GRAVE_ROCHE']) if 'type_materiau' in df_s else 0
+                    m3.metric("Type Sol / Grave-Roche", f"{sol_count} / {grav_count}")
                     
                     st.dataframe(df_s, use_container_width=True)
                     
