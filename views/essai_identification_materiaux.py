@@ -19,7 +19,7 @@ def classer_gtr(dmax, pass_80um, ip, vbs=0.5, pass_2mm=70.0, is_roche=False, roc
         elif "CALCAIRE" in rt: return "R2"
         elif any(k in rt for k in ["MARNE", "ARGILITE", "PELITE"]): return "R3"
         elif any(k in rt for k in ["GRES", "POUDINGUE", "BRECHE"]): return "R4"
-        elif any(k in rt for k in "SEL", "GEMME", "GYPSE"): return "R5"
+        elif any(k in rt for k in ["SEL", "GEMME", "GYPSE"]): return "R5"
         else: return "R6"
 
     if dmax <= 50:
@@ -29,32 +29,22 @@ def classer_gtr(dmax, pass_80um, ip, vbs=0.5, pass_2mm=70.0, is_roche=False, roc
             elif ip < 40: return "A3"
             else: return "A4"
         else:
-            # Zone pass_80um < 35.0 (fraction fine modérée ou faible)
-            # Distinction selon le passant à 2mm (<70% vs >=70% / ou structure B5/B6/D1/B1/D2/B3/B2/B4)
-            # Lecture graphique abaque Sols Dmax <= 50 mm :
-            # Entre 12% et 35% de 80µm : B5 (VBS < 0.2, passant2mm élevé/haut), B6 (VBS 0.2-8, etc.)
-            # Regardons l'abaque haut/bas : entre 12% et 35% -> B5 si VBS<0.2, B6 si VBS>=0.2 ? Non, abaque montre B5 à gauche (VBS 0-0.2, 12-35%), B6 à droite (0.2-8, 12-35%).
-            # Sous 12% de 80µm : séparé par horizontal 70% (passant à 2mm) ou autre. Analysons l'abaque :
             if pass_80um >= 12.0:
                 if vbs < 0.2:
                     return "B5" if pass_80um >= 12.0 else "D1"
                 else:
                     return "B6"
             else:
-                # pass_80um < 12.0
                 if vbs < 0.1:
-                    # séparé D1 (haut) / D2 (bas) ? Non, D1 et D2 sont sur VBS < 0.1 (D1 haut, D2 bas, séparés par ligne horizontale 70% à 2mm)
                     return "D1" if pass_2mm >= 70.0 else "D2"
                 elif vbs < 0.2:
                     return "B1"
                 else:
                     return "B2" if pass_2mm >= 70.0 else "B4"
     else:
-        # Dmax > 50 mm
         if pass_80um < 12.0 and vbs < 0.1:
             return "D3"
         else:
-            # C1 : matériaux roulés et matériaux anguleux peu charpentés (0/50 > 60 à 80 %) -> approximé par niveau ou par défaut C1/C2
             return "C1" if pass_2mm <= 80.0 else "C2"
 
 
@@ -184,7 +174,6 @@ def show(supabase_client):
             ]
             df_template = pd.DataFrame(default_sieves_desc, columns=["Tamis (mm)", "R_i (g) [≥10mm]", "r_i (g) [<10mm]"])
             
-            # Layout côte à côte : Tableau à gauche / Paramètres à droite
             col_main_tbl, col_params_right = st.columns([1.3, 0.9])
             
             with col_main_tbl:
@@ -196,7 +185,6 @@ def show(supabase_client):
                     key="sieve_editor_sol_desc"
                 )
 
-            # Pré-calcul sécurisé R_e à 10mm (garantit 6012.8 par défaut ou valeur lue exacte du tamis 10mm)
             try:
                 row_10 = edited_sieve_df[np.isclose(edited_sieve_df["Tamis (mm)"].astype(float), 10.0, atol=1e-3)]
                 re_val_calc = float(row_10["R_i (g) [≥10mm]"].values[0]) if not row_10.empty else 6012.8
