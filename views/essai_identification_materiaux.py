@@ -167,25 +167,28 @@ def show(supabase_client):
                 key="sieve_editor_sol"
             )
 
-            # Extraction automatique et systématique de Re (10mm) depuis le tableau (tamis == 10)
+            # Extraction automatique et systématique de Re (10mm) depuis le tableau (tamis == 10) et calcul de Me = M3 - Re
             row_10mm = edited_sieve_df[edited_sieve_df["Tamis (mm)"] == 10]
             re_val = float(row_10mm["Refus R_i / r_i (g)"].values[0]) if not row_10mm.empty else 0.0
+            me_val = m3_val - re_val
 
-            # Ligne de synthèse paramétrique avec Refus Re (10mm) non modifiable
-            col_e5, col_e6, col_e7, col_e8 = st.columns(4)
+            # Ligne de synthèse paramétrique avec Refus Re (10mm) et Prise Me non modifiables
+            col_e5, col_e6, col_e6b, col_e7, col_e8 = st.columns(5)
             with col_e5:
                 m4_val = st.number_input("Prise tamisage M4 (g)", value=1930.0, step=1.0, disabled=not user_can_edit)
             with col_e6:
                 st.number_input("Refus Re (10mm) (g)", value=re_val, disabled=True, key="re_10mm_non_mod")
+            with col_e6b:
+                st.number_input("Prise Me (g) [M3-Re]", value=me_val, disabled=True, key="me_val_non_mod")
             with col_e7:
                 w_l = st.number_input("wL (%)", value=35.0, step=0.5, disabled=not user_can_edit)
             with col_e8:
                 w_p = st.number_input("wP (%)", value=20.0, step=0.5, disabled=not user_can_edit)
 
-            a_factor = (m3_val - re_val) / m4_val if m4_val > 0 else 0
+            a_factor = me_val / m4_val if m4_val > 0 else 0
             ip = w_l - w_p
 
-            st.markdown(f"**Refus R_e (10mm) calculé** : `{re_val:.1f} g` | **Coefficient a = (M3 - Re)/M4** : `{a_factor:.4f}` | **IP** : `{ip:.1f}%`")
+            st.markdown(f"**Refus R_e (10mm) calculé** : `{re_val:.1f} g` | **Prise Me (M3-Re)** : `{me_val:.1f} g` | **Coefficient a = Me/M4** : `{a_factor:.4f}` | **IP** : `{ip:.1f}%`")
 
             # Calculs automatiques
             refus_vals = edited_sieve_df["Refus R_i / r_i (g)"].values
@@ -223,8 +226,8 @@ def show(supabase_client):
             data_dict = {
                 "Type Matériau": type_mat,
                 "Ref Echantillon": ref_ech,
-                "M1 (g)": f"{m1_val}", "M2 (g)": f"{m2_val}", "M3 (g)": f"{m3_val}", "M4 (g)": f"{m4_val}", "Re (10mm) (g)": f"{re_val:.1f}",
-                "Facteur a": f"{a_factor:.4f}",
+                "M1 (g)": f"{m1_val}", "M2 (g)": f"{m2_val}", "M3 (g)": f"{m3_val}", "M4 (g)": f"{m4_val}",
+                "Re (10mm) (g)": f"{re_val:.1f}", "Me (g)": f"{me_val:.1f}", "Facteur a": f"{a_factor:.4f}",
                 "Dmax (mm)": f"{dmax_detected}", "Passant 80µm (%)": f"{pass_80um_val:.1f}",
                 "wL (%)": f"{w_l}", "wP (%)": f"{w_p}", "IP (%)": f"{ip:.1f}",
                 "VBS": f"{vbs_val}", "ES": es_val,
