@@ -8,8 +8,28 @@ import streamlit as st
 from fpdf import FPDF
 
 
+def _get_subclass_1st_table(pass_80um, ip, vbs, pass_2mm):
+    """Sous-classification fine issue du diagramme dmax <= 50 mm."""
+    if pass_80um >= 35.0:
+        if ip < 12: return "A1"
+        elif ip < 25: return "A2"
+        elif ip < 40: return "A3"
+        else: return "A4"
+    elif pass_80um >= 12.0:
+        return "B5" if vbs < 0.2 else "B6"
+    else:
+        if vbs < 0.1:
+            return "D1" if pass_2mm >= 70.0 else "D2"
+        elif vbs <= 0.2:
+            return "B1"
+        elif vbs <= 6.0:
+            return "B2"
+        else:
+            return "B4"
+
+
 def classer_gtr(dmax, pass_80um, ip, vbs=0.5, pass_2mm=70.0, is_roche=False, roche_type=None, is_organique=False):
-    """Classification GTR fidèle au tableau synoptique officiel (tableau IV)."""
+    """Classification GTR fidèle au tableau synoptique officiel (tableau IV) avec complément C1/C2 pour dmax > 50."""
     if is_organique:
         return "F"
     
@@ -23,30 +43,13 @@ def classer_gtr(dmax, pass_80um, ip, vbs=0.5, pass_2mm=70.0, is_roche=False, roc
         else: return "R6"
 
     if dmax <= 50:
-        if pass_80um >= 35.0:
-            if ip < 12: return "A1"
-            elif ip < 25: return "A2"
-            elif ip < 40: return "A3"
-            else: return "A4"
-        elif pass_80um >= 12.0:
-            if vbs < 0.2:
-                return "B5"
-            else:
-                return "B6"
-        else:
-            if vbs < 0.1:
-                return "D1" if pass_2mm >= 70.0 else "D2"
-            elif vbs <= 0.2:
-                return "B1"
-            elif vbs <= 6.0:
-                return "B2"
-            else:
-                return "B4"
+        return _get_subclass_1st_table(pass_80um, ip, vbs, pass_2mm)
     else:
         if pass_80um < 12.0 and vbs < 0.1:
             return "D3"
-        else:
-            return "C1" if pass_2mm <= 80.0 else "C2"
+        c_base = "C1" if pass_2mm <= 80.0 else "C2"
+        sub_comp = _get_subclass_1st_table(pass_80um, ip, vbs, pass_2mm)
+        return f"{c_base}{sub_comp}"
 
 
 class IdentificationPDF(FPDF):
