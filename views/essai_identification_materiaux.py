@@ -145,7 +145,8 @@ def show(supabase_client):
             with col_e4:
                 m3_val = st.number_input("Masse après lavage M3 (g)", value=10079.7, step=0.1, disabled=not user_can_edit)
 
-            st.markdown("#### Tableau de Granulométrie (R_i pour ≥10 mm, r_i pour <10 mm)")
+            st.markdown("#### Tableau de Granulométrie (R_i pour ≥10 mm, r_i pour <10 mm — Tamis 14 mm supprimé)")
+            # Tamis 14 mm retiré de la liste ci-dessous
             default_sieves = [
                 (80, 0.0, 0.0), (63, 2141.3, 0.0), (50, 1743.5, 0.0), (40, 753.3, 0.0),
                 (31.5, 183.5, 0.0), (25, 250.3, 0.0), (20, 296.8, 0.0), (16, 287.1, 0.0),
@@ -191,8 +192,18 @@ def show(supabase_client):
             r_vals = edited_sieve_df["r_i (g) [<10mm]"].values
             sieve_sz = edited_sieve_df["Tamis (mm)"].values
 
-            effective_refus = np.where(sieve_sz >= 10, R_vals, r_vals * a_factor)
-            cum_refus = np.cumsum(effective_refus)
+            # Logique demandée :
+            # - Pour les tamis >= 10 mm : refus cumulé strict de R_i sommé
+            # - Pour les tamis < 10 mm : (ri * a_factor) + Refus R_e(10mm)
+            cum_refus = np.zeros_like(sieve_sz, dtype=float)
+            running_r_gt10 = 0.0
+            for i, sz in enumerate(sieve_sz):
+                if sz >= 10:
+                    running_r_gt10 += R_vals[i]
+                    cum_refus[i] = running_r_gt10
+                else:
+                    cum_refus[i] = (r_vals[i] * a_factor) + re_val
+
             pct_refus_cum = (cum_refus / m2_val) * 100.0 if m2_val > 0 else np.zeros_like(cum_refus)
             pct_passant = 100.0 - pct_refus_cum
 
@@ -240,12 +251,12 @@ def show(supabase_client):
                 classe_gtr_auto = classer_gtr(dmax_detected, pass_80um_val, ip, vbs_val)
                 st.metric("Classe GTR (Auto)", classe_gtr_auto)
 
-            m6_sim = cum_refus[-1] if len(cum_refus) > 0 else 0
+            m6_sim = cum_refus[sieve_sz == 10][0] if len(cum_refus[sieve_sz == 10]) > 0 else 0
             val_ecart = abs(100.0 * (m3_val - m6_sim) / m3_val) if m3_val > 0 else 0.0
             is_gnf1_conf = (pass_80um_val <= 35.0) and (ip < 25)
             obs = f"Conforme GNF 1 (Passant 80µm={pass_80um_val:.1f}%)" if is_gnf1_conf else "Non Conforme / Hors fuseau"
 
-            st.info(f"Observation automatique : **{obs}** | Dmax: **{dmax_detected} mm** | Écart de fermeture: **{val_ecart:.2f}%**")
+            st.info(f"Observation automatique : **{obs}** | Dmax: **{dmax_detected} mm** | Écart de référence 10mm/M3: **{val_ecart:.2f}%**")
 
             data_dict = {
                 "Type Matériau": type_mat,
@@ -300,7 +311,7 @@ def show(supabase_client):
     # ---------------------------------------------------------
     # TAB 1 : 📋 PVS / HISTORIQUE, CONSULTATION & ADMINISTRATION
     # ---------------------------------------------------------
-    with tabs:
+    with tabs[1]:
         st.subheader("📋 PVS / Historique, Consultation & Administration")
         if not supabase_client:
             st.info("💡 Client Supabase non configuré.")
@@ -327,7 +338,7 @@ def show(supabase_client):
     # ---------------------------------------------------------
     # TAB 2 : 📊 SYNTHÈSE
     # ---------------------------------------------------------
-    with tabs:
+    with tabs[2]:
         st.subheader("📊 Synthèse Identification Matériaux")
         if not supabase_client:
             st.info("💡 Client Supabase non configuré.")
