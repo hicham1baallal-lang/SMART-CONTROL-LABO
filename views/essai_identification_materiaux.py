@@ -1,6 +1,7 @@
 import datetime
 import io
 import os
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import streamlit as st
@@ -201,7 +202,25 @@ def show(supabase_client):
             result_df["% Refus Cumulé"] = np.round(pct_refus_cum, 1)
             result_df["% Passant"] = np.round(pct_passant, 1)
 
-            st.dataframe(result_df, use_container_width=True)
+            # Disposition côte à côte : Tableau à gauche / Courbe granulométrique à droite
+            col_tbl, col_plt = st.columns([1.1, 0.9])
+            with col_tbl:
+                st.dataframe(result_df, use_container_width=True, height=420)
+            with col_plt:
+                st.markdown("#### Courbe Granulométrique")
+                fig, ax = plt.subplots(figsize=(4.8, 4.2))
+                ax.plot(
+                    result_df["Tamis (mm)"], result_df["% Passant"],
+                    marker='o', markersize=3.5, linestyle='-', color='#1f77b4', linewidth=1.5
+                )
+                ax.set_xscale('log')
+                ax.invert_xaxis()  # grands diamètres à gauche, petits à droite (norme géotechnique)
+                ax.set_xlabel("Ouverture des tamis (mm - log)")
+                ax.set_ylabel("% Passant")
+                ax.set_ylim(-2, 105)
+                ax.grid(True, which="both", linestyle=":", alpha=0.6)
+                fig.tight_layout()
+                st.pyplot(fig)
 
             dmax_detected = float(result_df[result_df["Refus R_i / r_i (g)"] > 0]["Tamis (mm)"].max()) if any(result_df["Refus R_i / r_i (g)"] > 0) else 50.0
             row_80um = result_df[result_df["Tamis (mm)"] == 0.08]
