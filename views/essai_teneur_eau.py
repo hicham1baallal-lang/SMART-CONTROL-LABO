@@ -380,7 +380,7 @@ def show(supabase_client, can_edit=False, is_admin=False):
     # ---------------------------------------------------------
     # TAB 2 : PVS / HISTORIQUE, CONSULTATION & ADMINISTRATION
     # ---------------------------------------------------------
-    with tabs:
+    with tabs[1]:
         st.subheader("📋 PVS / Historique, Consultation & Administration")
 
         if not supabase_client:
@@ -537,7 +537,7 @@ def show(supabase_client, can_edit=False, is_admin=False):
     # ---------------------------------------------------------
     # TAB 3 : SYNTHÈSE + EXPORT EXCEL
     # ---------------------------------------------------------
-    with tabs:
+    with tabs[2]:
         st.subheader("📊 Synthèse des Essais de Teneur en Eau")
 
         if not supabase_client:
