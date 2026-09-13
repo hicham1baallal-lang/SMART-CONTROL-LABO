@@ -35,7 +35,7 @@ def generate_pdf(header_info, data_dict, type_mat):
     pdf.alias_nb_pages()
     pdf.add_page()
     pdf.set_font("Helvetica", "B", 14)
-    pdf.cell(0, 8, f"PROCES VERBAL - IDENTIFICATION {type_mat.upper()}", 0, 1, "C")
+    pdf.cell(0, 8, f"PROCES VERBAL - IDENTIFICATION ({type_mat.upper()})", 0, 1, "C")
     pdf.ln(5)
     pdf.set_font("Helvetica", "B", 10)
     pdf.cell(0, 6, f"Rapport d'Essai n° : {header_info.get('num_rapport') or 'N/A'}", 0, 1, "R")
@@ -51,7 +51,7 @@ def generate_pdf(header_info, data_dict, type_mat):
     pdf.ln(5)
 
     pdf.set_font("Helvetica", "B", 10)
-    pdf.cell(190, 8, f" II - Résultats d'identification ({type_mat})", 1, 1, "L", fill=True)
+    pdf.cell(190, 8, " II - Résultats d'identification", 1, 1, "L", fill=True)
     pdf.set_font("Helvetica", "", 9)
     for k, v in data_dict.items():
         pdf.cell(95, 7, f"   {k}", 1, 0, "L")
@@ -77,116 +77,93 @@ def show(supabase_client):
         st.warning("🔒 Mode lecture seule. Droits de modification restreints.")
 
     tabs = st.tabs([
-        "➕ Saisir un sol",
-        "➕ Saisir un grave",
+        "➕ Saisir un PV",
         "📋 PVS / Historique, Consultation & Administration",
         "📊 Synthèse"
     ])
 
     # ---------------------------------------------------------
-    # TAB 0 : ➕ SAISIR UN SOL
+    # TAB 0 : ➕ SAISIR UN PV
     # ---------------------------------------------------------
     with tabs[0]:
-        st.subheader("➕ Saisie Identification Sol (Atterberg, ES, GTR)")
+        st.subheader("➕ Saisie PV Identification Matériau")
         c1, c2, c3 = st.columns(3)
         with c1:
-            num_rapp_sol = st.text_input("N° Rapport Sol", value="25/260/LGV/CS/SOL/001", disabled=not user_can_edit)
-            lieu_sol = st.text_input("Lieu / Zone Sol", value="Zone T4", disabled=not user_can_edit)
+            num_rapport = st.text_input("N° Rapport", value="25/260/LGV/CS/IDENT/001", disabled=not user_can_edit)
+            lieu = st.text_input("Lieu / Zone", value="Zone T4 / Carrière", disabled=not user_can_edit)
         with c2:
-            pk_sol = st.text_input("PK / Section Sol", value="PK 8+540", disabled=not user_can_edit)
-            date_sol = st.date_input("Date Essai Sol", value=datetime.date.today(), disabled=not user_can_edit)
+            pk = st.text_input("PK / Section", value="PK 8+540", disabled=not user_can_edit)
+            date_essai = st.date_input("Date Essai", value=datetime.date.today(), disabled=not user_can_edit)
         with c3:
-            w_l = st.number_input("Limite de liquidité wL (%)", value=35.0, step=0.5, disabled=not user_can_edit)
-            w_p = st.number_input("Limite de plasticité wP (%)", value=20.0, step=0.5, disabled=not user_can_edit)
+            type_mat = st.selectbox("Type de matériau", ["Sol (Atterberg, ES, GTR)", "Grave (Los Angeles, Micro-Deval, ES)"], disabled=not user_can_edit)
 
-        ip = w_l - w_p
-        c4, c5, c6 = st.columns(3)
-        with c4:
-            st.metric("Indice de plasticité IP", f"{ip:.1f} %")
-        with c5:
-            es_visuel = st.selectbox("Équivalent de sable (ES)", ["ESV > 60 (Propre)", "40 < ESV <= 60 (Acceptable)", "ESV <= 40 / EST"], disabled=not user_can_edit)
-        with c6:
-            gtr_sol = st.selectbox("Classe GTR Sol", ["A1", "A2", "A3", "A4", "B1", "B2", "C1", "D1"], disabled=not user_can_edit)
+        st.markdown("---")
+        data_dict = {}
+        if "Sol" in type_mat:
+            st.subheader("Paramètres d'identification - Sol")
+            col_s1, col_s2, col_s3 = st.columns(3)
+            with col_s1:
+                w_l = st.number_input("Limite de liquidité wL (%)", value=35.0, step=0.5, disabled=not user_can_edit)
+            with col_s2:
+                w_p = st.number_input("Limite de plasticité wP (%)", value=20.0, step=0.5, disabled=not user_can_edit)
+            with col_s3:
+                ip = w_l - w_p
+                st.metric("Indice de plasticité IP", f"{ip:.1f} %")
 
-        obs_sol = "Conforme" if ip < 25 else "Non Conforme / Argileux"
-        st.info(f"Observation automatique : **{obs_sol}**")
+            col_s4, col_s5 = st.columns(2)
+            with col_s4:
+                es_val = st.selectbox("Équivalent de sable (ES)", ["ESV > 60 (Propre)", "40 < ESV <= 60 (Acceptable)", "ESV <= 40 / EST"], disabled=not user_can_edit)
+            with col_s5:
+                gtr_val = st.selectbox("Classe GTR Sol", ["A1", "A2", "A3", "A4", "B1", "B2", "C1", "D1"], disabled=not user_can_edit)
 
-        data_sol_dict = {
-            "wL (%)": f"{w_l}", "wP (%)": f"{w_p}", "IP (%)": f"{ip:.1f}",
-            "ES": es_visuel, "Classe GTR": gtr_sol, "Observation": obs_sol
-        }
-        header_sol = {"num_rapport": num_rapp_sol, "lieu": lieu_sol, "pk": pk_sol, "date_essai": str(date_sol), "type": "SOL"}
+            obs = "Conforme" if ip < 25 else "Non Conforme / Argileux"
+            data_dict = {
+                "Type": "Sol",
+                "wL (%)": f"{w_l}", "wP (%)": f"{w_p}", "IP (%)": f"{ip:.1f}",
+                "ES": es_val, "Classe GTR": gtr_val, "Observation": obs
+            }
+        else:
+            st.subheader("Paramètres d'identification - Grave")
+            col_g1, col_g2 = st.columns(2)
+            with col_g1:
+                la = st.number_input("Los Angeles (LA)", value=25.0, step=1.0, disabled=not user_can_edit)
+                md = st.number_input("Micro-Deval humide (MDE)", value=18.0, step=1.0, disabled=not user_can_edit)
+            with col_g2:
+                es_grav = st.selectbox("ES à 10% / Piston (Grave)", ["ES >= 75", "ES < 75"], disabled=not user_can_edit)
 
-        pdf_sol = generate_pdf(header_sol, data_sol_dict, "Sol")
+            obs = "Conforme" if la <= 30 and md <= 20 else "Non Conforme"
+            data_dict = {
+                "Type": "Grave",
+                "Los Angeles (LA)": f"{la}", "Micro-Deval (MDE)": f"{md}",
+                "ES Grave": es_grav, "Observation": obs
+            }
+
+        st.info(f"Observation automatique : **{obs}**")
+        header_info = {"num_rapport": num_rapport, "lieu": lieu, "pk": pk, "date_essai": str(date_essai)}
+
+        pdf_bytes = generate_pdf(header_info, data_dict, type_mat.split()[0])
         col_d1, col_d2 = st.columns(2)
         with col_d1:
-            st.download_button("📄 Télécharger PV Sol (PDF)", data=pdf_sol, file_name=f"PV_Sol_{num_rapp_sol.replace('/','_')}.pdf", mime="application/pdf", use_container_width=True)
+            st.download_button("📄 Télécharger PV (PDF)", data=pdf_bytes, file_name=f"PV_Identification_{num_rapport.replace('/','_')}.pdf", mime="application/pdf", use_container_width=True)
         with col_d2:
-            if st.button("💾 Enregistrer Sol (Supabase)", type="primary", use_container_width=True, disabled=not user_can_edit):
+            if st.button("💾 Enregistrer dans Supabase", type="primary", use_container_width=True, disabled=not user_can_edit):
                 if supabase_client:
                     try:
                         supabase_client.table("pv_identification_materiaux").upsert({
-                            "num_rapport": num_rapp_sol,
-                            "type_materiau": "SOL",
-                            "lieu": lieu_sol,
-                            "pk": pk_sol,
-                            "date_essai": str(date_sol),
-                            "details": data_sol_dict,
-                            "observation": obs_sol
+                            "num_rapport": num_rapport,
+                            "type_materiau": type_mat.split()[0].upper(),
+                            "lieu": lieu,
+                            "pk": pk,
+                            "date_essai": str(date_essai),
+                            "details": data_dict,
+                            "observation": obs
                         }).execute()
-                        st.success("✅ Sol enregistré avec succès !")
+                        st.success("✅ PV enregistré avec succès !")
                     except Exception as e:
                         st.error(f"Erreur Supabase : {e}")
 
     # ---------------------------------------------------------
-    # TAB 1 : ➕ SAISIR UN GRAVE
-    # ---------------------------------------------------------
-    with tabs:
-        st.subheader("➕ Saisie Identification Grave (Los Angeles, Micro-Deval, ES)")
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            num_rapp_grav = st.text_input("N° Rapport Grave", value="25/260/LGV/CS/GRV/001", disabled=not user_can_edit)
-            lieu_grav = st.text_input("Lieu / Zone Grave", value="Centrale / Carrière", disabled=not user_can_edit)
-        with c2:
-            pk_grav = st.text_input("PK / Section Grave", value="Section 2", disabled=not user_can_edit)
-            date_grav = st.date_input("Date Essai Grave", value=datetime.date.today(), disabled=not user_can_edit)
-        with c3:
-            la = st.number_input("Los Angeles (LA)", value=25.0, step=1.0, disabled=not user_can_edit)
-            md = st.number_input("Micro-Deval humide (MDE)", value=18.0, step=1.0, disabled=not user_can_edit)
-
-        es_grav = st.selectbox("ES à 10% / Piston (Grave)", ["ES >= 75", "ES < 75"], disabled=not user_can_edit)
-        obs_grav = "Conforme" if la <= 30 and md <= 20 else "Non Conforme"
-        st.info(f"Observation automatique : **{obs_grav}**")
-
-        data_grav_dict = {
-            "Los Angeles (LA)": f"{la}", "Micro-Deval (MDE)": f"{md}",
-            "ES Grave": es_grav, "Observation": obs_grav
-        }
-        header_grav = {"num_rapport": num_rapp_grav, "lieu": lieu_grav, "pk": pk_grav, "date_essai": str(date_grav), "type": "GRAVE"}
-
-        pdf_grav = generate_pdf(header_grav, data_grav_dict, "Grave")
-        col_g1, col_g2 = st.columns(2)
-        with col_g1:
-            st.download_button("📄 Télécharger PV Grave (PDF)", data=pdf_grav, file_name=f"PV_Grave_{num_rapp_grav.replace('/','_')}.pdf", mime="application/pdf", use_container_width=True)
-        with col_g2:
-            if st.button("💾 Enregistrer Grave (Supabase)", type="primary", use_container_width=True, disabled=not user_can_edit):
-                if supabase_client:
-                    try:
-                        supabase_client.table("pv_identification_materiaux").upsert({
-                            "num_rapport": num_rapp_grav,
-                            "type_materiau": "GRAVE",
-                            "lieu": lieu_grav,
-                            "pk": pk_grav,
-                            "date_essai": str(date_grav),
-                            "details": data_grav_dict,
-                            "observation": obs_grav
-                        }).execute()
-                        st.success("✅ Grave enregistré avec succès !")
-                    except Exception as e:
-                        st.error(f"Erreur Supabase : {e}")
-
-    # ---------------------------------------------------------
-    # TAB 2 : 📋 PVS / HISTORIQUE, CONSULTATION & ADMINISTRATION
+    # TAB 1 : 📋 PVS / HISTORIQUE, CONSULTATION & ADMINISTRATION
     # ---------------------------------------------------------
     with tabs:
         st.subheader("📋 PVS / Historique, Consultation & Administration")
@@ -213,7 +190,7 @@ def show(supabase_client):
                 st.warning(f"Table non initialisée ou erreur de lecture : {e}")
 
     # ---------------------------------------------------------
-    # TAB 3 : 📊 SYNTHÈSE
+    # TAB 2 : 📊 SYNTHÈSE
     # ---------------------------------------------------------
     with tabs:
         st.subheader("📊 Synthèse Identification Matériaux")
@@ -227,7 +204,10 @@ def show(supabase_client):
                     m1, m2, m3 = st.columns(3)
                     m1.metric("Total PVs Ident.", len(df_s))
                     m2.metric("Conformes", len(df_s[df_s["observation"]=="Conforme"]) if "observation" in df_s else 0)
-                    m3.metric("Type Sol / Grave", f"{len(df_s[df_s['type_materiau']=='SOL'])} / {len(df_s[df_s['type_materiau']=='GRAVE'])}")
+                    
+                    sol_count = len(df_s[df_s['type_materiau']=='SOL']) if 'type_materiau' in df_s else 0
+                    grav_count = len(df_s[df_s['type_materiau']=='GRAVE']) if 'type_materiau' in df_s else 0
+                    m3.metric("Type Sol / Grave", f"{sol_count} / {grav_count}")
                     
                     st.dataframe(df_s, use_container_width=True)
                     
