@@ -145,22 +145,22 @@ def show(supabase_client):
             with col_e4:
                 m3_val = st.number_input("Masse après lavage M3 (g)", value=10079.7, step=0.1, disabled=not user_can_edit)
 
-            st.markdown("#### Tableau de Granulométrie & Résultats par tamisage (Modules LPEE)")
+            st.markdown("#### Tableau de Granulométrie & Résultats par tamisage (Ouverture mm)")
             default_sieves = [
-                (50, 80, 0.0), (49, 63, 2141.3), (48, 50, 1743.5), (47, 40, 753.3),
-                (46, 31.5, 183.5), (45, 25, 250.3), (44, 20, 296.8), (43, 16, 287.1),
-                (42.5, 14, 0.0), (42, 12.5, 147.0), (41, 10, 6012.8), (40, 8, 72.4),
-                (39, 6.3, 151.0), (38, 5, 197.6), (37, 4, 238.5), (36, 3.15, 278.4),
-                (35, 2.5, 321.6), (34, 2, 361.1), (33, 1.6, 401.9), (32, 1.25, 445.4),
-                (31, 1, 483.1), (30, 0.8, 524.9), (29, 0.63, 563.3), (28, 0.5, 624.5),
-                (27, 0.4, 683.8), (26, 0.315, 857.0), (25, 0.25, 1141.6), (24, 0.2, 1403.9),
-                (23, 0.16, 1642.3), (22, 0.1, 1809.4), (21, 0.08, 1919.2)
+                (80, 0.0), (63, 2141.3), (50, 1743.5), (40, 753.3),
+                (31.5, 183.5), (25, 250.3), (20, 296.8), (16, 287.1),
+                (14, 0.0), (12.5, 147.0), (10, 6012.8), (8, 72.4),
+                (6.3, 151.0), (5, 197.6), (4, 238.5), (3.15, 278.4),
+                (2.5, 321.6), (2, 361.1), (1.6, 401.9), (1.25, 445.4),
+                (1, 483.1), (0.8, 524.9), (0.63, 563.3), (0.5, 624.5),
+                (0.4, 683.8), (0.315, 857.0), (0.25, 1141.6), (0.2, 1403.9),
+                (0.16, 1642.3), (0.1, 1809.4), (0.08, 1919.2)
             ]
-            df_template = pd.DataFrame(default_sieves, columns=["Modules", "Tamis (mm)", "Refus R_i / r_i (g)"])
+            df_template = pd.DataFrame(default_sieves, columns=["Tamis (mm)", "Refus R_i / r_i (g)"])
             
             edited_sieve_df = st.data_editor(
                 df_template,
-                disabled=["Modules", "Tamis (mm)"] if not user_can_edit else [],
+                disabled=["Tamis (mm)"] if not user_can_edit else [],
                 use_container_width=True,
                 height=380,
                 key="sieve_editor_sol"
