@@ -134,7 +134,7 @@ def show(supabase_client):
         if is_sol:
             st.markdown("### 📄 Feuille d'Essai type LPEE — Analyse Granulométrique (Sol)")
             
-            # Paramètres généraux en-tête feuille
+            # Paramètres généraux en-tête feuille (Masse totale M1)
             col_e1, col_e2, col_e3, col_e4 = st.columns(4)
             with col_e1:
                 ref_ech = st.text_input("Référence Échantillon", value="ECH-SOL-0247", disabled=not user_can_edit)
@@ -149,18 +149,13 @@ def show(supabase_client):
             with col_e5:
                 m4_val = st.number_input("Prise tamisage M4 (g)", value=1930.0, step=1.0, disabled=not user_can_edit)
             with col_e6:
-                re_val = st.number_input("Refus Re (10mm) (g)", value=6012.8, step=1.0, disabled=not user_can_edit)
+                st.caption("Refus Re (10mm) lié automatiquement au tamis 10mm ci-dessous")
             with col_e7:
                 w_l = st.number_input("wL (%)", value=35.0, step=0.5, disabled=not user_can_edit)
             with col_e8:
                 w_p = st.number_input("wP (%)", value=20.0, step=0.5, disabled=not user_can_edit)
 
-            a_factor = (m3_val - re_val) / m4_val if m4_val > 0 else 0
-            ip = w_l - w_p
-
-            st.markdown(f"**Coefficient de raccordement $a = (M_3 - R_e)/M_4$** : `{a_factor:.4f}` | **IP** : `{ip:.1f}%`")
-
-            # Tableau unique consolidé (édition & résultats cumulés)
+            # Tableau interactif type LPEE (modules & tamis)
             st.markdown("#### Tableau de Granulométrie & Résultats par tamisage (Modules LPEE)")
             default_sieves = [
                 (50, 80, 0.0), (49, 63, 2141.3), (48, 50, 1743.5), (47, 40, 753.3),
@@ -181,6 +176,15 @@ def show(supabase_client):
                 height=380,
                 key="sieve_editor_sol"
             )
+
+            # Extraction automatique de Re (10mm) depuis le tableau (tamis == 10)
+            row_10mm = edited_sieve_df[edited_sieve_df["Tamis (mm)"] == 10]
+            re_val = float(row_10mm["Refus R_i / r_i (g)"].values[0]) if not row_10mm.empty else 0.0
+
+            a_factor = (m3_val - re_val) / m4_val if m4_val > 0 else 0
+            ip = w_l - w_p
+
+            st.markdown(f"**Refus R_e (10mm)** : `{re_val:.1f} g` | **Coefficient a = (M3 - Re)/M4** : `{a_factor:.4f}` | **IP** : `{ip:.1f}%`")
 
             # Calculs automatiques
             refus_vals = edited_sieve_df["Refus R_i / r_i (g)"].values
@@ -218,7 +222,7 @@ def show(supabase_client):
             data_dict = {
                 "Type Matériau": type_mat,
                 "Ref Echantillon": ref_ech,
-                "M1 (g)": f"{m1_val}", "M2 (g)": f"{m2_val}", "M3 (g)": f"{m3_val}", "M4 (g)": f"{m4_val}", "Re (g)": f"{re_val}",
+                "M1 (g)": f"{m1_val}", "M2 (g)": f"{m2_val}", "M3 (g)": f"{m3_val}", "M4 (g)": f"{m4_val}", "Re (10mm) (g)": f"{re_val}",
                 "Facteur a": f"{a_factor:.4f}",
                 "Dmax (mm)": f"{dmax_detected}", "Passant 80µm (%)": f"{pass_80um_val:.1f}",
                 "wL (%)": f"{w_l}", "wP (%)": f"{w_p}", "IP (%)": f"{ip:.1f}",
