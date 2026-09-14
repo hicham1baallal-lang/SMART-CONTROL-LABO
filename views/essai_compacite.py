@@ -269,7 +269,7 @@ def generate_excel_synthese_lpee(df_filtered):
         except Exception:
             pass
 
-    # En-tête LPEE (Ecriture PUIS Fusion)
+    # En-tête LPEE
     ws["C1"] = "LABORATOIRE PUBLIC D'ESSAIS ET D'ETUDES - LPEE"
     ws["C1"].font = font_header_title
     ws["C1"].alignment = align_center
@@ -285,7 +285,7 @@ def generate_excel_synthese_lpee(df_filtered):
     ws["C3"].alignment = align_center
     ws.merge_cells("C3:I3")
 
-    # Titre principal (Ecriture PUIS Fusion)
+    # Titre principal
     ws["A5"] = "SYNTHÈSE ET STATISTIQUES DES ESSAIS DE COMPACITÉ (NF P 94-093 / NF P 94-061-2)"
     ws["A5"].font = Font(name="Arial", size=11, bold=True, color="FFFFFF")
     ws["A5"].fill = fill_navy
@@ -357,7 +357,7 @@ def generate_excel_synthese_lpee(df_filtered):
 
         current_row += 1
 
-    # --- BLOC STATISTIQUE COMPLET ---
+    # --- BLOC STATISTIQUE COMPLET (CORRIGÉ SANS WRITE SUR MERGED CELLS) ---
     current_row += 1
     stat_title_cell = ws.cell(row=current_row, column=1, value="📊 STATISTIQUES GLOBALES DES ESSAIS")
     stat_title_cell.font = font_section
@@ -388,13 +388,17 @@ def generate_excel_synthese_lpee(df_filtered):
     ws.row_dimensions[current_row].height = 20
     for idx, sh in enumerate(stat_headers, 1):
         col_target = 1 if idx == 1 else (idx + 1) * 2 - 2
+        end_col = col_target + 1 if idx > 1 else 3
+        
+        # Style et bordure sur la plage avant/pendant fusion
+        for c_idx in range(col_target, end_col + 1):
+            cell = ws.cell(row=current_row, column=c_idx)
+            cell.fill = fill_stat_hdr
+            cell.border = thin_border
+
         c = ws.cell(row=current_row, column=col_target, value=sh)
         c.font = font_bold
-        c.fill = fill_stat_hdr
         c.alignment = align_center
-        c.border = thin_border
-        
-        end_col = col_target + 1 if idx > 1 else 3
         ws.merge_cells(start_row=current_row, start_column=col_target, end_row=current_row, end_column=end_col)
 
     # Valeurs Min, Moy, Max
@@ -413,9 +417,11 @@ def generate_excel_synthese_lpee(df_filtered):
         current_row += 1
         ws.row_dimensions[current_row].height = 18
         
+        for c_idx in range(1, 4):
+            ws.cell(row=current_row, column=c_idx).border = thin_border
+            
         c_lbl = ws.cell(row=current_row, column=1, value=label)
         c_lbl.font = font_data
-        c_lbl.border = thin_border
         ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=3)
         
         vals = [ds_v, w_v, ref_v, ic_v]
@@ -423,10 +429,12 @@ def generate_excel_synthese_lpee(df_filtered):
             col_target = (i + 2) * 2 - 2
             val_formatted = round(val, 3) if i == 0 else round(val, 1)
             
+            for c_idx in range(col_target, col_target + 2):
+                ws.cell(row=current_row, column=c_idx).border = thin_border
+                
             c_val = ws.cell(row=current_row, column=col_target, value=val_formatted)
             c_val.font = font_bold
             c_val.alignment = align_center
-            c_val.border = thin_border
             ws.merge_cells(start_row=current_row, start_column=col_target, end_row=current_row, end_column=col_target+1)
 
     # Ajustement des largeurs de colonnes
