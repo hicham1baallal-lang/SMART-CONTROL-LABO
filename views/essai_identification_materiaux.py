@@ -379,12 +379,14 @@ def show(supabase_client):
                     "observation": obs
                 }
                 saved_to_db = False
+                db_error_msg = ""
                 if supabase_client:
                     try:
-                        supabase_client.table("pv_identification_materiaux").upsert(payload_record).execute()
+                        res = supabase_client.table("pv_identification_materiaux").upsert(payload_record).execute()
                         saved_to_db = True
-                    except Exception:
+                    except Exception as e:
                         saved_to_db = False
+                        db_error_msg = str(e)
                 
                 f_st.session_state["pv_ident_local_db"] = [
                     r for r in f_st.session_state["pv_ident_local_db"] if r.get("num_rapport") != num_rapport
@@ -394,7 +396,7 @@ def show(supabase_client):
                 if saved_to_db:
                     f_st.success("✅ PV enregistré avec succès dans Supabase !")
                 else:
-                    f_st.warning("⚠️ Table Supabase non trouvée/inaccessible (PGRST205) -> Enregistré en mémoire locale session.")
+                    f_st.warning(f"⚠️ Stocké en session locale uniquement (Erreur Supabase : `{db_error_msg[:100]}`). Exécutez le script DDL `pv_identification_materiaux`.")
 
     # ---------------------------------------------------------
     # TAB 1 : 📋 PVS / HISTORIQUE, CONSULTATION & ADMINISTRATION
