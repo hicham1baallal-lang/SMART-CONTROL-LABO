@@ -173,7 +173,7 @@ if st.session_state["user"] is None:
 
 # Formulaire de Connexion
 if st.session_state["user"] is None:
-    col1, col2, col3 = st.columns()
+    col1, col2, col3 = st.columns(3)
     with col2:
         st.title("🔐 Accès Restreint - LPEE")
         with st.form("login_form"):
