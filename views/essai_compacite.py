@@ -295,13 +295,38 @@ def generate_excel_synthese_lpee(df_filtered):
     ws.merge_cells("A5:H5")
     ws.row_dimensions[5].height = 24
 
-    # En-têtes du tableau principal (Colonnes demandées retirées)
+    # --- BLOC INFORMATIONS GÉNÉRALES (CLIENT, PROJET, PÉRIODE) ---
+    ws.row_dimensions[6].height = 20
+    
+    if "Période_Mois" in df_filtered.columns:
+        periodes = df_filtered["Période_Mois"].dropna().unique()
+        periode_str = ", ".join(str(p) for p in periodes) if len(periodes) > 0 else "Septembre 2026"
+    else:
+        periode_str = "Septembre 2026"
+
+    ws.cell(row=6, column=1, value="CLIENT : TGCC").font = font_bold
+    ws.cell(row=6, column=1).alignment = align_left
+    ws.merge_cells("A6:C6")
+
+    ws.cell(row=6, column=4, value="PROJET : LGV CASA SUD").font = font_bold
+    ws.cell(row=6, column=4).alignment = align_center
+    ws.merge_cells("D6:F6")
+
+    ws.cell(row=6, column=7, value=f"PÉRIODE : {periode_str}").font = font_bold
+    ws.cell(row=6, column=7).alignment = align_right
+    ws.merge_cells("G6:H6")
+
+    for col in range(1, 9):
+        ws.cell(row=6, column=col).fill = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")
+        ws.cell(row=6, column=col).border = thin_border
+
+    # En-têtes du tableau principal
     headers = [
         "N° Rapport", "Date Prél.", "Lieu / Zone", 
         "Matériau", "Réf", "Niveau", "IC (%)", "Observation"
     ]
     
-    start_row = 7
+    start_row = 8
     ws.row_dimensions[start_row].height = 22
     for col_idx, h in enumerate(headers, 1):
         cell = ws.cell(row=start_row, column=col_idx, value=h)
