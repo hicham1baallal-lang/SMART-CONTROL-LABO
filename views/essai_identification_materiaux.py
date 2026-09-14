@@ -54,25 +54,26 @@ def classer_gtr(dmax, pass_80um, ip, vbs=0.5, pass_2mm=70.0, is_roche=False, roc
 
 class IdentificationPDF(FPDF):
     def header(self):
-        # En-tête officiel conforme au Modèle LPEE (Sans caractères Unicode non supportés)
+        # En-tête utilisant uniquement le logo LPEE à droite (sans texte arabe)
         logo_path = "logo.png.jpg"
         if not os.path.exists(logo_path):
             logo_path = "logo.png"
+        
+        # Positionnement du logo sur le côté droit
         if os.path.exists(logo_path):
             try:
-                self.image(logo_path, 10, 8, 22)
+                self.image(logo_path, 160, 6, 30)
             except Exception:
                 pass
 
         self.set_font("Helvetica", "B", 10)
-        self.cell(100, 5, "L.P.E.E", 0, 0, "L")
-        self.set_font("Helvetica", "B", 9)
-        self.cell(90, 5, "L.P.E.E - CTR CASA-SETTAT", 0, 1, "R")
+        self.cell(100, 5, "L.P.E.E", 0, 1, "L")
         
         self.set_font("Helvetica", "B", 8)
-        self.cell(100, 4, "LABORATOIRE PUBLIC DES ESSAIS ET D'ETUDES", 0, 0, "L")
+        self.cell(100, 4, "LABORATOIRE PUBLIC DES ESSAIS ET D'ETUDES", 0, 1, "L")
+        
         self.set_font("Helvetica", "I", 8)
-        self.cell(90, 4, "Laboratoire du controle externe", 0, 1, "R")
+        self.cell(100, 4, "Laboratoire du controle externe", 0, 1, "L")
         
         self.set_font("Helvetica", "", 8)
         self.cell(100, 4, "Centre Technique Regional CASA-SETTAT-BENI MELLAL", 0, 1, "L")
