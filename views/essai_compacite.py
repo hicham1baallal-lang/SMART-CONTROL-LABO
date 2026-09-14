@@ -118,7 +118,7 @@ def generate_pv_compacite_pdf(header_info, points_data):
         pdf.cell(widths[i], 7, clean_text(h), 1, 0, "C")
     pdf.ln()
 
-    # Corps du tableau avec hauteur adaptable et correction des index widths[i]
+    # Corps du tableau avec hauteur adaptable et index widths corrigés
     pdf.set_font("Helvetica", "", 7.5)
     nb_samples = max(len(points_data), 1)
     row_height = 8 if nb_samples <= 6 else 6.5
@@ -131,7 +131,7 @@ def generate_pv_compacite_pdf(header_info, points_data):
         pdf.cell(widths, row_height, f"{float(p.get('densite_seche', 0.0)):.3f}", 1, 0, "C")
         pdf.cell(widths[3], row_height, f"{float(p.get('densite_ref', 0.0)):.3f}", 1, 0, "C")
         pdf.cell(widths[4], row_height, f"{float(p.get('w_mesure', 0.0)):.1f}%", 1, 0, "C")
-        pdf.cell(widths[5], row_height, f"{float(p.get('refus_20mm', 0.0)):.1f}", 1, 0, "C")
+        pdf.cell(widths[5], row_height, f"{float(p.get('refus_20mm', 0.0)):.1f}%", 1, 0, "C")
         pdf.cell(widths[6], row_height, f"{float(p.get('ic', 0.0)):.1f}%", 1, 0, "C")
         pdf.cell(widths[7], row_height, clean_text(str(p.get("observation", "Conforme"))), 1, 1, "C")
 
@@ -246,7 +246,6 @@ def show(supabase_client, can_edit=False, is_admin=False):
         st.markdown("---")
         st.subheader("2. Points de Mesure de Compacité")
 
-        # Initialisation avec références successives strictes
         if "compacite_samples" not in st.session_state:
             st.session_state["compacite_samples"] = [
                 {"ref_num": 1, "designation": lieu_prelevement, "type_mesure": "mc", "densite_seche": 2.162, "densite_ref": 2.217, "w_mesure": 6.2, "refus_20mm": 27.0},
