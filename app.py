@@ -172,10 +172,17 @@ if st.session_state["user"] is None:
         except Exception:
             pass
 
-# Formulaire de Connexion
+# Formulaire de Connexion avec image d'accueil
 if st.session_state["user"] is None:
-    col1, col2, col3 = st.columns(3)
-    with col2:
+    col_img, col_form = st.columns()
+    with col_img:
+        if os.path.exists("image.page d'accueil.png"):
+            st.image("image.page d'accueil.png", use_container_width=True)
+        elif os.path.exists("image.page d'accueil.jpg"):
+            st.image("image.page d'accueil.jpg", use_container_width=True)
+        else:
+            st.info("ℹ️ Image d'accueil non trouvée (`image.page d'accueil.png` / `image.page d'accueil.jpg`).")
+    with col_form:
         st.title("🔐 Accès Restreint - LPEE")
         with st.form("login_form"):
             username_input = st.text_input("Nom d'utilisateur").strip().upper()
