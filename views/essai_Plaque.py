@@ -39,7 +39,7 @@ def _executer_avec_reprise(fn, tentatives=2, delai=1.0):
 
 # Import pour la génération du PDF
 from reportlab.lib.pagesizes import A4
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as ReportLabImage
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 import io
@@ -48,6 +48,7 @@ import os
 # Import pour la génération Excel avancée
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from openpyxl.drawing.image import Image as OpenpyxlImage
 
 @st.cache_data(ttl=300)
 def charger_essais_plaque(projet_id):
@@ -255,8 +256,7 @@ def generer_pdf_pv(essai):
     
     if os.path.exists(logo_path):
         try:
-            # Taille augmentée à width=90, height=90 et adaptation de la largeur de colonne à 105
-            img = Image(logo_path, width=90, height=90)
+            img = ReportLabImage(logo_path, width=90, height=90)
             img.hAlign = 'LEFT'
             txt_header = Paragraph(header_text, org_style)
             header_table = Table([[img, txt_header]], colWidths=[105, 420])
@@ -435,6 +435,19 @@ def generer_excel_synthese(df, mois_str, empl_str, couche_str, nom_projet):
         top=Side(style='thin', color='D9D9D9'),
         bottom=Side(style='double', color='1F4E78')
     )
+
+    # Insertion du Logo LPEE (logo.png.jpg)
+    logo_path = "logo.png.jpg"
+    if os.path.exists(logo_path):
+        try:
+            img = OpenpyxlImage(logo_path)
+            img.width = 65
+            img.height = 65
+            ws.add_image(img, 'A1')
+            for r in range(1, 5):
+                ws.row_dimensions[r].height = 20
+        except Exception:
+            pass
 
     ws['A1'] = "LABORATOIRE LPEE — CENTRE TECHNIQUE RÉGIONAL"
     ws['A1'].font = title_font
