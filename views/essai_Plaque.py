@@ -436,7 +436,6 @@ def generer_excel_synthese(df, mois_str, empl_str, couche_str, nom_projet):
         bottom=Side(style='double', color='1F4E78')
     )
 
-    # Insertion du Logo LPEE (logo.png.jpg)
     logo_path = "logo.png.jpg"
     if os.path.exists(logo_path):
         try:
@@ -449,25 +448,21 @@ def generer_excel_synthese(df, mois_str, empl_str, couche_str, nom_projet):
         except Exception:
             pass
 
-    # Ligne 1 : Norme
     ws['A1'] = "Norme : NF P 94-117-1 (Plaque Ø 600 mm)"
     ws['A1'].font = bold_font
     ws.merge_cells('A1:G1')
     ws['A1'].alignment = Alignment(horizontal='center')
 
-    # Ligne 2 : Laboratoire et Centre sur la 2ème ligne
     ws['A2'] = "LABORATOIRE PUBLIC D'ESSAIS ET D'ÉTUDES (LPEE) - CENTRE TECHNIQUE REGIONALE DE CASABLANCA -SETTAT BENIMELLAL"
     ws['A2'].font = title_font
     ws.merge_cells('A2:G2')
     ws['A2'].alignment = Alignment(horizontal='center')
 
-    # Ligne 3 : Projet & Client & Filtres
     ws['A3'] = f"Projet : LGV CASA SUD | Client : TGCC | Filtres -> Mois: {mois_str} | Emplacement: {empl_str} | Couche: {couche_str}"
     ws['A3'].font = subtitle_font
     ws.merge_cells('A3:G3')
     ws['A3'].alignment = Alignment(horizontal='center')
 
-    # Ligne 4 : Titre de synthèse
     ws['A4'] = f"SYNTHÈSE DES ESSAIS DE PORTANCE À LA PLAQUE — MENSUEL - {mois_str}"
     ws['A4'].font = bold_font
     ws.merge_cells('A4:G4')
