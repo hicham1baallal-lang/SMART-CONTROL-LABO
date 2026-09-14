@@ -131,9 +131,14 @@ def generate_pv_compacite_pdf(header_info, points_data):
     pdf.ln(5)
 
     # --- SECTION I : IDENTIFICATION DU PROJET & DU MATÉRIAU ---
-    pdf.set_fill_color(230, 230, 230)
+    # En-tête de section bleu marine
+    pdf.set_fill_color(31, 78, 121)
+    pdf.set_text_color(255, 255, 255)
     pdf.set_font("Helvetica", "B", 9.5)
     pdf.cell(190, 8, clean_text(" I - Informations Générales & Matériau"), 1, 1, "L", fill=True)
+    
+    # Restauration texte noir pour le contenu
+    pdf.set_text_color(0, 0, 0)
     pdf.set_font("Helvetica", "", 8.5)
 
     pdf.cell(95, 7, clean_text(f"  Client : {header_info.get('client', 'TGCC')}"), 1, 0, "L")
@@ -151,34 +156,50 @@ def generate_pv_compacite_pdf(header_info, points_data):
     pdf.ln(8)
 
     # --- SECTION II : RÉSULTATS DES ESSAIS DE COMPACITÉ ---
+    # En-tête de section bleu marine
+    pdf.set_fill_color(31, 78, 121)
+    pdf.set_text_color(255, 255, 255)
     pdf.set_font("Helvetica", "B", 9.5)
     pdf.cell(190, 8, clean_text(" II - Résultats des Essais de Compacité"), 1, 1, "L", fill=True)
 
     headers = ["Réf", "Désignation", "Niveau", "D. Sèche", "D. Réf", "w (%)", "% > 20mm", "IC (%)", "Commentaire"]
     widths = [8, 58, 14, 18, 20, 16, 18, 16, 22]
 
+    # En-tête du tableau en bleu marine avec texte blanc
+    pdf.set_fill_color(31, 78, 121)
+    pdf.set_text_color(255, 255, 255)
     pdf.set_font("Helvetica", "B", 7.5)
     for i, h in enumerate(headers):
-        pdf.cell(widths[i], 8, clean_text(h), 1, 0, "C")
+        pdf.cell(widths[i], 8, clean_text(h), 1, 0, "C", fill=True)
     pdf.ln()
 
-    # Corps du tableau (hauteur des lignes augmentée à 10 mm pour plus d'espace)
+    # Réinitialisation de la couleur de texte pour le corps du tableau
+    pdf.set_text_color(0, 0, 0)
     pdf.set_font("Helvetica", "", 7.5)
     row_height = 10
 
-    for p in points_data:
+    # Corps du tableau avec alternance de couleur de fond (Zebra striping)
+    for idx, p in enumerate(points_data):
         desig = p.get('designation', '')
         niveau = str(p.get('type_mesure', 'mc')).lower()
         
-        pdf.cell(widths[0], row_height, clean_text(str(p.get("ref_num", ""))), 1, 0, "C")
-        pdf.cell(widths[1], row_height, clean_text(desig[:40]), 1, 0, "L")
-        pdf.cell(widths[2], row_height, clean_text(niveau), 1, 0, "C")
-        pdf.cell(widths[3], row_height, f"{float(p.get('densite_seche', 0.0)):.3f}", 1, 0, "C")
-        pdf.cell(widths[4], row_height, f"{float(p.get('densite_ref', 0.0)):.3f}", 1, 0, "C")
-        pdf.cell(widths[5], row_height, f"{float(p.get('w_mesure', 0.0)):.1f}%", 1, 0, "C")
-        pdf.cell(widths[6], row_height, f"{float(p.get('refus_20mm', 0.0)):.1f}%", 1, 0, "C")
-        pdf.cell(widths[7], row_height, f"{float(p.get('ic', 0.0)):.1f}%", 1, 0, "C")
-        pdf.cell(widths[8], row_height, clean_text(str(p.get("observation", "Conforme"))), 1, 1, "C")
+        # Lignes alternées : blanc et gris-bleu très clair
+        if idx % 2 == 1:
+            pdf.set_fill_color(245, 247, 250)
+            fill_row = True
+        else:
+            pdf.set_fill_color(255, 255, 255)
+            fill_row = False
+
+        pdf.cell(widths[0], row_height, clean_text(str(p.get("ref_num", ""))), 1, 0, "C", fill=fill_row)
+        pdf.cell(widths[1], row_height, clean_text(desig[:40]), 1, 0, "L", fill=fill_row)
+        pdf.cell(widths[2], row_height, clean_text(niveau), 1, 0, "C", fill=fill_row)
+        pdf.cell(widths[3], row_height, f"{float(p.get('densite_seche', 0.0)):.3f}", 1, 0, "C", fill=fill_row)
+        pdf.cell(widths[4], row_height, f"{float(p.get('densite_ref', 0.0)):.3f}", 1, 0, "C", fill=fill_row)
+        pdf.cell(widths[5], row_height, f"{float(p.get('w_mesure', 0.0)):.1f}%", 1, 0, "C", fill=fill_row)
+        pdf.cell(widths[6], row_height, f"{float(p.get('refus_20mm', 0.0)):.1f}%", 1, 0, "C", fill=fill_row)
+        pdf.cell(widths[7], row_height, f"{float(p.get('ic', 0.0)):.1f}%", 1, 0, "C", fill=fill_row)
+        pdf.cell(widths[8], row_height, clean_text(str(p.get("observation", "Conforme"))), 1, 1, "C", fill=fill_row)
 
     pdf.ln(5)
     pdf.set_font("Helvetica", "I", 7.5)
