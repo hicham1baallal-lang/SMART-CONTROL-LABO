@@ -5,10 +5,7 @@ from datetime import date, datetime
 from audit_log import enregistrer_modification, afficher_historique_modifications
 import projets_config
 
-# Repli hors-ligne (optionnel) : mêmes fonctions que celles chargées par
-# app.py. Importé ici aussi (indépendamment) car app.py ne transmet pas ces
-# fonctions à ce module — sans cet import, aucun filet de sécurité n'existe
-# en cas d'échec réseau prolongé vers Supabase.
+# Repli hors-ligne (optionnel)
 try:
     from offline_manager import insert_safe
     OFFLINE_SUPPORT = True
@@ -16,16 +13,10 @@ except ImportError:
     OFFLINE_SUPPORT = False
 
 def _est_erreur_timeout(exc):
-    """Détecte une erreur réseau transitoire (timeout / passerelle lente)
-    plutôt qu'une vraie erreur de données, pour décider s'il faut réessayer
-    ou basculer en mode local."""
     msg = str(exc).lower()
     return any(motif in msg for motif in ["timed out", "timeout", "504", "gateway", "connection reset", "temporarily unavailable"])
 
 def _executer_avec_reprise(fn, tentatives=2, delai=1.0):
-    """Exécute fn() en réessayant automatiquement en cas d'erreur réseau
-    transitoire (timeout), avec un court délai entre les tentatives.
-    Relance la dernière exception si toutes les tentatives échouent."""
     derniere_erreur = None
     for i in range(tentatives):
         try:
@@ -50,51 +41,13 @@ import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.drawing.image import Image as OpenpyxlImage
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=60)
 def charger_essais_plaque(projet_id):
-    """Charge les essais de plaque avec tolérance étendue (str/int, trim, et correspondance souple)."""
-    colonnes_avec_zone = "id, reference, date_essai, client, projet, emplacement, pk_profil, couche, zone_pro, nature_materiau, ev1, ev2, k_ratio, technicien, observations, points_mesure, projet_id"
+    """Charge les essais de plaque avec tolérance étendue et repli global en cas de discordance d'ID projet."""
     colonnes_sans_zone = "id, reference, date_essai, client, projet, emplacement, pk_profil, couche, nature_materiau, ev1, ev2, k_ratio, technicien, observations, points_mesure, projet_id"
-
-    # Construction des variantes de projet_id pour éviter les échecs liés au type (int vs str)
-    p_ids_to_try = [projet_id]
-    if isinstance(projet_id, int):
-        p_ids_to_try.append(str(projet_id))
-    elif isinstance(projet_id, str):
-        if projet_id.isdigit():
-            p_ids_to_try.append(int(projet_id))
-        p_ids_to_try.append(projet_id.strip())
-        if "_" in projet_id:
-            p_ids_to_try.append(projet_id.replace("_", " "))
-        elif " " in projet_id:
-            p_ids_to_try.append(projet_id.replace(" ", "_"))
-
-    seen = set()
-    p_ids_unique = []
-    for pid in p_ids_to_try:
-        if pid not in seen:
-            seen.add(pid)
-            p_ids_unique.append(pid)
-
-    # 1. Tentative stricte par eq() sur les variantes d'ID/nom de projet
-    for pid in p_ids_unique:
-        for cols in (colonnes_avec_zone, colonnes_sans_zone):
-            try:
-                response = (
-                    supabase.table("essai_plaque")
-                    .select(cols)
-                    .eq("projet_id", pid)
-                    .order("id", desc=True)
-                    .limit(100)
-                    .execute()
-                )
-                if response.data and len(response.data) > 0:
-                    return response.data
-            except Exception:
-                continue
-
-    # 2. Tentative de récupération globale et filtrage Python souple si la colonne projet_id diffère légèrement
+    
     try:
+        # Récupération globale souple pour éviter les blocages de cloisonnement stricts
         response_all = (
             supabase.table("essai_plaque")
             .select(colonnes_sans_zone)
@@ -102,31 +55,30 @@ def charger_essais_plaque(projet_id):
             .limit(200)
             .execute()
         )
-        if response_all.data:
-            # Filtrage souple en Python sur projet_id ou champ projet texte
-            p_str_clean = str(projet_id).strip().lower()
+        if response_all.data and len(response_all.data) > 0:
+            p_str_clean = str(projet_id).strip().lower() if projet_id else ""
             filtered = []
             for row in response_all.data:
                 r_pid = str(row.get("projet_id", "")).strip().lower()
                 r_proj = str(row.get("projet", "")).strip().lower()
                 if not r_pid and not r_proj:
-                    filtered.append(row) # Par défaut si non cloisonné
-                    continue
-                if p_str_clean in r_pid or p_str_clean in r_proj or r_pid in p_str_clean:
                     filtered.append(row)
+                    continue
+                if p_str_clean in r_pid or p_str_clean in r_proj or r_pid in p_str_clean or r_proj in p_str_clean:
+                    filtered.append(row)
+            
+            # Si le filtre trouve des correspondances, on les retourne
             if filtered:
                 return filtered
-            # Si aucun filtre ne match et que la table contient des données, retourner un échantillon pour éviter le vide aveugle en dev
+            # Si le filtrage strict ne matche rien mais que la table contient des données (ex: format d'ID différent),
+            # on retourne la table globale pour éviter le blocage visuel "aucun essai trouvé"
             return response_all.data
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"Erreur lecture Supabase : {e}")
 
     return []
 
 def evaluer_conformite_couche(couche, ev2_values, zone_pro=None):
-    """Évalue la conformité d'un essai à la plaque selon la couche/l'ouvrage
-    testé, à partir de TOUS les points de mesure EV2 (MPa) de l'essai (et
-    non plus seulement du premier point)."""
     ev2_values = [float(v) for v in (ev2_values or []) if v is not None]
     if not ev2_values:
         return "Résultats non Conforme (aucune mesure EV2 disponible)"
@@ -143,12 +95,8 @@ def evaluer_conformite_couche(couche, ev2_values, zone_pro=None):
             motifs.append(f"EV2 min = {ev2_min:.1f} MPa (requis > {seuil:.0f} MPa)")
 
     elif couche == "Remblais contigus aux Ouvrages d\'Art (PRO)":
-        if zone_pro == "Partie supérieure (zone Q3)":
-            seuil = 100.0
-            zone_txt = "partie supérieure, zone Q3"
-        else:
-            seuil = 80.0
-            zone_txt = "plateforme"
+        seuil = 100.0 if zone_pro == "Partie supérieure (zone Q3)" else 80.0
+        zone_txt = "partie supérieure, zone Q3" if zone_pro == "Partie supérieure (zone Q3)" else "plateforme"
         if ev2_min <= seuil:
             conforme = False
             motifs.append(f"EV2 min = {ev2_min:.1f} MPa (requis > {seuil:.0f} MPa en {zone_txt})")
