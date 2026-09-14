@@ -418,7 +418,7 @@ def generer_excel_synthese(df, mois_str, empl_str, couche_str, nom_projet):
 
     header_fill = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
     header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
-    title_font = Font(name="Calibri", size=13, bold=True, color="1F4E78")
+    title_font = Font(name="Calibri", size=11, bold=True, color="1F4E78")
     subtitle_font = Font(name="Calibri", size=10, italic=True, color="595959")
     bold_font = Font(name="Calibri", size=10, bold=True)
     normal_font = Font(name="Calibri", size=10)
@@ -456,7 +456,7 @@ def generer_excel_synthese(df, mois_str, empl_str, couche_str, nom_projet):
     ws['A1'].alignment = Alignment(horizontal='center')
 
     # Ligne 2 : Laboratoire et Centre sur la 2ème ligne
-    ws['A2'] = "LABORATOIRE PUBLIC D'ESSAIS ET D'ÉTUDES (LPEE) — CENTRE TECHNIQUE REGIONALE DE CASABLANCA -SETTAT BENIMELLAL"
+    ws['A2'] = "LABORATOIRE PUBLIC D'ESSAIS ET D'ÉTUDES (LPEE) - CENTRE TECHNIQUE REGIONALE DE CASABLANCA -SETTAT BENIMELLAL"
     ws['A2'].font = title_font
     ws.merge_cells('A2:G2')
     ws['A2'].alignment = Alignment(horizontal='center')
