@@ -386,7 +386,6 @@ def show(supabase_client):
                     except Exception:
                         saved_to_db = False
                 
-                # Fallback / sync local session state cache
                 f_st.session_state["pv_ident_local_db"] = [
                     r for r in f_st.session_state["pv_ident_local_db"] if r.get("num_rapport") != num_rapport
                 ]
@@ -421,7 +420,7 @@ def show(supabase_client):
                     except Exception:
                         pass
                 f_st.session_state["pv_ident_local_db"] = [
-                    r for r in f_st.session_state["pv_ident_local_db"] if r.get("num_rapport") != selected_del
+                    r for r in f_st.session_state["pv_ident_local_db"] if r.get("num_rapport"] != selected_del
                 ]
                 f_st.success(f"PV {selected_del} supprimé.")
                 f_st.rerun()
