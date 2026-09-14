@@ -618,7 +618,8 @@ def show(supabase_client, can_edit=False, is_admin=False):
                         selected_months = st.multiselect(
                             "📅 Période (Mois)",
                             options=all_period_labels,
-                            default=all_period_labels,
+                            default=[],
+                            placeholder="Tous les mois (par défaut)",
                             key="filter_months"
                         )
 
@@ -627,7 +628,8 @@ def show(supabase_client, can_edit=False, is_admin=False):
                         selected_locations = st.multiselect(
                             "📍 Emplacement / Zone",
                             options=all_locations,
-                            default=all_locations,
+                            default=[],
+                            placeholder="Toutes les zones (par défaut)",
                             key="filter_locations"
                         )
 
@@ -636,14 +638,21 @@ def show(supabase_client, can_edit=False, is_admin=False):
                         selected_materials = st.multiselect(
                             "🧱 Type de Couche / Matériau",
                             options=all_materials,
-                            default=all_materials,
+                            default=[],
+                            placeholder="Tous les matériaux (par défaut)",
                             key="filter_materials"
                         )
 
+                    # --- GESTION INDÉPENDANTE ET SOUPLE DES FILTRES ---
+                    # Si aucun choix n'est sélectionné dans un filtre, on conserve toutes les options par défaut.
+                    months_to_filter = selected_months if selected_months else all_period_labels
+                    locations_to_filter = selected_locations if selected_locations else all_locations
+                    materials_to_filter = selected_materials if selected_materials else all_materials
+
                     filtered_df = df_merged[
-                        (df_merged["Période_Mois"].isin(selected_months)) &
-                        (df_merged["lieu_prelevement"].isin(selected_locations)) &
-                        (df_merged["type_materiau"].isin(selected_materials))
+                        (df_merged["Période_Mois"].isin(months_to_filter)) &
+                        (df_merged["lieu_prelevement"].isin(locations_to_filter)) &
+                        (df_merged["type_materiau"].isin(materials_to_filter))
                     ]
 
                     st.markdown("---")
