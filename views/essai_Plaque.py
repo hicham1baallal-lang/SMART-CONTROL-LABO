@@ -60,8 +60,8 @@ def charger_essais_plaque(projet_id):
     qu'd'échouer complètement et d'afficher "Aucun essai enregistré" alors
     que des essais existent bel et bien en base.
     """
-    colonnes_avec_zone = "id, reference, date_essai, client, emplacement, pk_profil, couche, zone_pro, nature_materiau, ev1, ev2, k_ratio, technicien, observations, points_mesure"
-    colonnes_sans_zone = "id, reference, date_essai, client, emplacement, pk_profil, couche, nature_materiau, ev1, ev2, k_ratio, technicien, observations, points_mesure"
+    colonnes_avec_zone = "id, reference, date_essai, client, projet, emplacement, pk_profil, couche, zone_pro, nature_materiau, ev1, ev2, k_ratio, technicien, observations, points_mesure"
+    colonnes_sans_zone = "id, reference, date_essai, client, projet, emplacement, pk_profil, couche, nature_materiau, ev1, ev2, k_ratio, technicien, observations, points_mesure"
 
     for colonnes in (colonnes_avec_zone, colonnes_sans_zone):
         try:
@@ -278,9 +278,10 @@ def generer_pdf_pv(essai):
     elements.append(Paragraph("PROCÈS-VERBAL D\'ESSAI À LA PLAQUE (NF P 94-117-1)", title_style))
     elements.append(Paragraph(f"Référence : <b>{essai.get('reference', '-')}</b> | Date : {essai.get('date_essai', '-')}", subtitle_style))
 
+    projet_val_pdf = essai.get('projet') or 'LGV CASA SUD'
     data_infos = [
         [Paragraph("Client / Organisme :", bold_style), Paragraph(str(essai.get('client', '-')), normal_style),
-         Paragraph("Chantier / Projet :", bold_style), Paragraph(str(essai.get('projet', '-')), normal_style)],
+         Paragraph("Chantier / Projet :", bold_style), Paragraph(str(projet_val_pdf), normal_style)],
         [Paragraph("Emplacement / Zone :", bold_style), Paragraph(str(essai.get('emplacement', '-')), normal_style),
          Paragraph("PK / Profil :", bold_style), Paragraph(str(essai.get('pk_profil', '-')), normal_style)],
         [Paragraph("Couche / Ouvrage :", bold_style), Paragraph(str(essai.get('couche', '-')), normal_style),
@@ -451,25 +452,25 @@ def generer_excel_synthese(df, mois_str, empl_str, couche_str, nom_projet):
 
     ws['A1'] = "LABORATOIRE LPEE — CENTRE TECHNIQUE RÉGIONAL"
     ws['A1'].font = title_font
-    ws.merge_cells('A1:G1')
+    ws.merge_cells('A1:I1')
     ws['A1'].alignment = Alignment(horizontal='center')
 
     ws['A2'] = "Norme : NF P 94-117-1 (Plaque Ø 600 mm)"
     ws['A2'].font = bold_font
-    ws.merge_cells('A2:G2')
+    ws.merge_cells('A2:I2')
     ws['A2'].alignment = Alignment(horizontal='center')
 
-    ws['A3'] = f"Projet : {nom_projet} | Filtres -> Mois: {mois_str} | Emplacement: {empl_str} | Couche: {couche_str}"
+    ws['A3'] = f"Contexte : {nom_projet} | Filtres -> Mois: {mois_str} | Emplacement: {empl_str} | Couche: {couche_str}"
     ws['A3'].font = subtitle_font
-    ws.merge_cells('A3:G3')
+    ws.merge_cells('A3:I3')
     ws['A3'].alignment = Alignment(horizontal='center')
 
     ws['A4'] = f"SYNTHÈSE DES ESSAIS DE PORTANCE À LA PLAQUE — MENSUEL - {mois_str}"
     ws['A4'].font = bold_font
-    ws.merge_cells('A4:G4')
+    ws.merge_cells('A4:I4')
     ws['A4'].alignment = Alignment(horizontal='center')
 
-    headers = ["Date Essai", "Couche", "Emplacement", "PK / Profil", "EV1 (MPa)", "EV2 (MPa)", "K (EV2/EV1)"]
+    headers = ["Date Essai", "Client", "Projet", "Couche", "Emplacement", "PK / Profil", "EV1 (MPa)", "EV2 (MPa)", "K (EV2/EV1)"]
     for col_num, header_title in enumerate(headers, 1):
         cell = ws.cell(row=6, column=col_num)
         cell.value = header_title
@@ -483,9 +484,11 @@ def generer_excel_synthese(df, mois_str, empl_str, couche_str, nom_projet):
 
     for _, row in df.iterrows():
         ws.cell(row=row_idx, column=1, value=str(row.get('date_essai', ''))).alignment = Alignment(horizontal='center', vertical='center')
-        ws.cell(row=row_idx, column=2, value=str(row.get('couche', ''))).alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
-        ws.cell(row=row_idx, column=3, value=str(row.get('emplacement', ''))).alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
-        ws.cell(row=row_idx, column=4, value=str(row.get('pk_profil', ''))).alignment = Alignment(horizontal='center', vertical='center')
+        ws.cell(row=row_idx, column=2, value=str(row.get('client', ''))).alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+        ws.cell(row=row_idx, column=3, value=str(row.get('projet', 'LGV CASA SUD'))).alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+        ws.cell(row=row_idx, column=4, value=str(row.get('couche', ''))).alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+        ws.cell(row=row_idx, column=5, value=str(row.get('emplacement', ''))).alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+        ws.cell(row=row_idx, column=6, value=str(row.get('pk_profil', ''))).alignment = Alignment(horizontal='center', vertical='center')
 
         ev1_v = float(row.get('ev1', 0) or 0)
         ev2_v = float(row.get('ev2', 0) or 0)
@@ -495,20 +498,20 @@ def generer_excel_synthese(df, mois_str, empl_str, couche_str, nom_projet):
         ev2_vals.append(ev2_v)
         k_vals.append(k_v)
 
-        c_ev1 = ws.cell(row=row_idx, column=5, value=ev1_v)
+        c_ev1 = ws.cell(row=row_idx, column=7, value=ev1_v)
         c_ev1.number_format = '#,##0.00'
         c_ev1.alignment = Alignment(horizontal='right', vertical='center')
 
-        c_ev2 = ws.cell(row=row_idx, column=6, value=ev2_v)
+        c_ev2 = ws.cell(row=row_idx, column=8, value=ev2_v)
         c_ev2.number_format = '#,##0.00'
         c_ev2.alignment = Alignment(horizontal='right', vertical='center')
 
-        c_k = ws.cell(row=row_idx, column=7, value=k_v)
+        c_k = ws.cell(row=row_idx, column=9, value=k_v)
         c_k.number_format = '#,##0.00'
         c_k.alignment = Alignment(horizontal='right', vertical='center')
         c_k.fill = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
 
-        for c in range(1, 8):
+        for c in range(1, 10):
             ws.cell(row=row_idx, column=c).font = normal_font
             ws.cell(row=row_idx, column=c).border = thin_border
 
@@ -519,27 +522,27 @@ def generer_excel_synthese(df, mois_str, empl_str, couche_str, nom_projet):
         avg_ev2 = sum(ev2_vals) / len(ev2_vals)
         avg_k = sum(k_vals) / len(k_vals)
 
-        ws.merge_cells(start_row=row_idx, start_column=1, end_row=row_idx, end_column=4)
+        ws.merge_cells(start_row=row_idx, start_column=1, end_row=row_idx, end_column=6)
         m_cell = ws.cell(row=row_idx, column=1, value="MOYENNE DES ESSAIS")
         m_cell.font = bold_font
         m_cell.alignment = Alignment(horizontal='right', vertical='center')
 
-        for c in range(1, 5):
+        for c in range(1, 7):
             ws.cell(row=row_idx, column=c).border = double_bottom_border
 
-        c_avg1 = ws.cell(row=row_idx, column=5, value=avg_ev1)
+        c_avg1 = ws.cell(row=row_idx, column=7, value=avg_ev1)
         c_avg1.font = bold_font
         c_avg1.number_format = '#,##0.00'
         c_avg1.alignment = Alignment(horizontal='right', vertical='center')
         c_avg1.border = double_bottom_border
 
-        c_avg2 = ws.cell(row=row_idx, column=6, value=avg_ev2)
+        c_avg2 = ws.cell(row=row_idx, column=8, value=avg_ev2)
         c_avg2.font = bold_font
         c_avg2.number_format = '#,##0.00'
         c_avg2.alignment = Alignment(horizontal='right', vertical='center')
         c_avg2.border = double_bottom_border
 
-        c_avgk = ws.cell(row=row_idx, column=7, value=avg_k)
+        c_avgk = ws.cell(row=row_idx, column=9, value=avg_k)
         c_avgk.font = bold_font
         c_avgk.number_format = '#,##0.00'
         c_avgk.alignment = Alignment(horizontal='right', vertical='center')
@@ -550,10 +553,12 @@ def generer_excel_synthese(df, mois_str, empl_str, couche_str, nom_projet):
         ws.cell(row=row_idx, column=1, value="RÉSUMÉ STATISTIQUE QUALITÉ").font = bold_font
         row_idx += 1
 
-        stat_headers = ["Indicateur", "EV1 (MPa)", "EV2 (MPa)", "Ratio K (EV2/EV1)"]
-        for col_num, sh in enumerate(stat_headers, 1):
+        stat_headers =
+        for col_start, col_end in [(1, 6), (7, 7), (8, 8), (9, 9)]:
+            pass
+        for sh_idx, (col_num, header_title) in enumerate([(1, "Indicateur"), (7, "EV1 (MPa)"), (8, "EV2 (MPa)"), (9, "Ratio K (EV2/EV1)")], 1):
             cell = ws.cell(row=row_idx, column=col_num)
-            cell.value = sh
+            cell.value = header_title
             cell.font = header_font
             cell.fill = header_fill
             cell.alignment = Alignment(horizontal='center', vertical='center')
@@ -570,8 +575,10 @@ def generer_excel_synthese(df, mois_str, empl_str, couche_str, nom_projet):
         for label, v1, v2, vk in stats_data:
             ws.cell(row=row_idx, column=1, value=label).font = bold_font
             ws.cell(row=row_idx, column=1).border = thin_border
+            for c_skip in range(2, 7):
+                ws.cell(row=row_idx, column=c_skip).border = thin_border
             
-            for col_idx, val in enumerate([v1, v2, vk], 2):
+            for col_idx, val in zip([7, 8, 9], [v1, v2, vk]):
                 c = ws.cell(row=row_idx, column=col_idx, value=val)
                 c.font = normal_font
                 c.number_format = '#,##0.00' if label != "Nombre d\'essais" else '#,##0'
@@ -581,16 +588,18 @@ def generer_excel_synthese(df, mois_str, empl_str, couche_str, nom_projet):
 
         row_idx += 3
         ws.cell(row=row_idx, column=1, value="O.IKKEN").font = bold_font
-        ws.cell(row=row_idx, column=6, value="Chef du Laboratoire").font = bold_font
+        ws.cell(row=row_idx, column=8, value="Chef du Laboratoire").font = bold_font
 
     col_dimensions = {
         'A': 13,
-        'B': 24,
-        'C': 16,
-        'D': 14,
-        'E': 12,
-        'F': 12,
-        'G': 15
+        'B': 18,
+        'C': 18,
+        'D': 24,
+        'E': 16,
+        'F': 14,
+        'G': 12,
+        'H': 12,
+        'I': 15
     }
     for col_letter, width in col_dimensions.items():
         ws.column_dimensions[col_letter].width = width
@@ -639,6 +648,7 @@ def show(supabase_client):
             st.info(f"✏️ **Mode Modification** - Essai ID #{editing_item['id']}")
             
             default_ref = editing_item.get("reference") or editing_item.get("ref_essai") or editing_item.get("ref") or "260/26/PLQ/01"
+            default_proj = editing_item.get("projet", "LGV CASA SUD")
             default_date = datetime.strptime(str(editing_item["date_essai"]), "%Y-%m-%d").date() if isinstance(editing_item.get("date_essai"), str) else date.today()
             default_client = editing_item.get("client", "TGCC")
             default_empl = editing_item.get("emplacement", "")
@@ -655,6 +665,7 @@ def show(supabase_client):
                 default_points = saved_points
         else:
             default_ref = "260/26/PLQ/01"
+            default_proj = "LGV CASA SUD"
             default_date = date.today()
             default_client = "TGCC"
             default_empl = "Voie B"
@@ -671,6 +682,7 @@ def show(supabase_client):
 
         with col0:
             reference = st.text_input("Référence de l'essai", value=default_ref, key="plaque_reference")
+            projet_saisie = st.text_input("Projet / Chantier", value=default_proj, key="plaque_projet_saisie")
         with col1:
             date_essai = st.date_input("Date de l'essai", value=default_date, key="plaque_date")
             client = st.text_input("Client / Organisme", value=default_client, key="plaque_client")
@@ -790,6 +802,7 @@ def show(supabase_client):
                     "reference": reference,
                     "date_essai": str(date_essai),
                     "client": client,
+                    "projet": projet_saisie,
                     "emplacement": emplacement,
                     "pk_profil": pk_profil,
                     "couche": couche,
@@ -886,6 +899,7 @@ def show(supabase_client):
                         "Référence": ref_val,
                         "Date": row.get("date_essai"),
                         "Client": row.get("client"),
+                        "Projet": row.get("projet", "LGV CASA SUD"),
                         "Emplacement": row.get("emplacement"),
                         "Couche": row.get("couche"),
                         "EV2 (MPa)": row.get("ev2"),
@@ -966,7 +980,7 @@ def show(supabase_client):
                     st.write(f"**Référence :** {essai_selectionne.get('reference', '-')}")
                     st.write(f"**Date :** {essai_selectionne.get('date_essai', '-')}")
                     st.write(f"**Client :** {essai_selectionne.get('client', '-')}")
-                    st.write(f"**Projet :** {projets_config.nom_projet(projet_id_actif)}")
+                    st.write(f"**Projet :** {essai_selectionne.get('projet', 'LGV CASA SUD')}")
                 with col_p2:
                     st.write(f"**Emplacement :** {essai_selectionne.get('emplacement', '-')}")
                     st.write(f"**Couche :** {essai_selectionne.get('couche', '-')}")
@@ -995,6 +1009,8 @@ def show(supabase_client):
             data_plaque = charger_essais_plaque(projet_id_actif)
             if data_plaque and len(data_plaque) > 0:
                 df_synth = pd.DataFrame(data_plaque)
+                if 'projet' not in df_synth.columns:
+                    df_synth['projet'] = 'LGV CASA SUD'
                 df_synth['date_datetime'] = pd.to_datetime(df_synth['date_essai'], errors='coerce')
                 df_synth['mois'] = df_synth['date_datetime'].dt.strftime('%Y-%m')
 
@@ -1014,7 +1030,7 @@ def show(supabase_client):
                             return f"{_NOMS_MOIS_FR.get(mois_num, mois_num)} {annee}"
                         except Exception:
                             return m
-                    choix_mois = st.cat_sel = st.selectbox("Période (Mois)", mois_options, key="filtre_mois", format_func=_formatter_mois) if hasattr(st, 'selectbox') else None
+                    choix_mois = st.selectbox("Période (Mois)", mois_options, key="filtre_mois", format_func=_formatter_mois)
                 with f_col2:
                     empl_options = ["Tous"] + sorted([str(e) for e in df_synth['emplacement'].dropna().unique().tolist()])
                     choix_empl = st.selectbox("Emplacement", empl_options, key="filtre_emplacement")
@@ -1056,6 +1072,7 @@ def show(supabase_client):
                             "Référence": ref_val,
                             "Date": row.get("date_essai"),
                             "Client": row.get("client"),
+                            "Projet": row.get("projet", "LGV CASA SUD"),
                             "Emplacement": row.get("emplacement"),
                             "Couche": row.get("couche"),
                             "EV2 (MPa)": row.get("ev2"),
