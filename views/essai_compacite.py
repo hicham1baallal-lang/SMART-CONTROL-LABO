@@ -4,6 +4,9 @@ import os
 import pandas as pd
 import streamlit as st
 from fpdf import FPDF
+import openpyxl
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from openpyxl.drawing.image import Image as OpenPyxlImage
 
 # ==========================================
 # UTILITAIRE NETTOYAGE TEXTE UTF-8 POUR FPDF (HELVETICA)
@@ -91,7 +94,6 @@ def evaluer_compacite(density_seche, density_ref, type_mesure="mc", exigence_mc=
 # ==========================================
 class LPEECompacitePDF(FPDF):
     def header(self):
-        # Logo remonté tout en haut (y=2)
         logo_path = "logo.png.jpg"
         if os.path.exists(logo_path):
             self.image(logo_path, x=10, y=2, w=25)
@@ -117,27 +119,22 @@ def generate_pv_compacite_pdf(header_info, points_data):
     pdf.alias_nb_pages()
     pdf.add_page()
 
-    # --- TITRE DU RAPPORT ---
     pdf.set_font("Helvetica", "B", 13)
     pdf.cell(0, 7, clean_text("PROCES VERBAL DE CONTROLE DE COMPACITE"), 0, 1, "C")
     pdf.set_font("Helvetica", "B", 9)
     pdf.cell(0, 6, clean_text("Références de normes : NF P 94-093 / NF P 94-061-2"), 0, 1, "C")
     pdf.ln(5)
 
-    # N° RAPPORT & DOSSIER
     pdf.set_font("Helvetica", "B", 9)
     pdf.cell(100, 6, clean_text(f"N° Dossier : {header_info.get('num_dossier', 'N/A')}"), 0, 0, "L")
     pdf.cell(90, 6, clean_text(f"Rapport d'Essai n° : {header_info.get('num_rapport', 'N/A')}"), 0, 1, "R")
     pdf.ln(5)
 
-    # --- SECTION I : IDENTIFICATION DU PROJET & DU MATÉRIAU ---
-    # En-tête de section bleu marine
     pdf.set_fill_color(31, 78, 121)
     pdf.set_text_color(255, 255, 255)
     pdf.set_font("Helvetica", "B", 9.5)
     pdf.cell(190, 8, clean_text(" I - Informations Générales & Matériau"), 1, 1, "L", fill=True)
     
-    # Restauration texte noir pour le contenu
     pdf.set_text_color(0, 0, 0)
     pdf.set_font("Helvetica", "", 8.5)
 
@@ -155,8 +152,6 @@ def generate_pv_compacite_pdf(header_info, points_data):
     pdf.cell(95, 7, clean_text(f"  Exigence CCTP : {exig_str}"), 1, 1, "L")
     pdf.ln(8)
 
-    # --- SECTION II : RÉSULTATS DES ESSAIS DE COMPACITÉ ---
-    # En-tête de section bleu marine
     pdf.set_fill_color(31, 78, 121)
     pdf.set_text_color(255, 255, 255)
     pdf.set_font("Helvetica", "B", 9.5)
@@ -165,7 +160,6 @@ def generate_pv_compacite_pdf(header_info, points_data):
     headers = ["Réf", "Désignation", "Niveau", "D. Sèche", "D. Réf", "w (%)", "% > 20mm", "IC (%)", "Commentaire"]
     widths = [8, 58, 14, 18, 20, 16, 18, 16, 22]
 
-    # En-tête du tableau en bleu marine avec texte blanc
     pdf.set_fill_color(31, 78, 121)
     pdf.set_text_color(255, 255, 255)
     pdf.set_font("Helvetica", "B", 7.5)
@@ -173,17 +167,14 @@ def generate_pv_compacite_pdf(header_info, points_data):
         pdf.cell(widths[i], 8, clean_text(h), 1, 0, "C", fill=True)
     pdf.ln()
 
-    # Réinitialisation de la couleur de texte pour le corps du tableau
     pdf.set_text_color(0, 0, 0)
     pdf.set_font("Helvetica", "", 7.5)
     row_height = 10
 
-    # Corps du tableau avec alternance de couleur de fond (Zebra striping)
     for idx, p in enumerate(points_data):
         desig = p.get('designation', '')
         niveau = str(p.get('type_mesure', 'mc')).lower()
         
-        # Lignes alternées : blanc et gris-bleu très clair
         if idx % 2 == 1:
             pdf.set_fill_color(245, 247, 250)
             fill_row = True
@@ -205,7 +196,6 @@ def generate_pv_compacite_pdf(header_info, points_data):
     pdf.set_font("Helvetica", "I", 7.5)
     pdf.cell(0, 5, clean_text("Légende : fc = fond de couche de la couche compactée | mc = moyenne sur toute l'épaisseur de la couche compactée"), 0, 1, "L")
 
-    # --- BLOC SIGNATURES ---
     if pdf.get_y() < 215:
         pdf.set_y(215)
     else:
@@ -226,6 +216,221 @@ def generate_pv_compacite_pdf(header_info, points_data):
     pdf.cell(63, 5, clean_text("Visa:"), 0, 1, "C")
 
     return bytes(pdf.output())
+
+
+# ==========================================
+# FONCTION DE GÉNÉRATION DU FICHIER EXCEL DE SYNTHÈSE FORMATÉ LPEE
+# ==========================================
+def generate_excel_synthese_lpee(df_filtered):
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Synthèse Compacité"
+
+    # Configurer l'impression en format A4 Portrait adapté
+    ws.page_setup.orientation = ws.ORIENTATION_PORTRAIT
+    ws.page_setup.paperSize = ws.PAPERSIZE_A4
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 0
+
+    # Styles réutilisables
+    font_header_title = Font(name="Arial", size=11, bold=True, color="1F4E79")
+    font_sub_title = Font(name="Arial", size=9, italic=True)
+    font_section = Font(name="Arial", size=10, bold=True, color="FFFFFF")
+    font_table_hdr = Font(name="Arial", size=9, bold=True, color="FFFFFF")
+    font_data = Font(name="Arial", size=9)
+    font_bold = Font(name="Arial", size=9, bold=True)
+    
+    fill_navy = PatternFill(start_color="1F4E79", end_color="1F4E79", fill_type="solid")
+    fill_zebra = PatternFill(start_color="F5F7FA", end_color="F5F7FA", fill_type="solid")
+    fill_stat_hdr = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")
+
+    thin_border = Border(
+        left=Side(style='thin', color='D3D3D3'),
+        right=Side(style='thin', color='D3D3D3'),
+        top=Side(style='thin', color='D3D3D3'),
+        bottom=Side(style='thin', color='D3D3D3')
+    )
+    thick_bottom = Border(bottom=Side(style='medium', color='1F4E79'))
+
+    align_center = Alignment(horizontal='center', vertical='center', wrap_text=True)
+    align_left = Alignment(horizontal='left', vertical='center', wrap_text=True)
+    align_right = Alignment(horizontal='right', vertical='center')
+
+    # Intégration du Logo si disponible
+    logo_path = "logo.png.jpg"
+    if os.path.exists(logo_path):
+        try:
+            img = OpenPyxlImage(logo_path)
+            img.width = 110
+            img.height = 50
+            ws.add_image(img, "A1")
+        except Exception:
+            pass
+
+    # En-tête LPEE
+    ws.merge_cells("C1:I1")
+    ws["C1"] = "LABORATOIRE PUBLIC D'ESSAIS ET D'ETUDES - LPEE"
+    ws["C1"].font = font_header_title
+    ws["C1"].alignment = align_center
+
+    ws.merge_cells("C2:I2")
+    ws["C2"] = "CENTRE TECHNIQUE REGIONAL DE CASABLANCA-SETTAT-BENI MELLAL (CTR-CSB)"
+    ws["C2"].font = Font(name="Arial", size=9, bold=True)
+    ws["C2"].alignment = align_center
+
+    ws.merge_cells("C3:I3")
+    ws["C3"] = "Laboratoire de Contrôle Externe - Projet LGV CASA SUD"
+    ws["C3"].font = font_sub_title
+    ws["C3"].alignment = align_center
+
+    # Titre du document
+    ws.merge_cells("A5:I5")
+    ws["A5"] = "SYNTHÈSE ET STATISTIQUES DES ESSAIS DE COMPACITÉ (NF P 94-093 / NF P 94-061-2)"
+    ws["A5"].font = Font(name="Arial", size=11, bold=True, color="FFFFFF")
+    ws["A5"].fill = fill_navy
+    ws["A5"].alignment = align_center
+
+    ws.row_dimensions[5].height = 24
+
+    # En-têtes du tableau principal
+    headers = [
+        "N° Rapport", "Date Prél.", "Mois / Période", "Lieu / Zone", 
+        "Matériau", "Réf", "Niveau", "D. Sèche", "D. Réf", "w (%)", 
+        "% > 20mm", "IC (%)", "Observation"
+    ]
+    
+    start_row = 7
+    ws.row_dimensions[start_row].height = 22
+    for col_idx, h in enumerate(headers, 1):
+        cell = ws.cell(row=start_row, column=col_idx, value=h)
+        cell.font = font_table_hdr
+        cell.fill = fill_navy
+        cell.alignment = align_center
+        cell.border = thin_border
+
+    # Remplissage du tableau de données
+    current_row = start_row + 1
+    for idx, row in df_filtered.iterrows():
+        ws.row_dimensions[current_row].height = 18
+        fill_to_use = fill_zebra if idx % 2 == 1 else None
+
+        values = [
+            row.get("num_rapport", ""),
+            str(row.get("date_prelevement", "")),
+            str(row.get("Période_Mois", "")),
+            str(row.get("lieu_prelevement", "")),
+            str(row.get("type_materiau", "")),
+            row.get("ref_num", ""),
+            str(row.get("type_mesure", "")).lower(),
+            float(row.get("densite_seche", 0.0)),
+            float(row.get("densite_ref", 0.0)),
+            float(row.get("w_mesure", 0.0)),
+            float(row.get("refus_20mm", 0.0)),
+            float(row.get("ic", 0.0)),
+            str(row.get("observation", ""))
+        ]
+
+        for col_idx, val in enumerate(values, 1):
+            cell = ws.cell(row=current_row, column=col_idx, value=val)
+            cell.font = font_data
+            cell.border = thin_border
+            if fill_to_use:
+                cell.fill = fill_to_use
+
+            # Formatage spécifique selon la colonne
+            if col_idx in [1, 2, 3, 6, 7]:
+                cell.alignment = align_center
+            elif col_idx in [4, 5]:
+                cell.alignment = align_left
+            elif col_idx in [8, 9]:
+                cell.alignment = align_right
+                cell.number_format = "0.000"
+            elif col_idx in [10, 11, 12]:
+                cell.alignment = align_right
+                cell.number_format = "0.0"
+            elif col_idx == 13:
+                cell.alignment = align_center
+                if val == "Conforme":
+                    cell.font = Font(name="Arial", size=9, bold=True, color="008000")
+                elif val == "Non Conforme":
+                    cell.font = Font(name="Arial", size=9, bold=True, color="FF0000")
+
+        current_row += 1
+
+    # --- BLOC STATISTIQUE COMPLET ---
+    current_row += 1
+    ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=13)
+    stat_title_cell = ws.cell(row=current_row, column=1, value="📊 STATISTIQUES GLOBALES DES ESSAIS")
+    stat_title_cell.font = font_section
+    stat_title_cell.fill = fill_navy
+    stat_title_cell.alignment = align_left
+    ws.row_dimensions[current_row].height = 20
+
+    current_row += 1
+    total_pts = len(df_filtered)
+    conf_pts = len(df_filtered[df_filtered["observation"] == "Conforme"])
+    non_conf_pts = len(df_filtered[df_filtered["observation"] == "Non Conforme"])
+    taux_conf = (conf_pts / total_pts * 100) if total_pts > 0 else 0.0
+
+    ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=4)
+    ws.cell(row=current_row, column=1, value=f"Nombre total d'essais : {total_pts}").font = font_bold
+
+    ws.merge_cells(start_row=current_row, start_column=5, end_row=current_row, end_column=8)
+    ws.cell(row=current_row, column=5, value=f"Conformes : {conf_pts} ({taux_conf:.1f}%) | Non Conformes : {non_conf_pts}").font = font_bold
+
+    current_row += 2
+    stat_headers = ["Indicateur Statistique", "Densité Sèche (t/m³)", "Teneur en eau w (%)", "Refus > 20mm (%)", "Indice Compacité IC (%)"]
+    
+    ws.row_dimensions[current_row].height = 20
+    for idx, sh in enumerate(stat_headers, 1):
+        col_target = 1 if idx == 1 else (idx + 1) * 2 - 2
+        ws.merge_cells(start_row=current_row, start_column=col_target, end_row=current_row, end_column=col_target+1 if idx > 1 else 3)
+        c = ws.cell(row=current_row, column=col_target, value=sh)
+        c.font = font_bold
+        c.fill = fill_stat_hdr
+        c.alignment = align_center
+        c.border = thin_border
+
+    # Valeurs Min, Moyenne, Max
+    ds_vals = df_filtered["densite_seche"].astype(float)
+    w_vals = df_filtered["w_mesure"].astype(float)
+    ref_vals = df_filtered["refus_20mm"].astype(float)
+    ic_vals = df_filtered["ic"].astype(float)
+
+    stats_rows = [
+        ("Valeur Minimum (Min)", ds_vals.min(), w_vals.min(), ref_vals.min(), ic_vals.min()),
+        ("Valeur Moyenne (Moy)", ds_vals.mean(), w_vals.mean(), ref_vals.mean(), ic_vals.mean()),
+        ("Valeur Maximum (Max)", ds_vals.max(), w_vals.max(), ref_vals.max(), ic_vals.max())
+    ]
+
+    for label, ds_v, w_v, ref_v, ic_v in stats_rows:
+        current_row += 1
+        ws.row_dimensions[current_row].height = 18
+        
+        ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=3)
+        c_lbl = ws.cell(row=current_row, column=1, value=label)
+        c_lbl.font = font_data
+        c_lbl.border = thin_border
+        
+        vals = [ds_v, w_v, ref_v, ic_v]
+        for i, val in enumerate(vals):
+            col_target = (i + 2) * 2 - 2
+            ws.merge_cells(start_row=current_row, start_column=col_target, end_row=current_row, end_column=col_target+1)
+            c_val = ws.cell(row=current_row, column=col_target, value=round(val, 3) if i == 0 else round(val, 1))
+            c_val.font = font_bold
+            c_val.alignment = align_center
+            c_val.border = thin_border
+
+    # Ajustement des largeurs de colonnes
+    col_widths = {1: 18, 2: 12, 3: 15, 4: 28, 5: 24, 6: 8, 7: 10, 8: 12, 9: 12, 10: 10, 11: 12, 12: 10, 13: 15}
+    for col_i, w in col_widths.items():
+        col_letter = openpyxl.utils.get_column_letter(col_i)
+        ws.column_dimensions[col_letter].width = w
+
+    output = io.BytesIO()
+    wb.save(output)
+    return output.getvalue()
 
 
 # ==========================================
@@ -643,8 +848,6 @@ def show(supabase_client, can_edit=False, is_admin=False):
                             key="filter_materials"
                         )
 
-                    # --- GESTION INDÉPENDANTE ET SOUPLE DES FILTRES ---
-                    # Si aucun choix n'est sélectionné dans un filtre, on conserve toutes les options par défaut.
                     months_to_filter = selected_months if selected_months else all_period_labels
                     locations_to_filter = selected_locations if selected_locations else all_locations
                     materials_to_filter = selected_materials if selected_materials else all_materials
@@ -694,15 +897,14 @@ def show(supabase_client, can_edit=False, is_admin=False):
                                 use_container_width=True
                             )
 
-                        buffer_excel = io.BytesIO()
-                        with pd.ExcelWriter(buffer_excel, engine='openpyxl') as writer:
-                            filtered_df[cols_existing].to_excel(writer, index=False, sheet_name='Synthèse Compacité')
+                        # Génération du fichier Excel formaté LPEE avec Logo et Statistiques
+                        excel_lpee_bytes = generate_excel_synthese_lpee(filtered_df)
                         
                         with d_col2:
                             st.download_button(
-                                label="📊 Télécharger la synthèse en Excel (XLSX)",
-                                data=buffer_excel.getvalue(),
-                                file_name=f"Synthese_Compacite_{datetime.date.today()}.xlsx",
+                                label="📊 Télécharger la synthèse Excel LPEE (Logo + Stats + A4)",
+                                data=excel_lpee_bytes,
+                                file_name=f"Synthese_LPEE_Compacite_{datetime.date.today()}.xlsx",
                                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                                 type="primary",
                                 use_container_width=True
