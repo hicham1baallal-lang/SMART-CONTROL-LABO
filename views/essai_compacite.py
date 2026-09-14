@@ -91,20 +91,20 @@ def evaluer_compacite(density_seche, density_ref, type_mesure="mc", exigence_mc=
 # ==========================================
 class LPEECompacitePDF(FPDF):
     def header(self):
-        # Logo déplacé légèrement plus haut (y=4 au lieu de y=8)
+        # Logo remonté tout en haut (y=2)
         logo_path = "logo.png.jpg"
         if os.path.exists(logo_path):
-            self.image(logo_path, x=10, y=4, w=25)
+            self.image(logo_path, x=10, y=2, w=25)
 
         self.set_font("Helvetica", "B", 11)
         self.cell(0, 5, clean_text("LABORATOIRE PUBLIC D'ESSAIS ET D'ETUDES - LPEE"), 0, 1, "C")
         self.set_font("Helvetica", "B", 9)
-        self.cell(0, 4, clean_text("CENTRE TECHNIQUE REGIONAL DE CASABLANCA-SETTAT-BENI MELLAL (CTR-CSB)"), 0, 1, "C")
+        self.cell(0, 5, clean_text("CENTRE TECHNIQUE REGIONAL DE CASABLANCA-SETTAT-BENI MELLAL (CTR-CSB)"), 0, 1, "C")
         self.set_font("Helvetica", "I", 9)
-        self.cell(0, 4, clean_text("Laboratoire de Contrôle Externe - LGV CASA SUD"), 0, 1, "C")
-        self.ln(2)
-        self.line(10, 24, 200, 24)
-        self.ln(5)
+        self.cell(0, 5, clean_text("Laboratoire de Contrôle Externe - LGV CASA SUD"), 0, 1, "C")
+        self.ln(3)
+        self.line(10, 25, 200, 25)
+        self.ln(6)
 
     def footer(self):
         self.set_y(-15)
@@ -121,50 +121,50 @@ def generate_pv_compacite_pdf(header_info, points_data):
     pdf.set_font("Helvetica", "B", 13)
     pdf.cell(0, 7, clean_text("PROCES VERBAL DE CONTROLE DE COMPACITE"), 0, 1, "C")
     pdf.set_font("Helvetica", "B", 9)
-    pdf.cell(0, 5, clean_text("Références de normes : NF P 94-093 / NF P 94-061-2"), 0, 1, "C")
-    pdf.ln(3)
+    pdf.cell(0, 6, clean_text("Références de normes : NF P 94-093 / NF P 94-061-2"), 0, 1, "C")
+    pdf.ln(5)
 
     # N° RAPPORT & DOSSIER
     pdf.set_font("Helvetica", "B", 9)
-    pdf.cell(100, 5, clean_text(f"N° Dossier : {header_info.get('num_dossier', 'N/A')}"), 0, 0, "L")
-    pdf.cell(90, 5, clean_text(f"Rapport d'Essai n° : {header_info.get('num_rapport', 'N/A')}"), 0, 1, "R")
-    pdf.ln(3)
+    pdf.cell(100, 6, clean_text(f"N° Dossier : {header_info.get('num_dossier', 'N/A')}"), 0, 0, "L")
+    pdf.cell(90, 6, clean_text(f"Rapport d'Essai n° : {header_info.get('num_rapport', 'N/A')}"), 0, 1, "R")
+    pdf.ln(5)
 
     # --- SECTION I : IDENTIFICATION DU PROJET & DU MATÉRIAU ---
     pdf.set_fill_color(230, 230, 230)
     pdf.set_font("Helvetica", "B", 9.5)
-    pdf.cell(190, 7, clean_text(" I - Informations Générales & Matériau"), 1, 1, "L", fill=True)
+    pdf.cell(190, 8, clean_text(" I - Informations Générales & Matériau"), 1, 1, "L", fill=True)
     pdf.set_font("Helvetica", "", 8.5)
 
-    pdf.cell(95, 6, clean_text(f"  Client : {header_info.get('client', 'TGCC')}"), 1, 0, "L")
-    pdf.cell(95, 6, clean_text(f"  Date du prélèvement : {header_info.get('date_prelevement', '')}"), 1, 1, "L")
+    pdf.cell(95, 7, clean_text(f"  Client : {header_info.get('client', 'TGCC')}"), 1, 0, "L")
+    pdf.cell(95, 7, clean_text(f"  Date du prélèvement : {header_info.get('date_prelevement', '')}"), 1, 1, "L")
 
-    pdf.cell(190, 6, clean_text(f"  Lieu de prélèvement : {header_info.get('lieu_prelevement', '')}"), 1, 1, "L")
+    pdf.cell(190, 7, clean_text(f"  Lieu de prélèvement : {header_info.get('lieu_prelevement', '')}"), 1, 1, "L")
 
     type_mat_str = clean_text(header_info.get('type_materiau', '')[:48])
-    pdf.cell(95, 6, f"  Type de materiau : {type_mat_str}", 1, 0, "L")
-    pdf.cell(95, 6, clean_text(f"  Densité Proctor OPN/OPM : {header_info.get('densite_opn', '2.09')} t/m3"), 1, 1, "L")
+    pdf.cell(95, 7, f"  Type de materiau : {type_mat_str}", 1, 0, "L")
+    pdf.cell(95, 7, clean_text(f"  Densité Proctor OPN/OPM : {header_info.get('densite_opn', '2.09')} t/m3"), 1, 1, "L")
 
-    pdf.cell(95, 6, clean_text(f"  Teneur en eau opt. : {header_info.get('w_opn', '6.3')} %"), 1, 0, "L")
+    pdf.cell(95, 7, clean_text(f"  Teneur en eau opt. : {header_info.get('w_opn', '6.3')} %"), 1, 0, "L")
     exig_str = clean_text(header_info.get('exigence_str', ''))
-    pdf.cell(95, 6, clean_text(f"  Exigence CCTP : {exig_str}"), 1, 1, "L")
-    pdf.ln(6)
+    pdf.cell(95, 7, clean_text(f"  Exigence CCTP : {exig_str}"), 1, 1, "L")
+    pdf.ln(8)
 
     # --- SECTION II : RÉSULTATS DES ESSAIS DE COMPACITÉ ---
     pdf.set_font("Helvetica", "B", 9.5)
-    pdf.cell(190, 7, clean_text(" II - Résultats des Essais de Compacité"), 1, 1, "L", fill=True)
+    pdf.cell(190, 8, clean_text(" II - Résultats des Essais de Compacité"), 1, 1, "L", fill=True)
 
     headers = ["Réf", "Désignation", "Niveau", "D. Sèche", "D. Réf", "w (%)", "% > 20mm", "IC (%)", "Commentaire"]
     widths = [8, 58, 14, 18, 20, 16, 18, 16, 22]
 
     pdf.set_font("Helvetica", "B", 7.5)
     for i, h in enumerate(headers):
-        pdf.cell(widths[i], 7, clean_text(h), 1, 0, "C")
+        pdf.cell(widths[i], 8, clean_text(h), 1, 0, "C")
     pdf.ln()
 
-    # Corps du tableau (hauteur des lignes augmentée à 9)
+    # Corps du tableau (hauteur des lignes augmentée à 10 mm pour plus d'espace)
     pdf.set_font("Helvetica", "", 7.5)
-    row_height = 9
+    row_height = 10
 
     for p in points_data:
         desig = p.get('designation', '')
@@ -180,29 +180,29 @@ def generate_pv_compacite_pdf(header_info, points_data):
         pdf.cell(widths[7], row_height, f"{float(p.get('ic', 0.0)):.1f}%", 1, 0, "C")
         pdf.cell(widths[8], row_height, clean_text(str(p.get("observation", "Conforme"))), 1, 1, "C")
 
-    pdf.ln(3)
+    pdf.ln(5)
     pdf.set_font("Helvetica", "I", 7.5)
-    pdf.cell(0, 4, clean_text("Légende : fc = fond de couche de la couche compactée | mc = moyenne sur toute l'épaisseur de la couche compactée"), 0, 1, "L")
+    pdf.cell(0, 5, clean_text("Légende : fc = fond de couche de la couche compactée | mc = moyenne sur toute l'épaisseur de la couche compactée"), 0, 1, "L")
 
     # --- BLOC SIGNATURES ---
-    if pdf.get_y() < 220:
-        pdf.set_y(220)
+    if pdf.get_y() < 215:
+        pdf.set_y(215)
     else:
-        pdf.ln(8)
+        pdf.ln(10)
 
     pdf.set_font("Helvetica", "B", 8.5)
-    pdf.cell(63, 5, clean_text("REÇU PAR LE CLIENT"), 0, 0, "C")
-    pdf.cell(64, 5, clean_text("LE COORDINATEUR DES ESSAIS"), 0, 0, "C")
-    pdf.cell(63, 5, clean_text("LE CHEF DU LABORATOIRE"), 0, 1, "C")
+    pdf.cell(63, 6, clean_text("REÇU PAR LE CLIENT"), 0, 0, "C")
+    pdf.cell(64, 6, clean_text("LE COORDINATEUR DES ESSAIS"), 0, 0, "C")
+    pdf.cell(63, 6, clean_text("LE CHEF DU LABORATOIRE"), 0, 1, "C")
 
     pdf.set_font("Helvetica", "I", 8.5)
-    pdf.cell(63, 5, clean_text("Nom: TGCC"), 0, 0, "C")
-    pdf.cell(64, 5, clean_text("Nom: O. IKEN"), 0, 0, "C")
-    pdf.cell(63, 5, clean_text("Nom: H. BAALLAL"), 0, 1, "C")
+    pdf.cell(63, 6, clean_text("Nom: TGCC"), 0, 0, "C")
+    pdf.cell(64, 6, clean_text("Nom: O. IKEN"), 0, 0, "C")
+    pdf.cell(63, 6, clean_text("Nom: H. BAALLAL"), 0, 1, "C")
 
-    pdf.cell(63, 4, clean_text("Visa:"), 0, 0, "C")
-    pdf.cell(64, 4, clean_text("Visa:"), 0, 0, "C")
-    pdf.cell(63, 4, clean_text("Visa:"), 0, 1, "C")
+    pdf.cell(63, 5, clean_text("Visa:"), 0, 0, "C")
+    pdf.cell(64, 5, clean_text("Visa:"), 0, 0, "C")
+    pdf.cell(63, 5, clean_text("Visa:"), 0, 1, "C")
 
     return bytes(pdf.output())
 
