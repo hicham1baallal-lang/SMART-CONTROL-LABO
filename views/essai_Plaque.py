@@ -418,7 +418,9 @@ def generer_excel_synthese(df, mois_str, empl_str, couche_str, nom_projet):
 
     header_fill = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
     header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
-    title_font = Font(name="Calibri", size=11, bold=True, color="1F4E78")
+    
+    font_l1 = Font(name="Calibri", size=15, bold=True, color="1F4E78")
+    font_l2 = Font(name="Calibri", size=13, bold=True, color="1F4E78")
     subtitle_font = Font(name="Calibri", size=10, italic=True, color="595959")
     bold_font = Font(name="Calibri", size=10, bold=True)
     normal_font = Font(name="Calibri", size=10)
@@ -436,6 +438,7 @@ def generer_excel_synthese(df, mois_str, empl_str, couche_str, nom_projet):
         bottom=Side(style='double', color='1F4E78')
     )
 
+    # Insertion du Logo LPEE (logo.png.jpg)
     logo_path = "logo.png.jpg"
     if os.path.exists(logo_path):
         try:
@@ -448,25 +451,29 @@ def generer_excel_synthese(df, mois_str, empl_str, couche_str, nom_projet):
         except Exception:
             pass
 
-    ws['A1'] = "Norme : NF P 94-117-1 (Plaque Ø 600 mm)"
-    ws['A1'].font = bold_font
+    # Ligne 1 : LABORATOIRE PUBLIC D'ESSAIS ET D'ÉTUDES (LPEE) - police 15
+    ws['A1'] = "LABORATOIRE PUBLIC D'ESSAIS ET D'ÉTUDES (LPEE)"
+    ws['A1'].font = font_l1
     ws.merge_cells('A1:G1')
-    ws['A1'].alignment = Alignment(horizontal='center')
+    ws['A1'].alignment = Alignment(horizontal='center', vertical='center')
 
-    ws['A2'] = "LABORATOIRE PUBLIC D'ESSAIS ET D'ÉTUDES (LPEE) - CENTRE TECHNIQUE REGIONALE DE CASABLANCA -SETTAT BENIMELLAL"
-    ws['A2'].font = title_font
+    # Ligne 2 : CENTRE TECHNIQUE REGIONALE DE CASABLANCA -SETTAT BENIMELLAL - police 13
+    ws['A2'] = "CENTRE TECHNIQUE REGIONALE DE CASABLANCA -SETTAT BENIMELLAL"
+    ws['A2'].font = font_l2
     ws.merge_cells('A2:G2')
-    ws['A2'].alignment = Alignment(horizontal='center')
+    ws['A2'].alignment = Alignment(horizontal='center', vertical='center')
 
+    # Ligne 3 : Projet & Client & Filtres
     ws['A3'] = f"Projet : LGV CASA SUD | Client : TGCC | Filtres -> Mois: {mois_str} | Emplacement: {empl_str} | Couche: {couche_str}"
     ws['A3'].font = subtitle_font
     ws.merge_cells('A3:G3')
-    ws['A3'].alignment = Alignment(horizontal='center')
+    ws['A3'].alignment = Alignment(horizontal='center', vertical='center')
 
-    ws['A4'] = f"SYNTHÈSE DES ESSAIS DE PORTANCE À LA PLAQUE — MENSUEL - {mois_str}"
+    # Ligne 4 : Norme
+    ws['A4'] = "Norme : NF P 94-117-1 (Plaque Ø 600 mm)."
     ws['A4'].font = bold_font
     ws.merge_cells('A4:G4')
-    ws['A4'].alignment = Alignment(horizontal='center')
+    ws['A4'].alignment = Alignment(horizontal='center', vertical='center')
 
     headers = ["Date Essai", "Couche", "Emplacement", "PK / Profil", "EV1 (MPa)", "EV2 (MPa)", "K (EV2/EV1)"]
     for col_num, header_title in enumerate(headers, 1):
