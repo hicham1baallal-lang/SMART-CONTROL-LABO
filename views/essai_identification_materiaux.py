@@ -407,20 +407,20 @@ def show(supabase_client):
         else:
             combined_records = raw_data if raw_data else f_st.session_state["pv_ident_local_db"]
             df_hist = pd.DataFrame(combined_records)
-            search_q = f_st.text_input("Filtrer par N° Rapport ou Lieu :").lower()
+            search_q = f_st.text_input("Filtrer par N° Rapport ou Lieu :", key="search_hist_input").lower()
             if search_q:
                 df_hist = df_hist[df_hist.apply(lambda r: search_q in str(r.values).lower(), axis=1)]
             f_st.dataframe(df_hist, use_container_width=True)
 
-            selected_del = f_st.selectbox("Sélectionner un PV à supprimer (Admin/Labo)", options=[""] + df_hist["num_rapport"].tolist() if "num_rapport" in df_hist else [])
-            if selected_del and f_st.button("🗑️ Supprimer ce PV", disabled=not user_can_edit):
+            selected_del = f_st.selectbox("Sélectionner un PV à supprimer (Admin/Labo)", options=[""] + df_hist["num_rapport"].tolist() if "num_rapport" in df_hist else [], key="del_pv_select")
+            if selected_del and f_st.button("🗑️ Supprimer ce PV", disabled=not user_can_edit, key="del_pv_btn"):
                 if supabase_client:
                     try:
                         supabase_client.table("pv_identification_materiaux").delete().eq("num_rapport", selected_del).execute()
                     except Exception:
                         pass
                 f_st.session_state["pv_ident_local_db"] = [
-                    r for r in f_st.session_state["pv_ident_local_db"] if r.get("num_rapport"] != selected_del
+                    r for r in f_st.session_state["pv_ident_local_db"] if r.get("num_rapport") != selected_del
                 ]
                 f_st.success(f"PV {selected_del} supprimé.")
                 f_st.rerun()
