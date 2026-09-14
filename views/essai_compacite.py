@@ -130,7 +130,7 @@ def generate_pv_compacite_pdf(header_info, points_data):
         pdf.cell(widths, row_height, clean_text(desig[:45]), 1, 0, "L")
         pdf.cell(widths, row_height, f"{float(p.get('densite_seche', 0.0)):.3f}", 1, 0, "C")
         pdf.cell(widths, row_height, f"{float(p.get('densite_ref', 0.0)):.3f}", 1, 0, "C")
-        pdf.cell(widths, row_height, f"{float(p.get('w_mesure', 0.0)):.1f}%", 1, 0, "C")
+        pdf.cell(widths[4], row_height, f"{float(p.get('w_mesure', 0.0)):.1f}%", 1, 0, "C")
         pdf.cell(widths[5], row_height, f"{float(p.get('refus_20mm', 0.0)):.1f}", 1, 0, "C")
         pdf.cell(widths[6], row_height, f"{float(p.get('ic', 0.0)):.1f}%", 1, 0, "C")
         pdf.cell(widths[7], row_height, clean_text(str(p.get("observation", "Conforme"))), 1, 1, "C")
@@ -198,7 +198,7 @@ def show(supabase_client, can_edit=False, is_admin=False):
 
         mat_keys = list(REFERENTIEL_MATERIAUX.keys())
         if default_mat not in mat_keys:
-            default_mat = mat_keys if len(mat_keys) > 2 else mat_keys[0]
+            default_mat = mat_keys[0]
 
         with col_h1:
             st.markdown("**N° Rapport d'essai**")
