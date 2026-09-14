@@ -459,7 +459,8 @@ def generer_excel_synthese(df, mois_str, empl_str, couche_str, nom_projet):
     ws.merge_cells('A2:G2')
     ws['A2'].alignment = Alignment(horizontal='center')
 
-    ws['A3'] = f"Projet : {nom_projet} | Filtres -> Mois: {mois_str} | Emplacement: {empl_str} | Couche: {couche_str}"
+    # Mise à jour avec Projet : LGV CASA SUD et Client : TGCC
+    ws['A3'] = f"Projet : LGV CASA SUD | Client : TGCC | Filtres -> Mois: {mois_str} | Emplacement: {empl_str} | Couche: {couche_str}"
     ws['A3'].font = subtitle_font
     ws.merge_cells('A3:G3')
     ws['A3'].alignment = Alignment(horizontal='center')
