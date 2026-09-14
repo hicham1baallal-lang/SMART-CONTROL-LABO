@@ -529,28 +529,40 @@ def show(supabase_client, can_edit=False, is_admin=False):
                 if df_pv.empty or df_essais.empty:
                     st.warning("⚠️ Pas assez de données enregistrées pour constituer une synthèse.")
                 else:
-                    # Fusion des données PV (méta) et Points de mesures (essais)
+                    # Fusion des données PV et Essais
                     df_merged = pd.merge(df_essais, df_pv, on="num_rapport", how="inner", suffixes=("_essai", "_pv"))
 
-                    # Formatage date
+                    # Formatage date et libellé des mois en français
                     df_merged["date_prelevement_dt"] = pd.to_datetime(df_merged["date_prelevement"], errors="coerce")
-                    df_merged["Mois_Annee"] = df_merged["date_prelevement_dt"].dt.strftime("%Y-%m")
+                    
+                    MOIS_FR = {
+                        1: "Janvier", 2: "Février", 3: "Mars", 4: "Avril",
+                        5: "Mai", 6: "Juin", 7: "Juillet", 8: "Août",
+                        9: "Septembre", 10: "Octobre", 11: "Novembre", 12: "Décembre"
+                    }
+
+                    df_merged["year_month_sort"] = df_merged["date_prelevement_dt"].dt.strftime("%Y-%m")
+                    df_merged["Période_Mois"] = df_merged["date_prelevement_dt"].apply(
+                        lambda d: f"{MOIS_FR[d.month]} {d.year}" if pd.notnull(d) else "Non définie"
+                    )
+
+                    periods_df = df_merged[["year_month_sort", "Période_Mois"]].drop_duplicates().sort_values("year_month_sort", ascending=False)
+                    all_period_labels = periods_df["Période_Mois"].tolist()
 
                     # --- ZONES DE FILTRES MULTI-CRITÈRES ---
                     st.markdown("#### 🎯 Filtres de recherche")
                     f_col1, f_col2, f_col3 = st.columns(3)
 
-                    # Filter 1: Période (Mois)
-                    all_months = sorted(df_merged["Mois_Annee"].dropna().unique().tolist(), reverse=True)
+                    # Filtre 1: Période (Mois) en français
                     with f_col1:
                         selected_months = st.multiselect(
                             "📅 Période (Mois)",
-                            options=all_months,
-                            default=all_months,
+                            options=all_period_labels,
+                            default=all_period_labels,
                             key="filter_months"
                         )
 
-                    # Filter 2: Emplacement / Lieu
+                    # Filtre 2: Emplacement / Zone
                     all_locations = sorted(df_merged["lieu_prelevement"].dropna().unique().tolist())
                     with f_col2:
                         selected_locations = st.multiselect(
@@ -560,7 +572,7 @@ def show(supabase_client, can_edit=False, is_admin=False):
                             key="filter_locations"
                         )
 
-                    # Filter 3: Type de couche / Matériau
+                    # Filtre 3: Type de couche / Matériau
                     all_materials = sorted(df_merged["type_materiau"].dropna().unique().tolist())
                     with f_col3:
                         selected_materials = st.multiselect(
@@ -572,7 +584,7 @@ def show(supabase_client, can_edit=False, is_admin=False):
 
                     # --- APPLICATION DES FILTRES ---
                     filtered_df = df_merged[
-                        (df_merged["Mois_Annee"].isin(selected_months)) &
+                        (df_merged["Période_Mois"].isin(selected_months)) &
                         (df_merged["lieu_prelevement"].isin(selected_locations)) &
                         (df_merged["type_materiau"].isin(selected_materials))
                     ]
@@ -597,7 +609,7 @@ def show(supabase_client, can_edit=False, is_admin=False):
                         st.markdown("#### 📄 Résultats de la Synthèse")
                         
                         cols_to_display = [
-                            "num_rapport", "date_prelevement", "lieu_prelevement", 
+                            "num_rapport", "date_prelevement", "Période_Mois", "lieu_prelevement", 
                             "type_materiau", "ref_num", "designation", "type_mesure", 
                             "densite_seche", "densite_ref", "w_mesure", "refus_20mm", "ic", "observation"
                         ]
