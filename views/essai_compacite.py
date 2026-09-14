@@ -221,21 +221,21 @@ def generate_pv_compacite_pdf(header_info, points_data, signataire_coord="O. IKE
 
 
 # ==========================================
-# FONCTION DE GÉNÉRATION DU FICHIER EXCEL DE SYNTHÈSE FORMATÉ LPEE
+# FONCTION DE GÉNÉRATION DU FICHIER EXCEL DE SYNTHÈSE FORMATÉ LPEE (SANS ERREUR MERGEDCELL)
 # ==========================================
 def generate_excel_synthese_lpee(df_filtered):
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Synthèse Compacité"
 
-    # Configuration Impression A4 Portrait
+    # Configuration Page
     ws.page_setup.orientation = ws.ORIENTATION_PORTRAIT
     ws.page_setup.paperSize = ws.PAPERSIZE_A4
     ws.sheet_properties.pageSetUpPr.fitToPage = True
     ws.page_setup.fitToWidth = 1
     ws.page_setup.fitToHeight = 0
 
-    # Styles
+    # Fonts & Fills
     font_header_title = Font(name="Arial", size=11, bold=True, color="1F4E79")
     font_sub_title = Font(name="Arial", size=9, italic=True)
     font_section = Font(name="Arial", size=10, bold=True, color="FFFFFF")
@@ -290,6 +290,10 @@ def generate_excel_synthese_lpee(df_filtered):
     ws["A5"].font = Font(name="Arial", size=11, bold=True, color="FFFFFF")
     ws["A5"].fill = fill_navy
     ws["A5"].alignment = align_center
+    
+    # Application style avant merge pour éviter MergedCell error
+    for col in range(1, 14):
+        ws.cell(row=5, column=col).fill = fill_navy
     ws.merge_cells("A5:M5")
     ws.row_dimensions[5].height = 24
 
@@ -309,7 +313,7 @@ def generate_excel_synthese_lpee(df_filtered):
         cell.alignment = align_center
         cell.border = thin_border
 
-    # Données du tableau
+    # Données du tableau principal
     current_row = start_row + 1
     for idx, row in df_filtered.iterrows():
         ws.row_dimensions[current_row].height = 18
@@ -357,22 +361,27 @@ def generate_excel_synthese_lpee(df_filtered):
 
         current_row += 1
 
-    # --- BLOC STATISTIQUE COMPLET (CORRIGÉ SANS WRITE SUR MERGED CELLS) ---
+    # --- BLOC STATISTIQUE GLOBAL (SÉCURISÉ) ---
     current_row += 1
-    stat_title_cell = ws.cell(row=current_row, column=1, value="📊 STATISTIQUES GLOBALES DES ESSAIS")
-    stat_title_cell.font = font_section
-    stat_title_cell.fill = fill_navy
-    stat_title_cell.alignment = align_left
+    
+    # Titre section stats
+    for c_idx in range(1, 14):
+        c = ws.cell(row=current_row, column=c_idx)
+        c.fill = fill_navy
+        c.border = thin_border
+    
+    ws.cell(row=current_row, column=1, value="📊 STATISTIQUES GLOBALES DES ESSAIS").font = font_section
+    ws.cell(row=current_row, column=1).alignment = align_left
     ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=13)
     ws.row_dimensions[current_row].height = 20
 
+    # Résumé Effectifs & Conformité
     current_row += 1
     total_pts = len(df_filtered)
     conf_pts = len(df_filtered[df_filtered["observation"] == "Conforme"])
     non_conf_pts = len(df_filtered[df_filtered["observation"] == "Non Conforme"])
     taux_conf = (conf_pts / total_pts * 100) if total_pts > 0 else 0.0
 
-    # Résumé conformité
     c_tot = ws.cell(row=current_row, column=1, value=f"Nombre total d'essais : {total_pts}")
     c_tot.font = font_bold
     ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=4)
@@ -383,25 +392,27 @@ def generate_excel_synthese_lpee(df_filtered):
 
     # Entêtes du Tableau Statistique
     current_row += 2
+    ws.row_dimensions[current_row].height = 20
+    
     stat_headers = ["Indicateur Statistique", "Densité Sèche (t/m³)", "Teneur en eau w (%)", "Refus > 20mm (%)", "Indice Compacité IC (%)"]
     
-    ws.row_dimensions[current_row].height = 20
     for idx, sh in enumerate(stat_headers, 1):
-        col_target = 1 if idx == 1 else (idx + 1) * 2 - 2
-        end_col = col_target + 1 if idx > 1 else 3
+        col_start = 1 if idx == 1 else (idx * 2) - 1
+        col_end = col_start + 2 if idx == 1 else col_start + 1
         
-        # Style et bordure sur la plage avant/pendant fusion
-        for c_idx in range(col_target, end_col + 1):
-            cell = ws.cell(row=current_row, column=c_idx)
+        # Styliser toutes les cellules concernées AVANT la fusion
+        for c in range(col_start, col_end + 1):
+            cell = ws.cell(row=current_row, column=c)
             cell.fill = fill_stat_hdr
             cell.border = thin_border
+            
+        first_cell = ws.cell(row=current_row, column=col_start, value=sh)
+        first_cell.font = font_bold
+        first_cell.alignment = align_center
+        
+        ws.merge_cells(start_row=current_row, start_column=col_start, end_row=current_row, end_column=col_end)
 
-        c = ws.cell(row=current_row, column=col_target, value=sh)
-        c.font = font_bold
-        c.alignment = align_center
-        ws.merge_cells(start_row=current_row, start_column=col_target, end_row=current_row, end_column=end_col)
-
-    # Valeurs Min, Moy, Max
+    # Calculs et Lignes de valeurs
     ds_vals = df_filtered["densite_seche"].astype(float)
     w_vals = df_filtered["w_mesure"].astype(float)
     ref_vals = df_filtered["refus_20mm"].astype(float)
@@ -416,26 +427,32 @@ def generate_excel_synthese_lpee(df_filtered):
     for label, ds_v, w_v, ref_v, ic_v in stats_rows:
         current_row += 1
         ws.row_dimensions[current_row].height = 18
-        
-        for c_idx in range(1, 4):
-            ws.cell(row=current_row, column=c_idx).border = thin_border
-            
-        c_lbl = ws.cell(row=current_row, column=1, value=label)
-        c_lbl.font = font_data
+
+        # 1. Libellé Indicateur (Colonnes A à C)
+        for c in range(1, 4):
+            ws.cell(row=current_row, column=c).border = thin_border
+
+        lbl_cell = ws.cell(row=current_row, column=1, value=label)
+        lbl_cell.font = font_data
+        lbl_cell.alignment = align_left
         ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=3)
-        
+
+        # 2. Valeurs des 4 paramètres
         vals = [ds_v, w_v, ref_v, ic_v]
-        for i, val in enumerate(vals):
-            col_target = (i + 2) * 2 - 2
-            val_formatted = round(val, 3) if i == 0 else round(val, 1)
+        for idx, val in enumerate(vals, 1):
+            col_start = (idx * 2) + 1
+            col_end = col_start + 1
+            val_fmt = round(val, 3) if idx == 1 else round(val, 1)
+
+            # Application des bordures sur chaque cellule de la plage
+            for c in range(col_start, col_end + 1):
+                ws.cell(row=current_row, column=c).border = thin_border
+
+            val_cell = ws.cell(row=current_row, column=col_start, value=val_fmt)
+            val_cell.font = font_bold
+            val_cell.alignment = align_center
             
-            for c_idx in range(col_target, col_target + 2):
-                ws.cell(row=current_row, column=c_idx).border = thin_border
-                
-            c_val = ws.cell(row=current_row, column=col_target, value=val_formatted)
-            c_val.font = font_bold
-            c_val.alignment = align_center
-            ws.merge_cells(start_row=current_row, start_column=col_target, end_row=current_row, end_column=col_target+1)
+            ws.merge_cells(start_row=current_row, start_column=col_start, end_row=current_row, end_column=col_end)
 
     # Ajustement des largeurs de colonnes
     col_widths = {1: 18, 2: 12, 3: 15, 4: 28, 5: 24, 6: 8, 7: 10, 8: 12, 9: 12, 10: 10, 11: 12, 12: 10, 13: 15}
