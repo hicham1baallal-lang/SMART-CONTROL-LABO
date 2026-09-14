@@ -1,4 +1,3 @@
-import base64
 import datetime
 import json
 import os
@@ -173,52 +172,18 @@ if st.session_state["user"] is None:
         except Exception:
             pass
 
-def get_base64_of_file(file_path):
-    try:
-        with open(file_path, "rb") as f:
-            return base64.b64encode(f.read()).decode("utf-8")
-    except Exception:
-        return None
-
-# Formulaire de Connexion plein écran avec image d'arrière-plan
+# Formulaire de Connexion avec image d'accueil (CORRECTION : st.columns(2))
 if st.session_state["user"] is None:
-    bg_path = None
-    mime_type = "image/jpeg"
-    if os.path.exists("image.page d'accueil.jpg"):
-        bg_path = "image.page d'accueil.jpg"
-        mime_type = "image/jpeg"
-    elif os.path.exists("image.page d'accueil.png"):
-        bg_path = "image.page d'accueil.png"
-        mime_type = "image/png"
-
-    if bg_path:
-        b64_img = get_base64_of_file(bg_path)
-        if b64_img:
-            st.markdown(
-                f"""
-                <style>
-                .stApp {{
-                    background-image: linear-gradient(rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0.45)), url("data:{mime_type};base64,{b64_img}");
-                    background-size: cover;
-                    background-position: center;
-                    background-repeat: no-repeat;
-                    background-attachment: fixed;
-                }}
-                </style>
-                """,
-                unsafe_allow_html=True,
-            )
-
-    _, col_form, _ = st.columns()
+    col_img, col_form = st.columns(2)
+    with col_img:
+        if os.path.exists("image.page d'accueil.png"):
+            st.image("image.page d'accueil.png", use_container_width=True)
+        elif os.path.exists("image.page d'accueil.jpg"):
+            st.image("image.page d'accueil.jpg", use_container_width=True)
+        else:
+            st.info("ℹ️ Image d'accueil non trouvée (`image.page d'accueil.png` / `image.page d'accueil.jpg`).")
     with col_form:
-        st.markdown(
-            '<div style="background: rgba(255, 255, 255, 0.94); padding: 2.2rem; border-radius: 14px; box-shadow: 0 10px 35px rgba(0,0,0,0.4); margin-top: 8vh;">',
-            unsafe_allow_html=True,
-        )
-        st.markdown(
-            "<h2 style='text-align: center; color: #1f2937; margin-bottom: 1.5rem;'>🔐 Accès Restreint - LPEE</h2>",
-            unsafe_allow_html=True,
-        )
+        st.title("🔐 Accès Restreint - LPEE")
         with st.form("login_form"):
             username_input = st.text_input("Nom d'utilisateur").strip().upper()
             password_input = st.text_input("Mot de passe", type="password")
@@ -239,7 +204,6 @@ if st.session_state["user"] is None:
                     st.rerun()
                 else:
                     st.error("❌ Identifiants incorrects.")
-        st.markdown("</div>", unsafe_allow_html=True)
     st.stop()
 
 current_username = st.session_state["user"]["username"]
