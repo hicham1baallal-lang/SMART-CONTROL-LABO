@@ -94,9 +94,11 @@ components.html(pwa_code, height=0, width=0)
 # ==========================================
 # 2. CONNEXION SUPABASE & UTILISATEURS
 # ==========================================
+supabase = None
+supabase_status_msg = "Non initialisé"
 try:
-    SUPABASE_URL = st.secrets.get("SUPABASE_URL", "https://pfyfmfujccibiwfiwknu.supabase.co")
-    SUPABASE_KEY = st.secrets.get("SUPABASE_KEY", "sb_publishable_6h8ZUeV8ii5TjKUV9B1Ewg_eDawQRkW")
+    SUPABASE_URL = st.secrets["supabase"]["url"]
+    SUPABASE_KEY = st.secrets["supabase"]["key"]
     CODE_ACCES_TERRAIN = st.secrets.get("CODE_ACCES_TERRAIN", "lpee2026")
 
     supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -104,8 +106,12 @@ try:
         supabase.postgrest.session.headers.update({"x-code-acces-terrain": CODE_ACCES_TERRAIN})
     except Exception:
         pass
-except Exception:
-    supabase = None
+    
+    # Test léger de connectivité
+    res_test = supabase.table("pv_identification_materiaux").select("num_rapport").limit(1).execute()
+    supabase_status_msg = "Connecté (Supabase OK)"
+except Exception as e:
+    supabase_status_msg = f"Mode hors-ligne / Erreur DB ({str(e)[:30]})"
 
 DEFAULT_USERS = {
     "BAALLAL": {"password": "arwa2020", "role": "admin", "can_edit": True},
@@ -119,16 +125,10 @@ def load_users():
     users = DEFAULT_USERS.copy()
     if supabase:
         try:
-            # NOTE : la table réelle s'appelle "users" (pas "app_users") —
-            # voir diagnostic PGRST205. Le mot de passe peut être stocké
-            # sous "password" ou "password_hash" selon le schéma exact ;
-            # les deux sont pris en charge par prudence.
             res = supabase.table("users").select("*").execute()
             if res.data:
                 for row in res.data:
-                    mot_de_passe = row.get("password")
-                    if mot_de_passe is None:
-                        mot_de_passe = row.get("password_hash")
+                    mot_de_passe = row.get("password") or row.get("password_hash")
                     if row.get("username") and mot_de_passe is not None:
                         users[row["username"]] = {
                             "password": mot_de_passe,
@@ -169,6 +169,7 @@ if st.session_state["user"] is None:
                     "role": remembered_role,
                     "can_edit": remembered_can_edit,
                 }
+                st.session_state["user_name"] = remembered_user
                 st.session_state["role"] = remembered_role
                 st.session_state["can_edit"] = remembered_can_edit
                 st.session_state["users_db"] = load_users()
@@ -177,7 +178,7 @@ if st.session_state["user"] is None:
 
 # Formulaire de Connexion
 if st.session_state["user"] is None:
-    col1, col2, col3 = st.columns([1, 2, 1])
+    col1, col2, col3 = st.columns()
     with col2:
         st.title("🔐 Accès Restreint - LPEE")
         with st.form("login_form"):
@@ -194,6 +195,7 @@ if st.session_state["user"] is None:
                         "role": fresh_users[username_input]["role"],
                         "can_edit": fresh_users[username_input]["can_edit"]
                     }
+                    st.session_state["user_name"] = username_input
                     st.session_state["role"] = fresh_users[username_input]["role"]
                     st.session_state["can_edit"] = fresh_users[username_input]["can_edit"]
                     st.rerun()
@@ -202,6 +204,8 @@ if st.session_state["user"] is None:
     st.stop()
 
 current_username = st.session_state["user"]["username"]
+# Synchronisation de sécurité pour les vues enfants
+st.session_state["user_name"] = current_username
 
 # ==========================================
 # 3. CHARGEMENT DYNAMIQUE DES VUES
@@ -252,9 +256,15 @@ with st.sidebar:
 
     st.title("Smart Control Béton")
     st.caption(f"👤 Connecté : **{current_username}**")
+    
+    # Indicateur d'état Supabase visuel
+    if supabase is not None and "Connecté" in supabase_status_msg:
+        st.success(f"🟢 {supabase_status_msg}")
+    else:
+        st.warning(f"🟡 {supabase_status_msg}")
+
     st.markdown("---")
 
-    # Dictionnaire des modules conservés (sans suivi bétonnage, contrôle béton, ni synthèse plaque)
     menu_options = {
         "🚜 Essai à la Plaque": essai_Plaque,
         "💧 Teneur en Eau": essai_teneur_eau,
@@ -282,9 +292,6 @@ with st.sidebar:
     )
     st.session_state["selected_page"] = selected_page_label
 
-    # Indicateur + synchronisation manuelle du mode hors-ligne (données
-    # sauvegardées localement suite à un timeout Supabase, en attente
-    # d'envoi). N'affiche rien s'il n'y a rien en attente.
     if OFFLINE_SUPPORT:
         try:
             _pending_count = get_pending_count()
@@ -299,7 +306,7 @@ with st.sidebar:
                 if resume["synced"] > 0:
                     st.success(f"✅ {resume['synced']} enregistrement(s) synchronisé(s) avec succès.")
                 if resume["failed"] > 0:
-                    st.error(f"⚠️ {resume['failed']} enregistrement(s) toujours en échec (connexion encore instable).")
+                    st.error(f"⚠️ {resume['failed']} enregistrement(s) toujours en échec.")
                 st.cache_data.clear()
                 st.rerun()
 
