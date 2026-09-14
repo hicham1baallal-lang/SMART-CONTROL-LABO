@@ -114,7 +114,7 @@ class LPEECompacitePDF(FPDF):
         self.cell(0, 10, clean_text(f"CTR-CSB - Page {self.page_no()}/{{nb}}"), 0, 0, "C")
 
 
-def generate_pv_compacite_pdf(header_info, points_data):
+def generate_pv_compacite_pdf(header_info, points_data, signataire_coord="O. IKEN", signataire_chef="H. BAALLAL"):
     pdf = LPEECompacitePDF()
     pdf.alias_nb_pages()
     pdf.add_page()
@@ -201,15 +201,17 @@ def generate_pv_compacite_pdf(header_info, points_data):
     else:
         pdf.ln(10)
 
+    client_nom = str(header_info.get('client', 'TGCC'))
+
     pdf.set_font("Helvetica", "B", 8.5)
     pdf.cell(63, 6, clean_text("REÇU PAR LE CLIENT"), 0, 0, "C")
     pdf.cell(64, 6, clean_text("LE COORDINATEUR DES ESSAIS"), 0, 0, "C")
     pdf.cell(63, 6, clean_text("LE CHEF DU LABORATOIRE"), 0, 1, "C")
 
     pdf.set_font("Helvetica", "I", 8.5)
-    pdf.cell(63, 6, clean_text("Nom: TGCC"), 0, 0, "C")
-    pdf.cell(64, 6, clean_text("Nom: O. IKEN"), 0, 0, "C")
-    pdf.cell(63, 6, clean_text("Nom: H. BAALLAL"), 0, 1, "C")
+    pdf.cell(63, 6, clean_text(f"Nom: {client_nom}"), 0, 0, "C")
+    pdf.cell(64, 6, clean_text(f"Nom: {signataire_coord}"), 0, 0, "C")
+    pdf.cell(63, 6, clean_text(f"Nom: {signataire_chef}"), 0, 1, "C")
 
     pdf.cell(63, 5, clean_text("Visa:"), 0, 0, "C")
     pdf.cell(64, 5, clean_text("Visa:"), 0, 0, "C")
@@ -219,7 +221,7 @@ def generate_pv_compacite_pdf(header_info, points_data):
 
 
 # ==========================================
-# FONCTION DE GÉNÉRATION DU FICHIER EXCEL DE SYNTHÈSE FORMATÉ LPEE (CORRIGÉE)
+# FONCTION DE GÉNÉRATION DU FICHIER EXCEL DE SYNTHÈSE FORMATÉ LPEE
 # ==========================================
 def generate_excel_synthese_lpee(df_filtered):
     wb = openpyxl.Workbook()
@@ -355,7 +357,7 @@ def generate_excel_synthese_lpee(df_filtered):
 
         current_row += 1
 
-    # --- BLOC STATISTIQUE COMPLET (CORRIGÉ DES CELLULES FUSIONNÉES) ---
+    # --- BLOC STATISTIQUE COMPLET ---
     current_row += 1
     stat_title_cell = ws.cell(row=current_row, column=1, value="📊 STATISTIQUES GLOBALES DES ESSAIS")
     stat_title_cell.font = font_section
@@ -370,7 +372,7 @@ def generate_excel_synthese_lpee(df_filtered):
     non_conf_pts = len(df_filtered[df_filtered["observation"] == "Non Conforme"])
     taux_conf = (conf_pts / total_pts * 100) if total_pts > 0 else 0.0
 
-    # Résumé conformité (Ecriture PUIS Fusion)
+    # Résumé conformité
     c_tot = ws.cell(row=current_row, column=1, value=f"Nombre total d'essais : {total_pts}")
     c_tot.font = font_bold
     ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=4)
@@ -379,7 +381,7 @@ def generate_excel_synthese_lpee(df_filtered):
     c_conf.font = font_bold
     ws.merge_cells(start_row=current_row, start_column=5, end_row=current_row, end_column=8)
 
-    # Entêtes du Tableau Statistique (Ecriture PUIS Fusion)
+    # Entêtes du Tableau Statistique
     current_row += 2
     stat_headers = ["Indicateur Statistique", "Densité Sèche (t/m³)", "Teneur en eau w (%)", "Refus > 20mm (%)", "Indice Compacité IC (%)"]
     
@@ -395,7 +397,7 @@ def generate_excel_synthese_lpee(df_filtered):
         end_col = col_target + 1 if idx > 1 else 3
         ws.merge_cells(start_row=current_row, start_column=col_target, end_row=current_row, end_column=end_col)
 
-    # Valeurs Min, Moy, Max (Ecriture PUIS Fusion)
+    # Valeurs Min, Moy, Max
     ds_vals = df_filtered["densite_seche"].astype(float)
     w_vals = df_filtered["w_mesure"].astype(float)
     ref_vals = df_filtered["refus_20mm"].astype(float)
@@ -445,6 +447,10 @@ def show(supabase_client, can_edit=False, is_admin=False):
     user_role = str(st.session_state.get("role", st.session_state.get("user_role", ""))).upper()
     user_is_admin = is_admin or ("ADMIN" in user_role)
     user_can_edit = can_edit or user_is_admin or ("LABO" in user_role)
+
+    # Récupération dynamique des noms de signataires (depuis session ou valeurs par défaut)
+    signataire_coord = st.session_state.get("signataire_coordinateur", "O. IKEN")
+    signataire_chef = st.session_state.get("signataire_chef_labo", "H. BAALLAL")
 
     st.title("🧱 Contrôle de Compacité (NF P 94-093 / NF P 94-061-2)")
     st.caption("Laboratoire de Contrôle Externe - Projet LGV CASA SUD")
@@ -615,7 +621,7 @@ def show(supabase_client, can_edit=False, is_admin=False):
             "exigence_fc": exigence_fc
         }
 
-        pdf_bytes = generate_pv_compacite_pdf(header_data, samples_calculated)
+        pdf_bytes = generate_pv_compacite_pdf(header_data, samples_calculated, signataire_coord, signataire_chef)
 
         col_act1, col_act2 = st.columns(2)
         with col_act1:
@@ -712,7 +718,7 @@ def show(supabase_client, can_edit=False, is_admin=False):
                         col_act1, col_act2, col_act3 = st.columns(3)
 
                         with col_act1:
-                            pdf_reprint = generate_pv_compacite_pdf(selected_pv, samples_data)
+                            pdf_reprint = generate_pv_compacite_pdf(selected_pv, samples_data, signataire_coord, signataire_chef)
                             st.download_button(
                                 label="🖨️ Imprimer / PDF",
                                 data=pdf_reprint,
