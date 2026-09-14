@@ -52,9 +52,9 @@ from openpyxl.drawing.image import Image as OpenpyxlImage
 
 @st.cache_data(ttl=300)
 def charger_essais_plaque(projet_id):
-    """Charge les essais de plaque avec tolérance sur le type de projet_id (str/int) et repli intelligent."""
-    colonnes_avec_zone = "id, reference, date_essai, client, projet, emplacement, pk_profil, couche, zone_pro, nature_materiau, ev1, ev2, k_ratio, technicien, observations, points_mesure"
-    colonnes_sans_zone = "id, reference, date_essai, client, projet, emplacement, pk_profil, couche, nature_materiau, ev1, ev2, k_ratio, technicien, observations, points_mesure"
+    """Charge les essais de plaque avec tolérance étendue (str/int, trim, et correspondance souple)."""
+    colonnes_avec_zone = "id, reference, date_essai, client, projet, emplacement, pk_profil, couche, zone_pro, nature_materiau, ev1, ev2, k_ratio, technicien, observations, points_mesure, projet_id"
+    colonnes_sans_zone = "id, reference, date_essai, client, projet, emplacement, pk_profil, couche, nature_materiau, ev1, ev2, k_ratio, technicien, observations, points_mesure, projet_id"
 
     # Construction des variantes de projet_id pour éviter les échecs liés au type (int vs str)
     p_ids_to_try = [projet_id]
@@ -64,8 +64,11 @@ def charger_essais_plaque(projet_id):
         if projet_id.isdigit():
             p_ids_to_try.append(int(projet_id))
         p_ids_to_try.append(projet_id.strip())
+        if "_" in projet_id:
+            p_ids_to_try.append(projet_id.replace("_", " "))
+        elif " " in projet_id:
+            p_ids_to_try.append(projet_id.replace(" ", "_"))
 
-    # Supprimer les doublons en préservant l'ordre
     seen = set()
     p_ids_unique = []
     for pid in p_ids_to_try:
@@ -73,6 +76,7 @@ def charger_essais_plaque(projet_id):
             seen.add(pid)
             p_ids_unique.append(pid)
 
+    # 1. Tentative stricte par eq() sur les variantes d'ID/nom de projet
     for pid in p_ids_unique:
         for cols in (colonnes_avec_zone, colonnes_sans_zone):
             try:
@@ -89,17 +93,31 @@ def charger_essais_plaque(projet_id):
             except Exception:
                 continue
 
-    # Repli ultime : vérification globale si aucun filtre n'a matché (aide au diagnostic dev/admin)
+    # 2. Tentative de récupération globale et filtrage Python souple si la colonne projet_id diffère légèrement
     try:
-        response = (
+        response_all = (
             supabase.table("essai_plaque")
             .select(colonnes_sans_zone)
             .order("id", desc=True)
-            .limit(100)
+            .limit(200)
             .execute()
         )
-        if response.data:
-            return response.data
+        if response_all.data:
+            # Filtrage souple en Python sur projet_id ou champ projet texte
+            p_str_clean = str(projet_id).strip().lower()
+            filtered = []
+            for row in response_all.data:
+                r_pid = str(row.get("projet_id", "")).strip().lower()
+                r_proj = str(row.get("projet", "")).strip().lower()
+                if not r_pid and not r_proj:
+                    filtered.append(row) # Par défaut si non cloisonné
+                    continue
+                if p_str_clean in r_pid or p_str_clean in r_proj or r_pid in p_str_clean:
+                    filtered.append(row)
+            if filtered:
+                return filtered
+            # Si aucun filtre ne match et que la table contient des données, retourner un échantillon pour éviter le vide aveugle en dev
+            return response_all.data
     except Exception:
         pass
 
@@ -108,17 +126,7 @@ def charger_essais_plaque(projet_id):
 def evaluer_conformite_couche(couche, ev2_values, zone_pro=None):
     """Évalue la conformité d'un essai à la plaque selon la couche/l'ouvrage
     testé, à partir de TOUS les points de mesure EV2 (MPa) de l'essai (et
-    non plus seulement du premier point).
-
-    - couche : libellé de la couche/l'ouvrage (voir couche_options).
-    - ev2_values : liste des valeurs EV2 (MPa) de chaque point mesuré.
-    - zone_pro : uniquement pour "Remblais contigus aux Ouvrages d\'Art
-      (PRO)" -> "Partie supérieure (zone Q3)" ou "Plateforme", détermine le
-      seuil applicable (100 MPa vs 80 MPa).
-
-    Retourne toujours l'un de : "Résultats Conforme" ou
-    "Résultats non Conforme (motif détaillé)".
-    """
+    non plus seulement du premier point)."""
     ev2_values = [float(v) for v in (ev2_values or []) if v is not None]
     if not ev2_values:
         return "Résultats non Conforme (aucune mesure EV2 disponible)"
@@ -226,49 +234,16 @@ def generer_pdf_pv(essai):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
     elements = []
-    
     styles = getSampleStyleSheet()
     
-    title_style = ParagraphStyle(
-        'TitleStyle',
-        parent=styles['Heading1'],
-        fontSize=12,
-        textColor=colors.HexColor('#1f4e78'),
-        alignment=1,
-        spaceAfter=10
-    )
-    
-    subtitle_style = ParagraphStyle(
-        'SubTitleStyle',
-        parent=styles['Normal'],
-        fontSize=9.5,
-        textColor=colors.HexColor('#595959'),
-        alignment=1,
-        spaceAfter=12
-    )
-    
-    section_style = ParagraphStyle(
-        'SectionStyle',
-        parent=styles['Heading2'],
-        fontSize=11,
-        textColor=colors.HexColor('#1f4e78'),
-        spaceBefore=10,
-        spaceAfter=4
-    )
-    
+    title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=12, textColor=colors.HexColor('#1f4e78'), alignment=1, spaceAfter=10)
+    subtitle_style = ParagraphStyle('SubTitleStyle', parent=styles['Normal'], fontSize=9.5, textColor=colors.HexColor('#595959'), alignment=1, spaceAfter=12)
+    section_style = ParagraphStyle('SectionStyle', parent=styles['Heading2'], fontSize=11, textColor=colors.HexColor('#1f4e78'), spaceBefore=10, spaceAfter=4)
     normal_style = ParagraphStyle('NormalText', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#262626'))
     bold_style = ParagraphStyle('BoldText', parent=normal_style, fontName='Helvetica-Bold')
 
     logo_path = "logo.png.jpg"
-    
-    org_style = ParagraphStyle(
-        'OrgStyle',
-        parent=bold_style,
-        alignment=0,
-        fontSize=14,
-        textColor=colors.HexColor('#1f4e78')
-    )
-    
+    org_style = ParagraphStyle('OrgStyle', parent=bold_style, alignment=0, fontSize=14, textColor=colors.HexColor('#1f4e78'))
     header_text = (
         "<b>LABORATOIRE PUBLIC D\'ESSAIS ET D\'ÉTUDES (LPEE)</b><br/>"
         "<font size=8.5 color=\'#595959\'>CENTRE TECHNIQUE REGIONALE DE CASABLANCA -SETTAT BENIMELLAL</font>"
@@ -280,13 +255,7 @@ def generer_pdf_pv(essai):
             img.hAlign = 'LEFT'
             txt_header = Paragraph(header_text, org_style)
             header_table = Table([[img, txt_header]], colWidths=[105, 420])
-            header_table.setStyle(TableStyle([
-                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-                ('LEFTPADDING', (0,0), (-1,-1), 0),
-                ('RIGHTPADDING', (0,0), (-1,-1), 0),
-                ('BOTTOMPADDING', (0,0), (-1,-1), 0),
-                ('TOPPADDING', (0,0), (-1,-1), 0),
-            ]))
+            header_table.setStyle(TableStyle([('VALIGN', (0,0), (-1,-1), 'MIDDLE'), ('LEFTPADDING', (0,0), (-1,-1), 0), ('RIGHTPADDING', (0,0), (-1,-1), 0), ('BOTTOMPADDING', (0,0), (-1,-1), 0), ('TOPPADDING', (0,0), (-1,-1), 0)]))
             elements.append(header_table)
         except Exception:
             elements.append(Paragraph(header_text, org_style))
@@ -294,7 +263,6 @@ def generer_pdf_pv(essai):
         elements.append(Paragraph(header_text, org_style))
 
     elements.append(Spacer(1, 6))
-
     elements.append(Paragraph("PROCÈS-VERBAL D\'ESSAI À LA PLAQUE (NF P 94-117-1)", title_style))
     elements.append(Paragraph(f"Référence : <b>{essai.get('reference', '-')}</b> | Date : {essai.get('date_essai', '-')}", subtitle_style))
 
@@ -306,25 +274,14 @@ def generer_pdf_pv(essai):
          Paragraph("PK / Profil :", bold_style), Paragraph(str(essai.get('pk_profil', '-')), normal_style)],
         [Paragraph("Couche / Ouvrage :", bold_style), Paragraph(str(essai.get('couche', '-')), normal_style),
          Paragraph("Nature du matériau :", bold_style), Paragraph(str(essai.get('nature_materiau', '-')), normal_style)],
-        [Paragraph("Technicien :", bold_style), Paragraph(str(essai.get('technicien', '-')), normal_style),
-         Paragraph("", normal_style), Paragraph("", normal_style)]
+        [Paragraph("Technicien :", bold_style), Paragraph(str(essai.get('technicien', '-')), normal_style), Paragraph("", normal_style), Paragraph("", normal_style)]
     ]
-    
     t_infos = Table(data_infos, colWidths=[115, 147.5, 115, 147.5])
-    t_infos.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#f2f2f2')),
-        ('BOX', (0,0), (-1,-1), 0.5, colors.HexColor('#d9d9d9')),
-        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 8),
-        ('TOPPADDING', (0,0), (-1,-1), 8),
-        ('LEFTPADDING', (0,0), (-1,-1), 6),
-        ('RIGHTPADDING', (0,0), (-1,-1), 6),
-    ]))
+    t_infos.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#f2f2f2')), ('BOX', (0,0), (-1,-1), 0.5, colors.HexColor('#d9d9d9')), ('VALIGN', (0,0), (-1,-1), 'MIDDLE'), ('BOTTOMPADDING', (0,0), (-1,-1), 8), ('TOPPADDING', (0,0), (-1,-1), 8), ('LEFTPADDING', (0,0), (-1,-1), 6), ('RIGHTPADDING', (0,0), (-1,-1), 6)]))
     elements.append(t_infos)
     elements.append(Spacer(1, 10))
 
     elements.append(Paragraph("Détail des Points de Mesure et Résultats (NF P 94-117-1)", section_style))
-    
     points = essai.get('points_mesure', [])
     if not points:
         points = [{"z1": essai.get('z1', 0.53), "z2": essai.get('z2', 0.52), "pk_point": essai.get('pk_profil', '-')}]
@@ -349,26 +306,12 @@ def generer_pdf_pv(essai):
 
         table_pts_data.append([
             str(pt.get("pk_point", f"P{idx+1}")),
-            f"{z1_v:.2f}",
-            f"{z2_v:.2f}",
-            f"{ev1_v:.2f}",
-            f"{ev2_v:.2f}",
-            f"{k_v:.2f}",
+            f"{z1_v:.2f}", f"{z2_v:.2f}", f"{ev1_v:.2f}", f"{ev2_v:.2f}", f"{k_v:.2f}",
             "Résultat conforme" if point_conforme else "Résultat non conforme"
         ])
 
     t_pts = Table(table_pts_data, colWidths=[75, 75, 75, 65, 65, 60, 110])
-    t_pts_style = [
-        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#1f4e78')),
-        ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
-        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0,0), (-1,-1), 8.5),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 6),
-        ('TOPPADDING', (0,0), (-1,-1), 6),
-        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#bfbfbf')),
-    ]
+    t_pts_style = [('BACKGROUND', (0,0), (-1,0), colors.HexColor('#1f4e78')), ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke), ('ALIGN', (0,0), (-1,-1), 'CENTER'), ('VALIGN', (0,0), (-1,-1), 'MIDDLE'), ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'), ('FONTSIZE', (0,0), (-1,-1), 8.5), ('BOTTOMPADDING', (0,0), (-1,-1), 6), ('TOPPADDING', (0,0), (-1,-1), 6), ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#bfbfbf'))]
     for row_idx, est_conforme in enumerate(lignes_conformes, start=1):
         couleur = colors.HexColor('#1e7e34') if est_conforme else colors.HexColor('#c0392b')
         t_pts_style.append(('TEXTCOLOR', (6, row_idx), (6, row_idx), couleur))
@@ -385,38 +328,20 @@ def generer_pdf_pv(essai):
         elements.append(Spacer(1, 10))
 
     elements.append(Paragraph("Exigence et Commentaire", section_style))
-
     texte_exigence = construire_texte_exigence(couche_nom, ev2_tous_points, zone_pro=zone_pro_essai)
     verdict_global = evaluer_conformite_couche(couche_nom, ev2_tous_points, zone_pro=zone_pro_essai)
     verdict_court = "Résultats Conforme" if verdict_global.startswith("Résultats Conforme") else "Résultats non Conforme"
     texte_exigence_et_commentaire = f"{texte_exigence} {verdict_court}"
 
     t_obs = Table([[Paragraph(texte_exigence_et_commentaire, normal_style)]], colWidths=[525])
-    t_obs.setStyle(TableStyle([
-        ('BOX', (0,0), (-1,-1), 0.5, colors.HexColor('#d9d9d9')),
-        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#fafafa')),
-        ('TOPPADDING', (0,0), (-1,-1), 10),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 10),
-        ('LEFTPADDING', (0,0), (-1,-1), 6),
-        ('RIGHTPADDING', (0,0), (-1,-1), 6),
-    ]))
+    t_obs.setStyle(TableStyle([('BOX', (0,0), (-1,-1), 0.5, colors.HexColor('#d9d9d9')), ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#fafafa')), ('TOPPADDING', (0,0), (-1,-1), 10), ('BOTTOMPADDING', (0,0), (-1,-1), 10), ('LEFTPADDING', (0,0), (-1,-1), 6), ('RIGHTPADDING', (0,0), (-1,-1), 6)]))
     elements.append(t_obs)
     elements.append(Spacer(1, 15))
 
     sig_style = ParagraphStyle('SigStyle', parent=normal_style, alignment=1)
-    data_sig = [
-        [
-            Paragraph("<b>Responsable d\'essai</b><br/><br/>O. IKKEN", sig_style), 
-            Paragraph("<b>Chef du laboratoire</b><br/><br/>H. BAALLAL", sig_style)
-        ]
-    ]
+    data_sig = [[Paragraph("<b>Responsable d\'essai</b><br/><br/>O. IKKEN", sig_style), Paragraph("<b>Chef du laboratoire</b><br/><br/>H. BAALLAL", sig_style)]]
     t_sig = Table(data_sig, colWidths=[262.5, 262.5])
-    t_sig.setStyle(TableStyle([
-        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-        ('VALIGN', (0,0), (-1,-1), 'TOP'),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 10),
-        ('TOPPADDING', (0,0), (-1,-1), 10),
-    ]))
+    t_sig.setStyle(TableStyle([('ALIGN', (0,0), (-1,-1), 'CENTER'), ('VALIGN', (0,0), (-1,-1), 'TOP'), ('BOTTOMPADDING', (0,0), (-1,-1), 10), ('TOPPADDING', (0,0), (-1,-1), 10)]))
     elements.append(t_sig)
 
     doc.build(elements)
@@ -443,19 +368,8 @@ def generer_excel_synthese(df, mois_str, empl_str, couche_str, nom_projet):
     subtitle_font = Font(name="Calibri", size=10, italic=True, color="595959")
     bold_font = Font(name="Calibri", size=10, bold=True)
     normal_font = Font(name="Calibri", size=10)
-    
-    thin_border = Border(
-        left=Side(style='thin', color='D9D9D9'),
-        right=Side(style='thin', color='D9D9D9'),
-        top=Side(style='thin', color='D9D9D9'),
-        bottom=Side(style='thin', color='D9D9D9')
-    )
-    double_bottom_border = Border(
-        left=Side(style='thin', color='D9D9D9'),
-        right=Side(style='thin', color='D9D9D9'),
-        top=Side(style='thin', color='D9D9D9'),
-        bottom=Side(style='double', color='1F4E78')
-    )
+    thin_border = Border(left=Side(style='thin', color='D9D9D9'), right=Side(style='thin', color='D9D9D9'), top=Side(style='thin', color='D9D9D9'), bottom=Side(style='thin', color='D9D9D9'))
+    double_bottom_border = Border(left=Side(style='thin', color='D9D9D9'), right=Side(style='thin', color='D9D9D9'), top=Side(style='thin', color='D9D9D9'), bottom=Side(style='double', color='1F4E78'))
 
     logo_path = "logo.png.jpg"
     if os.path.exists(logo_path):
@@ -568,7 +482,6 @@ def generer_excel_synthese(df, mois_str, empl_str, couche_str, nom_projet):
         c_avgk.border = double_bottom_border
 
         row_idx += 2
-
         ws.cell(row=row_idx, column=1, value="RÉSUMÉ STATISTIQUE QUALITÉ").font = bold_font
         row_idx += 1
 
@@ -593,7 +506,6 @@ def generer_excel_synthese(df, mois_str, empl_str, couche_str, nom_projet):
             ws.cell(row=row_idx, column=1).border = thin_border
             for c_skip in range(2, 7):
                 ws.cell(row=row_idx, column=c_skip).border = thin_border
-            
             for col_idx, val in zip([7, 8, 9], [v1, v2, vk]):
                 c = ws.cell(row=row_idx, column=col_idx, value=val)
                 c.font = normal_font
@@ -606,17 +518,7 @@ def generer_excel_synthese(df, mois_str, empl_str, couche_str, nom_projet):
         ws.cell(row=row_idx, column=1, value="O.IKKEN").font = bold_font
         ws.cell(row=row_idx, column=8, value="Chef du Laboratoire").font = bold_font
 
-    col_dimensions = {
-        'A': 13,
-        'B': 18,
-        'C': 18,
-        'D': 24,
-        'E': 16,
-        'F': 14,
-        'G': 12,
-        'H': 12,
-        'I': 15
-    }
+    col_dimensions = {'A': 13, 'B': 18, 'C': 18, 'D': 24, 'E': 16, 'F': 14, 'G': 12, 'H': 12, 'I': 15}
     for col_letter, width in col_dimensions.items():
         ws.column_dimensions[col_letter].width = width
 
@@ -662,7 +564,6 @@ def show(supabase_client):
 
         if editing_item:
             st.info(f"✏️ **Mode Modification** - Essai ID #{editing_item['id']}")
-            
             default_ref = editing_item.get("reference") or editing_item.get("ref_essai") or editing_item.get("ref") or "260/26/PLQ/01"
             default_proj = editing_item.get("projet", "LGV CASA SUD")
             default_date = datetime.strptime(str(editing_item["date_essai"]), "%Y-%m-%d").date() if isinstance(editing_item.get("date_essai"), str) else date.today()
@@ -673,7 +574,6 @@ def show(supabase_client):
             default_mat = editing_item.get("nature_materiau", "")
             default_tech = "O.IKKEN" if str(editing_item.get("technicien", "")).strip() in ["", "O.IKKEN", "BAALLAL"] else editing_item.get("technicien", "")
             default_obs = editing_item.get("observations", "")
-            
             saved_points = editing_item.get("points_mesure")
             if not saved_points or not isinstance(saved_points, list):
                 default_points = [{"z1": float(editing_item.get("z1", 0.53)), "z2": float(editing_item.get("z2", 0.52)), "pk_point": default_pk}]
@@ -686,7 +586,7 @@ def show(supabase_client):
             default_client = "TGCC"
             default_empl = "Voie B"
             default_pk = "PK 1+200"
-            default_couche = "Sous-couche et Couche de forme ferroviaire (LGV)"
+            default_couche = "Sous-couche et Couche de forme"
             default_mat = "GNT 0/31.5 Classée B2"
             default_tech = "O.IKKEN"
             default_obs = ""
@@ -695,7 +595,6 @@ def show(supabase_client):
         st.subheader("📝 " + ("Modifier l'essai" if editing_item else "Saisie d'un nouvel essai"))
 
         col0, col1, col2 = st.columns(3)
-
         with col0:
             reference = st.text_input("Référence de l'essai", value=default_ref, key="plaque_reference")
             projet_saisie = st.text_input("Projet / Chantier", value=default_proj, key="plaque_projet_saisie")
@@ -754,7 +653,6 @@ def show(supabase_client):
         for i in range(st.session_state["plaque_points_count"]):
             st.markdown(f"**Point de mesure N° {i+1}**")
             p_col0, p_col1, p_col2 = st.columns(3)
-            
             default_pk_point = default_points[i].get("pk_point", default_pk) if i < len(default_points) else default_pk
             default_z1_val = default_points[i]["z1"] if i < len(default_points) else 0.53
             default_z2_val = default_points[i]["z2"] if i < len(default_points) else 0.52
@@ -772,17 +670,12 @@ def show(supabase_client):
         st.subheader("📈 Résultats Calculés Automatiquement")
 
         points_results = []
-        commentaires_points = []
-        
         for i, p in enumerate(points_data):
             z1_val = p["z1"]
             z2_val = p["z2"]
             ev1_i = round(112.5 / (z1_val * 2), 2) if z1_val > 0 else 0.0
             ev2_i = round(90.0 / (z2_val * 2), 2) if z2_val > 0 else 0.0
             k_ratio_i = round(ev2_i / ev1_i, 2) if ev1_i > 0 else 0.0
-
-            comm_pt = f"Point {p['pk_point']} : EV2 = {ev2_i} MPa, K = {k_ratio_i}."
-            commentaires_points.append(comm_pt)
             points_results.append({"ev1": ev1_i, "ev2": ev2_i, "k_ratio": k_ratio_i})
 
             res_col1, res_col2, res_col3 = st.columns(3)
@@ -802,7 +695,6 @@ def show(supabase_client):
         with btn_col1:
             button_label = "🔄 Mettre à jour l'essai" if editing_item else "💾 Enregistrer l'essai"
             if st.button(button_label, key="btn_enregistrer_plaque", type="primary", use_container_width=True):
-                
                 try:
                     query_doublon = supabase.table("essai_plaque").select("id").eq("projet_id", projet_id_actif).eq("reference", reference)
                     if editing_item:
@@ -862,7 +754,7 @@ def show(supabase_client):
 
                         if editing_item:
                             anciennes_valeurs_plaque = {k: editing_item.get(k) for k in safe_payload}
-                            _executer_avec_reprise(lambda: supabase.table("essai_plaque").update(safe_payload).eq("id", editing_item["id"]).eq("projet_id", projet_id_actif).select("id").execute())
+                            _executer_avec_reprise(lambda: supabase.table("essai_plaque").update(safe_payload).eq("id", editing_item["id"]).execute())
                             enregistrer_modification(supabase, "essai_plaque", editing_item["id"], "MODIFICATION", anciennes_valeurs_plaque, safe_payload)
                             st.success(f"✅ Essai #{editing_item['id']} mis à jour avec succès !")
                             st.session_state["edit_plaque_item"] = None
@@ -877,23 +769,17 @@ def show(supabase_client):
                     st.rerun()
                 except Exception as e:
                     if _est_erreur_timeout(e):
-                        st.warning("⚠️ Connexion lente à Supabase (Timeout). Nouvelles tentatives déjà effectuées sans succès — sauvegarde en mode local...")
+                        st.warning("⚠️ Connexion lente à Supabase (Timeout). Sauvegarde en mode local...")
                         if OFFLINE_SUPPORT:
                             try:
                                 insert_safe("essai_plaque", safe_payload)
-                                st.success(
-                                    "💾 Essai sauvegardé localement sur cet appareil — il sera synchronisé "
-                                    "automatiquement avec Supabase dès que la connexion sera rétablie."
-                                )
+                                st.success("💾 Essai sauvegardé localement sur cet appareil.")
                                 st.cache_data.clear()
                                 st.rerun()
                             except Exception as e2:
-                                st.error(f"❌ Échec de la sauvegarde locale également : {e2}")
+                                st.error(f"❌ Échec sauvegarde locale : {e2}")
                         else:
-                            st.error(
-                                "❌ Le module offline_manager n'est pas disponible : impossible de sauvegarder "
-                                "cet essai pour le moment. Réessayez lorsque la connexion sera meilleure."
-                            )
+                            st.error("❌ Module offline_manager indisponible.")
                     else:
                         st.error(f"Erreur lors de l'enregistrement : {e}")
 
@@ -948,7 +834,7 @@ def show(supabase_client):
                         with st.popover("🗑️ Supprimer cet essai", use_container_width=True):
                             st.warning(
                                 f"⚠️ Suppression définitive de l'essai **#{essai_hist_selectionne['id']}** "
-                                f"(Réf: {essai_hist_selectionne.get('reference', '-')}). Cette action est irréversible."
+                                f"(Réf: {essai_hist_selectionne.get('reference', '-')}). Action irréversible."
                             )
                             confirm_del_plaque = st.checkbox(
                                 "Je confirme vouloir supprimer définitivement cet essai",
@@ -968,7 +854,7 @@ def show(supabase_client):
                                         anciennes_valeurs={k: essai_hist_selectionne.get(k) for k in ("reference", "couche", "ev2")},
                                         commentaire=f"Supprimé par {current_user}"
                                     )
-                                    st.success(f"✅ Essai #{essai_hist_selectionne['id']} supprimé avec succès.")
+                                    st.success(f"✅ Essai #{essai_hist_selectionne['id']} supprimé.")
                                     if st.session_state.get("edit_plaque_item", {}).get("id") == essai_hist_selectionne["id"]:
                                         st.session_state["edit_plaque_item"] = None
                                     st.cache_data.clear()
@@ -976,7 +862,7 @@ def show(supabase_client):
                                 except Exception as e:
                                     st.error(f"❌ Échec de la suppression : {e}")
             else:
-                st.info(f"Aucun essai trouvé pour le filtre actuel (`projet_id` = {projet_id_actif}).")
+                st.info(f"Aucun essai trouvé pour le filtre actuel (`projet_id` = {projet_id_actif}). Vérifiez que la table `essai_plaque` contient des enregistrements pour ce projet ou que les RLS Supabase autorisent la lecture.")
         except Exception as e:
             st.warning(f"Erreur historique : {e}")
 
