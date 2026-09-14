@@ -18,18 +18,17 @@ def clean_text(text):
 
 
 # ==========================================
-# TABLEAU DE RÉFÉRENCE MATÉRIAUX & EXIGENCES CCTP (MAJ)
+# TABLEAU DE RÉFÉRENCE MATÉRIAUX & EXIGENCES CCTP (STRICTEMENT DU TABLEAU)
 # ==========================================
 REFERENTIEL_MATERIAUX = {
     "Remblai ordinaire": {"exigence_str": "q4 : pdmc >= 95 % OPN ; pdfc >= 92 % OPN", "exigence_mc": 95.0, "exigence_fc": 92.0},
     "GNT pour PST": {"exigence_str": "q4 : pdmc >= 95 % ; pdfc >= 92 % OPN", "exigence_mc": 95.0, "exigence_fc": 92.0},
     "Remblai contigu": {"exigence_str": "<1.50m de mur : q4 : pdmc >= 95 % ; pdfc >= 92 % OPN / > a 1.50 m de mur : q3 : pdmc >= 98.5 % ; pdfc >= 96 % OPN", "exigence_mc": 98.5, "exigence_fc": 96.0},
-    "Remblai renforcé": {"exigence_str": "95 % OPN", "exigence_mc": 95.0, "exigence_fc": 95.0},
-    "Remblai de fouille": {"exigence_str": "95 % OPN", "exigence_mc": 95.0, "exigence_fc": 95.0},
-    "GNF 1": {"exigence_str": "98 % OPN", "exigence_mc": 98.0, "exigence_fc": 98.0},
+    "Remblai renforcé": {"exigence_str": "95 % OPM", "exigence_mc": 95.0, "exigence_fc": 95.0},
+    "Remblai de fouille": {"exigence_str": "95 % OPM", "exigence_mc": 95.0, "exigence_fc": 95.0},
+    "GNF 1": {"exigence_str": "98 % OPM", "exigence_mc": 98.0, "exigence_fc": 98.0},
     "couche de forme 0/60": {"exigence_str": "q3 : pdmc >= 98,5 % OPN ; pdfc >= 96 % OPN", "exigence_mc": 98.5, "exigence_fc": 96.0},
-    "Sous-couche GNT 0/31,5": {"exigence_str": "q1 : pdmc >= 100 % ; pdfc >= 98 % OPN", "exigence_mc": 100.0, "exigence_fc": 98.0},
-    "Autre / Saisie Personnalisée": {"exigence_str": "Personnalisée", "exigence_mc": 95.0, "exigence_fc": 92.0}
+    "Sous-couche GNT 0/31,5": {"exigence_str": "q1 : pdmc >= 100 % ; pdfc >= 98 % OPN", "exigence_mc": 100.0, "exigence_fc": 98.0}
 }
 
 
@@ -197,6 +196,10 @@ def show(supabase_client, can_edit=False, is_admin=False):
         default_w_opn = float(st.session_state.get("edit_comp_w_opn", 6.3))
         default_mat = st.session_state.get("edit_comp_mat", "Remblai contigu")
 
+        mat_keys = list(REFERENTIEL_MATERIAUX.keys())
+        if default_mat not in mat_keys:
+            default_mat = mat_keys if len(mat_keys) > 2 else mat_keys[0]
+
         with col_h1:
             st.markdown("**N° Rapport d'essai**")
             c_prefix, c_num = st.columns([2.5, 1.5])
@@ -214,9 +217,7 @@ def show(supabase_client, can_edit=False, is_admin=False):
         with col_h2:
             lieu_prelevement = st.text_area("Lieu / Zone de prélèvement", value=default_lieu, height=90, disabled=not user_can_edit)
             
-            # SELECTBOX DYNAMIQUE MATÉRIAUX
-            mat_keys = list(REFERENTIEL_MATERIAUX.keys())
-            default_mat_idx = mat_keys.index(default_mat) if default_mat in mat_keys else 2
+            default_mat_idx = mat_keys.index(default_mat) if default_mat in mat_keys else 0
 
             type_materiau = st.selectbox(
                 "Type de matériau / Famille",
@@ -228,13 +229,13 @@ def show(supabase_client, can_edit=False, is_admin=False):
 
         with col_h3:
             date_prelevement = st.date_input("Date du prélèvement", value=datetime.date.today(), disabled=not user_can_edit)
-            densite_opn = st.number_input("Densité Proctor OPN (t/m³)", value=default_d_opn, step=0.01, disabled=not user_can_edit)
-            w_opn = st.number_input("Teneur en eau opt. OPN (%)", value=default_w_opn, step=0.1, disabled=not user_can_edit)
+            densite_opn = st.number_input("Densité Proctor OPN/OPM (t/m³)", value=default_d_opn, step=0.01, disabled=not user_can_edit)
+            w_opn = st.number_input("Teneur en eau opt. (%)", value=default_w_opn, step=0.1, disabled=not user_can_edit)
 
         # SYNCHRONISATION AUTOMATIQUE DES EXIGENCES D'APRÈS LE TABLEAU
         mat_info = REFERENTIEL_MATERIAUX[type_materiau]
 
-        c_exig1, c_exig2, c_exig3 = st.columns()
+        c_exig1, c_exig2, c_exig3 = st.columns(3)
         with c_exig1:
             exigence_str = st.text_input("Exigence CCTP", value=mat_info['exigence_str'], disabled=not user_can_edit)
         with c_exig2:
@@ -253,7 +254,7 @@ def show(supabase_client, can_edit=False, is_admin=False):
                 {"ref_num": 3, "designation": lieu_prelevement, "type_mesure": "mc", "densite_seche": 2.144, "densite_ref": 2.211, "w_mesure": 6.9, "refus_20mm": 26.0},
             ]
 
-        col_b1, col_b2, col_b3 = st.columns()
+        col_b1, col_b2, col_b3 = st.columns(3)
         with col_b1:
             if st.button("➕ Ajouter un point de mesure", disabled=not user_can_edit):
                 next_ref = len(st.session_state["compacite_samples"]) + 1
@@ -279,7 +280,7 @@ def show(supabase_client, can_edit=False, is_admin=False):
             point_num = i + 1
 
             with st.expander(f"📍 Point N° {point_num} : Réf {point_num} [{sample['type_mesure'].upper()}]", expanded=True):
-                c1, c2, c3, c4, c5, c6, c7 = st.columns()
+                c1, c2, c3, c4, c5, c6, c7 = st.columns(7)
                 with c1:
                     ref_num = st.number_input("Réf", value=point_num, step=1, key=f"comp_ref_{i}", disabled=True)
                 with c2:
@@ -431,7 +432,7 @@ def show(supabase_client, can_edit=False, is_admin=False):
                                 display_cols = [c for c in ["ref_num", "designation", "type_mesure", "densite_seche", "densite_ref", "w_mesure", "refus_20mm", "ic", "observation"] if c in df_samples.columns]
                                 st.dataframe(df_samples[display_cols], use_container_width=True)
 
-                        col_act1, col_act2, col_act3 = st.columns()
+                        col_act1, col_act2, col_act3 = st.columns(3)
 
                         with col_act1:
                             pdf_reprint = generate_pv_compacite_pdf(selected_pv, samples_data)
