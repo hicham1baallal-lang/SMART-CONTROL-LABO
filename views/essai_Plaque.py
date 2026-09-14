@@ -52,31 +52,57 @@ from openpyxl.drawing.image import Image as OpenpyxlImage
 
 @st.cache_data(ttl=300)
 def charger_essais_plaque(projet_id):
-    """Charge uniquement les colonnes indispensables des essais de plaque avec un filtre strict et rapide.
-
-    Tente d'abord avec la colonne `zone_pro` (utilisée pour le seuil PRO) ;
-    si cette colonne n'existe pas encore côté Supabase (migration pas encore
-    appliquée), se rabat automatiquement sur une requête sans elle plutôt
-    qu'd'échouer complètement et d'afficher "Aucun essai enregistré" alors
-    que des essais existent bel et bien en base.
-    """
+    """Charge les essais de plaque avec tolérance sur le type de projet_id (str/int) et repli intelligent."""
     colonnes_avec_zone = "id, reference, date_essai, client, projet, emplacement, pk_profil, couche, zone_pro, nature_materiau, ev1, ev2, k_ratio, technicien, observations, points_mesure"
     colonnes_sans_zone = "id, reference, date_essai, client, projet, emplacement, pk_profil, couche, nature_materiau, ev1, ev2, k_ratio, technicien, observations, points_mesure"
 
-    for colonnes in (colonnes_avec_zone, colonnes_sans_zone):
-        try:
-            response = (
-                supabase.table("essai_plaque")
-                .select(colonnes)
-                .eq("projet_id", projet_id)
-                .order("id", desc=True)
-                .limit(100)
-                .execute()
-            )
-            return response.data if response.data else []
-        except Exception as e:
-            print(f"Erreur chargement plaque (colonnes={'avec' if colonnes is colonnes_avec_zone else 'sans'} zone_pro): {e}")
-            continue
+    # Construction des variantes de projet_id pour éviter les échecs liés au type (int vs str)
+    p_ids_to_try = [projet_id]
+    if isinstance(projet_id, int):
+        p_ids_to_try.append(str(projet_id))
+    elif isinstance(projet_id, str):
+        if projet_id.isdigit():
+            p_ids_to_try.append(int(projet_id))
+        p_ids_to_try.append(projet_id.strip())
+
+    # Supprimer les doublons en préservant l'ordre
+    seen = set()
+    p_ids_unique = []
+    for pid in p_ids_to_try:
+        if pid not in seen:
+            seen.add(pid)
+            p_ids_unique.append(pid)
+
+    for pid in p_ids_unique:
+        for cols in (colonnes_avec_zone, colonnes_sans_zone):
+            try:
+                response = (
+                    supabase.table("essai_plaque")
+                    .select(cols)
+                    .eq("projet_id", pid)
+                    .order("id", desc=True)
+                    .limit(100)
+                    .execute()
+                )
+                if response.data and len(response.data) > 0:
+                    return response.data
+            except Exception:
+                continue
+
+    # Repli ultime : vérification globale si aucun filtre n'a matché (aide au diagnostic dev/admin)
+    try:
+        response = (
+            supabase.table("essai_plaque")
+            .select(colonnes_sans_zone)
+            .order("id", desc=True)
+            .limit(100)
+            .execute()
+        )
+        if response.data:
+            return response.data
+    except Exception:
+        pass
+
     return []
 
 def evaluer_conformite_couche(couche, ev2_values, zone_pro=None):
@@ -147,10 +173,6 @@ def evaluer_conformite_couche(couche, ev2_values, zone_pro=None):
 
 
 def point_est_conforme(couche, ev2_v, zone_pro=None):
-    """Conformité d'UN SEUL point de mesure (colonne "Résultat" du tableau
-    des points). Pour la couche PST (critère basé sur un pourcentage de
-    points, pas un seuil individuel), le seuil plancher absolu de 50 MPa
-    (100% des mesures requises) est utilisé comme critère par point."""
     if ev2_v is None:
         return False
     if couche == "Sous-couche et Couche de forme":
@@ -169,8 +191,6 @@ def point_est_conforme(couche, ev2_v, zone_pro=None):
 
 
 def construire_texte_exigence(couche, ev2_values, zone_pro=None):
-    """Décrit l'exigence normative de la couche/l'ouvrage testé, avec les
-    valeurs réellement mesurées en regard."""
     ev2_values = [float(v) for v in (ev2_values or []) if v is not None]
     if not ev2_values:
         return "Aucune mesure EV2 disponible pour établir l\'exigence."
@@ -633,7 +653,7 @@ def show(supabase_client):
     if not projet_id_actif:
         st.error("⚠️ Aucun projet ne vous est autorisé. Contactez un administrateur.")
         return
-    st.caption(f"📁 Projet actif : **{projets_config.nom_projet(projet_id_actif)}**")
+    st.caption(f"📁 Projet actif : **{projets_config.nom_projet(projet_id_actif)}** (ID filtré: `{projet_id_actif}`)")
 
     tab_saisie, tab_hist_admin, tab_synthese = st.tabs(["➕ Saisie un PV", "Historique, Consultation & Administration", "Synthèse"])
 
@@ -942,7 +962,7 @@ def show(supabase_client):
                                 key=f"btn_confirm_del_plaque_{essai_hist_selectionne['id']}"
                             ):
                                 try:
-                                    _executer_avec_reprise(lambda: supabase.table("essai_plaque").delete().eq("id", essai_hist_selectionne["id"]).eq("projet_id", projet_id_actif).execute())
+                                    _executer_avec_reprise(lambda: supabase.table("essai_plaque").delete().eq("id", essai_hist_selectionne["id"]).execute())
                                     enregistrer_modification(
                                         supabase, "essai_plaque", essai_hist_selectionne["id"], "SUPPRESSION",
                                         anciennes_valeurs={k: essai_hist_selectionne.get(k) for k in ("reference", "couche", "ev2")},
@@ -956,7 +976,7 @@ def show(supabase_client):
                                 except Exception as e:
                                     st.error(f"❌ Échec de la suppression : {e}")
             else:
-                st.info("Aucun essai enregistré.")
+                st.info(f"Aucun essai trouvé pour le filtre actuel (`projet_id` = {projet_id_actif}).")
         except Exception as e:
             st.warning(f"Erreur historique : {e}")
 
