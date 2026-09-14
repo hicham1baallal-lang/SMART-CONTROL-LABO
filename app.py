@@ -173,7 +173,7 @@ if st.session_state["user"] is None:
 
 # Formulaire de Connexion
 if st.session_state["user"] is None:
-    col1, col2, col3 = st.columns([1, 2, 1])
+    col1, col2, col3 = st.columns()
     with col2:
         st.title("🔐 Accès Restreint - LPEE")
         with st.form("login_form"):
@@ -238,7 +238,21 @@ except ImportError:
     gestion_utilisateurs = None
 
 # ==========================================
-# 4. BARRE LATÉRALE DE NAVIGATION (SIDEBAR)
+# 4. PAGE D'ACCUEIL (FONCTION D'AFFICHAGE)
+# ==========================================
+def render_accueil(supabase_client):
+    st.title("Plateforme de Suivi et Contrôle Qualité - LPEE")
+    st.markdown("Bienvenue sur l'application centralisée de gestion des contrôles qualité pour le projet LGV CASA SUD. Utilisez le menu de navigation latéral pour accéder aux différents modules de consultation et de suivi.")
+    
+    if os.path.exists("image.page d'accueil.png"):
+        st.image("image.page d'accueil.png", use_container_width=True)
+    elif os.path.exists("image.page d'accueil.jpg"):
+        st.image("image.page d'accueil.jpg", use_container_width=True)
+    else:
+        st.info("ℹ️ Image d'accueil non trouvée (`image.page d'accueil.png` / `image.page d'accueil.jpg`). Placez l'image dans le même répertoire si nécessaire.")
+
+# ==========================================
+# 5. BARRE LATÉRALE DE NAVIGATION (SIDEBAR)
 # ==========================================
 with st.sidebar:
     if os.path.exists("logo.png.jpg"):
@@ -251,6 +265,7 @@ with st.sidebar:
     st.markdown("---")
 
     menu_options = {
+        "🏠 Accueil": "accueil",
         "🚜 Essai à la Plaque": essai_Plaque,
         "💧 Teneur en Eau": essai_teneur_eau,
         "🏗️ Compacité": essai_compacite,
@@ -277,7 +292,7 @@ with st.sidebar:
     )
     st.session_state["selected_page"] = selected_page_label
 
-    # --- NOUVEAU : SOUS-TITRES POUR IDENTIFICATION MATÉRIAU ---
+    # --- SOUS-TITRES POUR IDENTIFICATION MATÉRIAU ---
     if selected_page_label == "🔬 Identification Matériau":
         sub_options = [
             "Remblai ordinaire",
@@ -325,9 +340,12 @@ with st.sidebar:
     st.caption("LPEE - CTR Casablanca | LGV CASA SUD")
 
 # ==========================================
-# 5. RENDU DE LA VUE SÉLECTIONNÉE
+# 6. RENDU DE LA VUE SÉLECTIONNÉE
 # ==========================================
 def render_view(module, supabase_client):
+    if module == "accueil":
+        render_accueil(supabase_client)
+        return
     if module is None:
         st.error("⚠️ Module non chargé ou fichier de vue manquant.")
         return
