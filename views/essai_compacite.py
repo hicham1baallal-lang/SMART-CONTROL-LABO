@@ -118,7 +118,7 @@ def generate_pv_compacite_pdf(header_info, points_data):
         pdf.cell(widths[i], 7, clean_text(h), 1, 0, "C")
     pdf.ln()
 
-    # Corps du tableau avec hauteur adaptable et index widths corrigés et [2]
+    # Corps du tableau avec hauteur adaptable et indexation des colonnes corrigée (widths[1])
     pdf.set_font("Helvetica", "", 7.5)
     nb_samples = max(len(points_data), 1)
     row_height = 8 if nb_samples <= 6 else 6.5
@@ -127,7 +127,7 @@ def generate_pv_compacite_pdf(header_info, points_data):
         desig = f"{p.get('designation', '')} ({p.get('type_mesure', 'mc')})"
         
         pdf.cell(widths[0], row_height, clean_text(str(p.get("ref_num", ""))), 1, 0, "C")
-        pdf.cell(widths, row_height, clean_text(desig[:45]), 1, 0, "L")
+        pdf.cell(widths[1], row_height, clean_text(desig[:45]), 1, 0, "L")
         pdf.cell(widths[2], row_height, f"{float(p.get('densite_seche', 0.0)):.3f}", 1, 0, "C")
         pdf.cell(widths[3], row_height, f"{float(p.get('densite_ref', 0.0)):.3f}", 1, 0, "C")
         pdf.cell(widths[4], row_height, f"{float(p.get('w_mesure', 0.0)):.1f}%", 1, 0, "C")
@@ -384,7 +384,7 @@ def show(supabase_client, can_edit=False, is_admin=False):
     # ---------------------------------------------------------
     # TAB 2 : HISTORIQUE & ADMINISTRATION
     # ---------------------------------------------------------
-    with tabs:
+    with tabs[1]:
         st.subheader("🖨️ Historique et Gestion des PV de Compacité")
 
         if not supabase_client:
