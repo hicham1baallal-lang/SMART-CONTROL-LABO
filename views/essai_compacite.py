@@ -1,4 +1,5 @@
 import datetime
+import io
 import pandas as pd
 import streamlit as st
 from fpdf import FPDF
@@ -18,7 +19,7 @@ def clean_text(text):
 
 
 # ==========================================
-# TABLEAU DE RÉFÉRENCE MATÉRIAUX & EXIGENCES CCTP (STRICTEMENT DU TABLEAU)
+# TABLEAU DE RÉFÉRENCE MATÉRIAUX & EXIGENCES CCTP
 # ==========================================
 REFERENTIEL_MATERIAUX = {
     "Remblai ordinaire": {"exigence_str": "q4 : pdmc >= 95 % OPN ; pdfc >= 92 % OPN", "exigence_mc": 95.0, "exigence_fc": 92.0},
@@ -118,7 +119,7 @@ def generate_pv_compacite_pdf(header_info, points_data):
         pdf.cell(widths[i], 7, clean_text(h), 1, 0, "C")
     pdf.ln()
 
-    # Corps du tableau avec hauteur adaptable et indexation des colonnes corrigée (widths[1])
+    # Corps du tableau
     pdf.set_font("Helvetica", "", 7.5)
     nb_samples = max(len(points_data), 1)
     row_height = 8 if nb_samples <= 6 else 6.5
@@ -177,7 +178,11 @@ def show(supabase_client, can_edit=False, is_admin=False):
     if is_editing_mode:
         st.warning(f"✏️ **Mode Modification** activé pour le PV : `{st.session_state.get('compacite_edit_num_rapport')}`")
 
-    tabs = st.tabs(["➕ Saisie & Modification PV", "📋 Historique, Consultation & Administration"])
+    tabs = st.tabs([
+        "➕ Saisie & Modification PV", 
+        "📋 Historique, Consultation & Administration",
+        "📊 Synthèse & Filtres"
+    ])
 
     # ---------------------------------------------------------
     # TAB 1 : SAISIE & MODIFICATION PV
@@ -216,7 +221,6 @@ def show(supabase_client, can_edit=False, is_admin=False):
 
         with col_h2:
             lieu_prelevement = st.text_area("Lieu / Zone de prélèvement", value=default_lieu, height=90, disabled=not user_can_edit)
-            
             default_mat_idx = mat_keys.index(default_mat) if default_mat in mat_keys else 0
 
             type_materiau = st.selectbox(
@@ -232,7 +236,6 @@ def show(supabase_client, can_edit=False, is_admin=False):
             densite_opn = st.number_input("Densité Proctor OPN/OPM (t/m³)", value=default_d_opn, step=0.01, disabled=not user_can_edit)
             w_opn = st.number_input("Teneur en eau opt. (%)", value=default_w_opn, step=0.1, disabled=not user_can_edit)
 
-        # SYNCHRONISATION AUTOMATIQUE DES EXIGENCES D'APRÈS LE TABLEAU
         mat_info = REFERENTIEL_MATERIAUX[type_materiau]
 
         c_exig1, c_exig2, c_exig3 = st.columns(3)
@@ -504,3 +507,135 @@ def show(supabase_client, can_edit=False, is_admin=False):
                     st.info("Aucune donnée d'échantillon enregistrée.")
             except Exception as e:
                 st.error(f"Erreur de chargement de la table brute : {e}")
+
+    # ---------------------------------------------------------
+    # TAB 3 : SYNTHÈSE & FILTRES MULTI-CRITÈRES
+    # ---------------------------------------------------------
+    with tabs[2]:
+        st.subheader("📊 Synthèse Globale des Essais de Compacité")
+        st.caption("Filtrage multi-critères et exportation personnalisée des données d'essais")
+
+        if not supabase_client:
+            st.info("💡 Connexion Supabase non configurée pour la synthèse.")
+        else:
+            try:
+                # Jointure logique via récupération des 2 tables
+                res_pv = supabase_client.table("pv_compacite").select("*").execute()
+                res_essais = supabase_client.table("essai_compacite").select("*").execute()
+
+                df_pv = pd.DataFrame(res_pv.data) if res_pv.data else pd.DataFrame()
+                df_essais = pd.DataFrame(res_essais.data) if res_essais.data else pd.DataFrame()
+
+                if df_pv.empty or df_essais.empty:
+                    st.warning("⚠️ Pas assez de données enregistrées pour constituer une synthèse.")
+                else:
+                    # Fusion des données PV (méta) et Points de mesures (essais)
+                    df_merged = pd.merge(df_essais, df_pv, on="num_rapport", how="inner", suffixes=("_essai", "_pv"))
+
+                    # Formatage date
+                    df_merged["date_prelevement_dt"] = pd.to_datetime(df_merged["date_prelevement"], errors="coerce")
+                    df_merged["Mois_Annee"] = df_merged["date_prelevement_dt"].dt.strftime("%Y-%m")
+
+                    # --- ZONES DE FILTRES MULTI-CRITÈRES ---
+                    st.markdown("#### 🎯 Filtres de recherche")
+                    f_col1, f_col2, f_col3 = st.columns(3)
+
+                    # Filter 1: Période (Mois)
+                    all_months = sorted(df_merged["Mois_Annee"].dropna().unique().tolist(), reverse=True)
+                    with f_col1:
+                        selected_months = st.multiselect(
+                            "📅 Période (Mois)",
+                            options=all_months,
+                            default=all_months,
+                            key="filter_months"
+                        )
+
+                    # Filter 2: Emplacement / Lieu
+                    all_locations = sorted(df_merged["lieu_prelevement"].dropna().unique().tolist())
+                    with f_col2:
+                        selected_locations = st.multiselect(
+                            "📍 Emplacement / Zone",
+                            options=all_locations,
+                            default=all_locations,
+                            key="filter_locations"
+                        )
+
+                    # Filter 3: Type de couche / Matériau
+                    all_materials = sorted(df_merged["type_materiau"].dropna().unique().tolist())
+                    with f_col3:
+                        selected_materials = st.multiselect(
+                            "🧱 Type de Couche / Matériau",
+                            options=all_materials,
+                            default=all_materials,
+                            key="filter_materials"
+                        )
+
+                    # --- APPLICATION DES FILTRES ---
+                    filtered_df = df_merged[
+                        (df_merged["Mois_Annee"].isin(selected_months)) &
+                        (df_merged["lieu_prelevement"].isin(selected_locations)) &
+                        (df_merged["type_materiau"].isin(selected_materials))
+                    ]
+
+                    st.markdown("---")
+
+                    # --- KPI / STATISTIQUES RÉSUMÉES ---
+                    total_points = len(filtered_df)
+                    if total_points > 0:
+                        conformes = len(filtered_df[filtered_df["observation"] == "Conforme"])
+                        non_conformes = len(filtered_df[filtered_df["observation"] == "Non Conforme"])
+                        taux_conformite = (conformes / total_points) * 100.0
+                        ic_moyen = filtered_df["ic"].astype(float).mean()
+
+                        kpi1, kpi2, kpi3, kpi4 = st.columns(4)
+                        kpi1.metric("Points d'essai", total_points)
+                        kpi2.metric("Conformes", conformes, f"{taux_conformite:.1f}%")
+                        kpi3.metric("Non Conformes", non_conformes, delta_color="inverse")
+                        kpi4.metric("IC Moyen", f"{ic_moyen:.1f} %")
+
+                        # --- TABLEAU SYNTHÉTIQUE AFFICHÉ ---
+                        st.markdown("#### 📄 Résultats de la Synthèse")
+                        
+                        cols_to_display = [
+                            "num_rapport", "date_prelevement", "lieu_prelevement", 
+                            "type_materiau", "ref_num", "designation", "type_mesure", 
+                            "densite_seche", "densite_ref", "w_mesure", "refus_20mm", "ic", "observation"
+                        ]
+                        
+                        cols_existing = [c for c in cols_to_display if c in filtered_df.columns]
+                        st.dataframe(filtered_df[cols_existing], use_container_width=True)
+
+                        # --- MODULE DE TÉLÉCHARGEMENT ---
+                        st.markdown("#### 📥 Téléchargement des Données Filtrées")
+                        d_col1, d_col2 = st.columns(2)
+
+                        # Exporter en CSV
+                        csv_data = filtered_df[cols_existing].to_csv(index=False).encode('utf-8')
+                        with d_col1:
+                            st.download_button(
+                                label="📥 Télécharger la synthèse en CSV",
+                                data=csv_data,
+                                file_name=f"Synthese_Compacite_{datetime.date.today()}.csv",
+                                mime="text/csv",
+                                use_container_width=True
+                            )
+
+                        # Exporter en Excel (.xlsx)
+                        buffer_excel = io.BytesIO()
+                        with pd.ExcelWriter(buffer_excel, engine='openpyxl') as writer:
+                            filtered_df[cols_existing].to_excel(writer, index=False, sheet_name='Synthèse Compacité')
+                        
+                        with d_col2:
+                            st.download_button(
+                                label="📊 Télécharger la synthèse en Excel (XLSX)",
+                                data=buffer_excel.getvalue(),
+                                file_name=f"Synthese_Compacite_{datetime.date.today()}.xlsx",
+                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                type="primary",
+                                use_container_width=True
+                            )
+                    else:
+                        st.warning("⚠️ Aucun résultat ne correspond aux filtres sélectionnés.")
+
+            except Exception as e:
+                st.error(f"❌ Erreur lors de la génération de la synthèse : {e}")
