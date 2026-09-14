@@ -173,8 +173,6 @@ def show(supabase_client):
             )
 
         f_st.markdown("---")
-        # Traitement granulométrique complet pour ces couches d'assise / remblai
-        is_granular_layer = True
         obs = "Conforme"
         data_dict = {}
 
