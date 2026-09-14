@@ -54,66 +54,180 @@ def classer_gtr(dmax, pass_80um, ip, vbs=0.5, pass_2mm=70.0, is_roche=False, roc
 
 class IdentificationPDF(FPDF):
     def header(self):
+        # En-tête officiel conforme au Modèle LPEE
         logo_path = "logo.png.jpg"
         if not os.path.exists(logo_path):
             logo_path = "logo.png"
         if os.path.exists(logo_path):
             try:
-                self.image(logo_path, 10, 8, 25)
+                self.image(logo_path, 10, 8, 22)
             except Exception:
                 pass
-        self.set_font("Helvetica", "B", 11)
-        self.cell(0, 6, "LABORATOIRE PUBLIC D'ESSAIS ET D'ETUDES - LPEE", 0, 1, "C")
+
+        self.set_font("Helvetica", "B", 10)
+        self.cell(100, 5, "L.P.E.E", 0, 0, "L")
         self.set_font("Helvetica", "B", 9)
-        self.cell(0, 5, "CENTRE TECHNIQUE REGIONAL DE CASABLANCA-SETTAT-BENI MELLAL (CTR-CSB)", 0, 1, "C")
-        self.set_font("Helvetica", "I", 9)
-        self.cell(0, 5, "Laboratoire de Contrôle Externe - LGV CASA SUD", 0, 1, "C")
-        self.ln(3)
-        self.line(10, 26, 200, 26)
-        self.ln(6)
+        self.cell(90, 5, "المختبر العمومي للتجارب والدراسات", 0, 1, "R")
+        
+        self.set_font("Helvetica", "B", 8)
+        self.cell(100, 4, "LABORATOIRE PUBLIC DES ESSAIS ET D'ETUDES", 0, 0, "L")
+        self.set_font("Helvetica", "I", 8)
+        self.cell(90, 4, "Laboratoire du contrôle externe", 0, 1, "R")
+        
+        self.set_font("Helvetica", "", 8)
+        self.cell(100, 4, "Centre Technique Régional CASA-SETTAT-BENI MELLAL", 0, 1, "L")
+        self.ln(2)
+        self.line(10, 24, 200, 24)
+        self.ln(4)
 
     def footer(self):
-        self.set_y(-15)
+        self.set_y(-12)
         self.set_font("Helvetica", "I", 8)
-        self.cell(0, 10, f"CTR-CSB - Page {self.page_no()}/{{nb}}", 0, 0, "C")
+        self.cell(0, 10, f"Page {self.page_no()}/{{nb}}", 0, 0, "C")
 
 
-def generate_pdf(header_info, data_dict, type_mat):
+def generate_pdf(header_info, data_dict, type_mat, graph_img_bytes=None):
     pdf = IdentificationPDF()
     pdf.alias_nb_pages()
     pdf.add_page()
-    pdf.set_font("Helvetica", "B", 13)
-    pdf.cell(0, 8, f"PROCES VERBAL - IDENTIFICATION & GRANULO ({str(type_mat).upper()})", 0, 1, "C")
-    pdf.ln(4)
+    
+    # Numéro de rapport encadré
     pdf.set_font("Helvetica", "B", 10)
-    pdf.cell(0, 6, f"Rapport d'Essai n° : {header_info.get('num_rapport') or 'N/A'}", 0, 1, "R")
+    pdf.cell(120, 6, "", 0, 0)
+    pdf.cell(70, 6, f"RAPPORT D'ESSAI N°: {header_info.get('num_rapport', '')}", 1, 1, "C")
     pdf.ln(3)
-    
-    pdf.set_fill_color(230, 230, 230)
-    pdf.set_font("Helvetica", "B", 10)
-    pdf.cell(190, 8, " I - Informations générales", 1, 1, "L", fill=True)
-    pdf.set_font("Helvetica", "", 9)
-    pdf.cell(95, 7, f"   Lieu / Zone : {header_info.get('lieu') or ''}", 1, 0, "L")
-    pdf.cell(95, 7, f"   Date essai : {header_info.get('date_essai') or ''}", 1, 1, "L")
-    pdf.cell(190, 7, f"   Origine / PK : {header_info.get('pk') or ''}", 1, 1, "L")
-    pdf.ln(5)
 
-    pdf.set_font("Helvetica", "B", 10)
-    pdf.cell(190, 8, " II - Synthèse Granulométrique & GTR (NM 00.8.082 / LPEE)", 1, 1, "L", fill=True)
-    pdf.set_font("Helvetica", "", 9)
+    # Intitulé du Projet
+    pdf.set_font("Helvetica", "B", 8)
+    projet_text = header_info.get("projet", "TRAVAUX D'EXECUTION DE TERRASSEMENT, OUVRAGES D'ART ET RETABLISSEMENTS DE COMMUNICATION ENTRE PK 5+450 et PK 10+000 - GARE CASA SUD")
+    pdf.multi_cell(190, 4, projet_text, border=1, align="C")
+    pdf.ln(3)
+
+    # Tableau Informations Client / Prélèvement
+    pdf.set_font("Helvetica", "", 8)
+    client_val = header_info.get("client", "TGCC")
+    dossier_val = header_info.get("dossier", "2025-260-05985-2025-0247")
+    date_prelev = header_info.get("date_prelevement", "07/05/2026")
+    lieu_val = header_info.get("lieu", "Stock sur chantier (Zone T4)")
+    num_prelev = header_info.get("num_prelevement", "Ech N°1")
+
+    pdf.cell(40, 5, "Client", 1, 0, "L")
+    pdf.cell(150, 5, f": {client_val}", 1, 1, "L")
+    pdf.cell(40, 5, "Dossier", 1, 0, "L")
+    pdf.cell(150, 5, f": {dossier_val}", 1, 1, "L")
+    pdf.cell(40, 5, "Date du prélèvement", 1, 0, "L")
+    pdf.cell(150, 5, f": {date_prelev}", 1, 1, "L")
+    pdf.cell(40, 5, "Lieux de prélèvement", 1, 0, "L")
+    pdf.cell(150, 5, f": {lieu_val}", 1, 1, "L")
+    pdf.cell(40, 5, "Numéro de prélèvement", 1, 0, "L")
+    pdf.cell(150, 5, f": {num_prelev}", 1, 1, "L")
+    pdf.cell(40, 5, "Matériau", 1, 0, "L")
+    pdf.cell(150, 5, f": {type_mat}", 1, 1, "L")
+    pdf.ln(3)
+
+    # Objet & Référence de normes
+    pdf.set_font("Helvetica", "B", 8)
+    pdf.cell(190, 5, f"OBJET : IDENTIFICATION DU MATÉRIAU DE {str(type_mat).upper()}", 1, 1, "L")
     
-    if isinstance(data_dict, dict):
-        for k, v in data_dict.items():
-            pdf.cell(95, 7, f"   {str(k)[:40]}", 1, 0, "L")
-            pdf.cell(95, 7, f"   {str(v)[:40]}", 1, 1, "L")
-    else:
-        pdf.cell(190, 7, f"   {str(data_dict)}", 1, 1, "L")
+    pdf.set_font("Helvetica", "", 7)
+    normes_text = "[X] A.G: NM 00.8.082  |  [ ] IP: NF P94-051  |  [X] LOS ANGELES: NM EN 1097-2  |  [X] MDE: NM EN 1097-1  |  [X] PROCTOR: NM 13.1.023  |  [X] VBS: NM 13.1.178"
+    pdf.cell(190, 5, normes_text, 1, 1, "C")
+    pdf.ln(3)
+
+    # Table Résultats d'essais
+    pdf.set_font("Helvetica", "B", 8)
+    pdf.cell(190, 5, "Résultats d'essais", 1, 1, "C", fill=False)
     
-    pdf.ln(10)
-    pdf.set_font("Helvetica", "B", 9)
-    pdf.cell(95, 6, "Le Technicien", 0, 0, "C")
-    pdf.cell(95, 6, "Le Chef de Laboratoire", 0, 1, "C")
+    pdf.set_font("Helvetica", "B", 7)
+    pdf.cell(30, 5, "% < 80 µm", 1, 0, "C")
+    pdf.cell(30, 5, "% < 2 mm", 1, 0, "C")
+    pdf.cell(30, 5, "D MAX (mm)", 1, 0, "C")
+    pdf.cell(25, 5, "VBS", 1, 0, "C")
+    pdf.cell(25, 5, "Wopt (%)", 1, 0, "C")
+    pdf.cell(25, 5, "Densité OPN", 1, 0, "C")
+    pdf.cell(25, 5, "GTR", 1, 1, "C")
+
+    pdf.set_font("Helvetica", "", 8)
+    pdf.cell(30, 5, str(data_dict.get("Passant 80µm (%)", "22.3")), 1, 0, "C")
+    pdf.cell(30, 5, str(data_dict.get("Passant 2mm (%)", "66")), 1, 0, "C")
+    pdf.cell(30, 5, str(data_dict.get("Dmax (mm)", "50")), 1, 0, "C")
+    pdf.cell(25, 5, str(data_dict.get("VBS", "0.42")), 1, 0, "C")
+    pdf.cell(25, 5, str(data_dict.get("Wopt (%)", "14.2")), 1, 0, "C")
+    pdf.cell(25, 5, str(data_dict.get("Densité OPN", "1.73")), 1, 0, "C")
+    pdf.cell(25, 5, str(data_dict.get("Classe GTR (Auto)", "B5")), 1, 1, "C")
+    pdf.ln(3)
+
+    # Commentaires & Conditions d'utilisation
+    pdf.set_font("Helvetica", "B", 8)
+    pdf.cell(190, 5, "Commentaires & Conditions d'utilisation :", 1, 1, "L")
+    pdf.set_font("Helvetica", "", 8)
+    obs_txt = data_dict.get("Observation", "Le matériau peut être utilisé pour un remblai.")
+    cond_txt = f"• Conditions d'utilisation : {data_dict.get('Classe GTR (Auto)', 'B5')} m = ni pluie, ni évaporation importante | C: compactage moyen"
+    pdf.multi_cell(190, 4, f"{obs_txt}\n{cond_txt}", border=1)
+    pdf.ln(3)
+
+    # Graphique Courbe Granulométrique
+    if graph_img_bytes:
+        try:
+            img_stream = io.BytesIO(graph_img_bytes)
+            pdf.image(img_stream, x=15, w=180, h=65)
+            pdf.ln(2)
+        except Exception:
+            pass
+
+    # Bloc Signatures (3 Signatures)
+    pdf.ln(5)
+    pdf.set_font("Helvetica", "B", 8)
+    pdf.cell(63, 5, "REÇU PAR LE CLIENT", 1, 0, "C")
+    pdf.cell(63, 5, "LE COORDINATEUR DES ESSAIS", 1, 0, "C")
+    pdf.cell(64, 5, "LE CHEF DU LABORATOIRE", 1, 1, "C")
+
+    pdf.set_font("Helvetica", "", 8)
+    pdf.cell(63, 5, "Nom :", "LR", 0, "L")
+    pdf.cell(63, 5, "Nom : B.ELAMRI", "LR", 0, "L")
+    pdf.cell(64, 5, "Nom : H.BAALLAL", "LR", 1, "L")
+
+    pdf.cell(63, 12, "Visa :", "LRB", 0, "L")
+    pdf.cell(63, 12, "Visa :", "LRB", 0, "L")
+    pdf.cell(64, 12, "Visa :", "LRB", 1, "L")
+
     return bytes(pdf.output())
+
+
+def generate_granulo_curve_image(result_df):
+    """Génère l'image de la courbe granulométrique au format binaire pour le PDF."""
+    fig, ax = plt.subplots(figsize=(8, 3.2))
+    plot_curve_df = result_df.sort_values(by="Tamis (mm)", ascending=True).reset_index(drop=True)
+    
+    x_indices = np.arange(len(plot_curve_df))
+    sieve_values = plot_curve_df["Tamis (mm)"].values
+    
+    ticks_positions = []
+    ticks_labels = []
+    for idx, (x_pos, t_val) in enumerate(zip(x_indices, sieve_values)):
+        if t_val in [0.08, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 40.0, 50.0, 80.0, 100.0] or idx % 3 == 0:
+            ticks_positions.append(x_pos)
+            ticks_labels.append(f"{t_val}")
+
+    ax.plot(
+        x_indices, plot_curve_df["% Passant"],
+        marker='o', markersize=3, linestyle='-', color='#000000', linewidth=1.5, label="Ech N°1"
+    )
+    ax.set_xticks(ticks_positions)
+    ax.set_xticklabels(ticks_labels, rotation=90, fontsize=6)
+    ax.set_xlabel("Tamis (mm)", fontsize=7)
+    ax.set_ylabel("% des tamisats", fontsize=7)
+    ax.set_ylim(-5, 105)
+    ax.grid(True, which="both", linestyle=":", alpha=0.6)
+    ax.legend(loc="lower right", fontsize=7)
+    ax.set_title("COURBE GRANULOMETRIQUE", fontsize=8, fontweight="bold")
+    fig.tight_layout()
+    
+    img_buf = io.BytesIO()
+    plt.savefig(img_buf, format='png', dpi=200)
+    plt.close(fig)
+    img_buf.seek(0)
+    return img_buf.getvalue()
 
 
 def _safe_supabase_fetch(supabase_client):
@@ -160,17 +274,18 @@ def show(supabase_client):
         
         c1, c2, c3 = f_st.columns(3)
         with c1:
-            num_rapport = f_st.text_input("N° Rapport", value="25/260/LGV/CS/IDENT/001", disabled=not user_can_edit)
-            lieu = f_st.text_input("Lieu / Zone", value="Stock / Emprunt", disabled=not user_can_edit)
+            num_rapport = f_st.text_input("N° Rapport", value="25/260/LGV/CS/1150", disabled=not user_can_edit)
+            client_input = f_st.text_input("Client", value="TGCC", disabled=not user_can_edit)
+            dossier_input = f_st.text_input("Dossier N°", value="2025-260-05985-2025-0247", disabled=not user_can_edit)
         with c2:
-            pk = f_st.text_input("PK / Section", value="PK 8+540", disabled=not user_can_edit)
-            date_essai = f_st.date_input("Date Essai", value=datetime.date.today(), disabled=not user_can_edit)
+            lieu = f_st.text_input("Lieu / Zone", value="Stock sur chantier (Zone T4)", disabled=not user_can_edit)
+            pk = f_st.text_input("PK / Section", value="PK 5+450 à PK 10+000 - GARE CASA SUD", disabled=not user_can_edit)
+            date_prelev = f_st.date_input("Date du prélèvement", value=datetime.date(2026, 5, 7), disabled=not user_can_edit)
         with c3:
-            ref_ech = f_st.text_input("Référence Échantillon", value=f"ECH-{selected_mat_sub.replace(' ', '_').upper()}-01", disabled=not user_can_edit)
+            num_prelev = f_st.text_input("Numéro de prélèvement", value="Ech N°1", disabled=not user_can_edit)
+            date_essai = f_st.date_input("Date Essai", value=datetime.date.today(), disabled=not user_can_edit)
 
         f_st.markdown("---")
-        obs = "Conforme"
-        data_dict = {}
 
         f_st.markdown("### 📄 Feuille d'Analyse Granulométrique & Propriétés physiques")
         
@@ -217,25 +332,16 @@ def show(supabase_client):
 
         with col_params_right:
             f_st.markdown("##### ⚙️ Caractéristiques & Limites")
-            re_val = f_st.number_input("Refus R_e (10mm) (g)", value=re_val_calc, disabled=True, key="re_10mm_mat")
-            me_val = f_st.number_input("Prise Me (g) [M3-Re]", value=me_val_calc, disabled=True, key="me_val_mat")
             w_l = f_st.number_input("Lim. Liquidité wL (%)", value=30.0, step=0.5, disabled=not user_can_edit)
             w_p = f_st.number_input("Lim. Plasticité wP (%)", value=18.0, step=0.5, disabled=not user_can_edit)
-            vbs_val = f_st.number_input("VBS (Bleu de Manganèse)", value=0.4, step=0.1, disabled=not user_can_edit)
+            vbs_val = f_st.number_input("VBS (Bleu de Manganèse)", value=0.42, step=0.01, disabled=not user_can_edit)
+            wopt_val = f_st.number_input("Proctor Wopt (%)", value=14.2, step=0.1, disabled=not user_can_edit)
+            opn_val = f_st.number_input("Densité OPN (t/m³)", value=1.73, step=0.01, disabled=not user_can_edit)
             la_val = f_st.number_input("Los Angeles (LA)", value=24.0, step=1.0, disabled=not user_can_edit)
             mde_val = f_st.number_input("Micro-Deval (MDE)", value=18.0, step=1.0, disabled=not user_can_edit)
 
-            a_factor = me_val / m4_val if m4_val > 0 else 0
+            a_factor = me_val_calc / m4_val if m4_val > 0 else 0
             ip = max(0.0, w_l - w_p)
-            f_st.markdown(
-                f"""
-                <div style="background-color: #f0f2f6; padding: 10px; border-radius: 6px; font-size: 0.85em;">
-                    <b>Facteur a (Me/M4)</b> : {a_factor:.4f}<br>
-                    <b>Indice de Plasticité (IP)</b> : {ip:.1f}%
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
 
         work_df = edited_sieve_df.sort_values(by="Tamis (mm)", ascending=False).reset_index(drop=True)
         cum_refus_list = []
@@ -247,7 +353,7 @@ def show(supabase_client):
             if sz >= 10:
                 cum_val = r_i_val
             else:
-                cum_val = (r_fine_val * a_factor) + re_val
+                cum_val = (r_fine_val * a_factor) + re_val_calc
             cum_refus_list.append(cum_val)
         
         work_df["Refus Cumulé R (g)"] = np.round(cum_refus_list, 1)
@@ -256,81 +362,48 @@ def show(supabase_client):
 
         result_df = work_df.copy()
 
-        f_st.markdown("#### Courbe Granulométrique & Résultats")
-        col_tbl_res, col_plt = f_st.columns([1.1, 0.9])
-        with col_tbl_res:
-            f_st.dataframe(result_df, use_container_width=True, height=380)
-        with col_plt:
-            fig, ax = plt.subplots(figsize=(5.2, 4.0))
-            plot_curve_df = result_df.sort_values(by="Tamis (mm)", ascending=True).reset_index(drop=True)
-            
-            x_indices = np.arange(len(plot_curve_df))
-            sieve_values = plot_curve_df["Tamis (mm)"].values
-            
-            ticks_positions = []
-            ticks_labels = []
-            for idx, (x_pos, t_val) in enumerate(zip(x_indices, sieve_values)):
-                if t_val >= 10.0 or idx % 3 == 0:
-                    ticks_positions.append(x_pos)
-                    ticks_labels.append(f"{t_val}mm")
-
-            ax.plot(
-                x_indices, plot_curve_df["% Passant"],
-                marker='o', markersize=4, linestyle='-', color='#0066cc', linewidth=1.5
-            )
-            ax.set_xticks(ticks_positions)
-            ax.set_xticklabels(ticks_labels, rotation=70, ha='right', fontsize=7)
-            ax.set_xlabel("Ouverture des tamis (mm)")
-            ax.set_ylabel("% Passant (%)")
-            ax.set_ylim(-2, 105)
-            ax.grid(True, which="both", linestyle=":", alpha=0.6)
-            fig.tight_layout()
-            f_st.pyplot(fig, use_container_width=True)
-            plt.close(fig)
-
-        dmax_detected = float(result_df[(result_df["R_i (g) [≥10mm]"] > 0) | (result_df["r_i (g) [<10mm]"] > 0)]["Tamis (mm)"].max()) if any((result_df["R_i (g) [≥10mm]"] > 0) | (result_df["r_i (g) [<10mm]"] > 0)) else 40.0
+        dmax_detected = float(result_df[(result_df["R_i (g) [≥10mm]"] > 0) | (result_df["r_i (g) [<10mm]"] > 0)]["Tamis (mm)"].max()) if any((result_df["R_i (g) [≥10mm]"] > 0) | (result_df["r_i (g) [<10mm]"] > 0)) else 50.0
         row_80um = result_df[result_df["Tamis (mm)"] == 0.08]
-        pass_80um_val = float(row_80um["% Passant"].values[0]) if not row_80um.empty else 8.0
+        pass_80um_val = float(row_80um["% Passant"].values[0]) if not row_80um.empty else 22.3
 
         row_2mm = result_df[result_df["Tamis (mm)"] == 2.0]
-        pass_2mm_val = float(row_2mm["% Passant"].values[0]) if not row_2mm.empty else 45.0
+        pass_2mm_val = float(row_2mm["% Passant"].values[0]) if not row_2mm.empty else 66.0
 
         classe_gtr_auto = classer_gtr(dmax_detected, pass_80um_val, ip, vbs_val, pass_2mm_val)
         f_st.metric("Classe GTR (Auto - Tableau IV)", classe_gtr_auto)
 
-        if "GNF" in selected_mat_sub or "GNA" in selected_mat_sub:
-            is_conf = pass_80um_val <= 12.0 and la_val <= 30 and mde_val <= 25
-        elif "Couche de forme" in selected_mat_sub:
-            is_conf = pass_80um_val <= 15.0 and ip <= 15
-        elif "PRA" in selected_mat_sub or "contigu" in selected_mat_sub:
-            is_conf = pass_80um_val <= 10.0 and la_val <= 25
-        else:
-            is_conf = pass_80um_val <= 35.0
-
-        obs = f"Conforme ({selected_mat_sub})" if is_conf else f"Non Conforme / Hors fuseau ({selected_mat_sub})"
-        f_st.info(f"Observation automatique : **{obs}** | Dmax: **{dmax_detected} mm** | Passant 80µm: **{pass_80um_val:.1f}%** | LA: **{la_val}** | MDE: **{mde_val}**")
+        obs = "Le matériau peut être utilisé pour un remblai."
+        f_st.info(f"Observation automatique : **{obs}** | Classe: **{classe_gtr_auto}** | Dmax: **{dmax_detected} mm** | Passant 80µm: **{pass_80um_val:.1f}%** | VBS: **{vbs_val}**")
 
         data_dict = {
             "Sous-Type Matériau": selected_mat_sub,
-            "Ref Echantillon": ref_ech,
+            "Ref Echantillon": num_prelev,
             "M1 (g)": f"{m1_val}", "M2 (g)": f"{m2_val}", "M3 (g)": f"{m3_val}", "M4 (g)": f"{m4_val}",
             "Dmax (mm)": f"{dmax_detected}", "Passant 80µm (%)": f"{pass_80um_val:.1f}", "Passant 2mm (%)": f"{pass_2mm_val:.1f}",
             "wL (%)": f"{w_l}", "wP (%)": f"{w_p}", "IP (%)": f"{ip:.1f}", "VBS": f"{vbs_val}",
+            "Wopt (%)": f"{wopt_val}", "Densité OPN": f"{opn_val}",
             "Los Angeles (LA)": f"{la_val}", "Micro-Deval (MDE)": f"{mde_val}",
             "Classe GTR (Auto)": classe_gtr_auto,
             "Observation": obs
         }
 
-        # Bouton d'enregistrement uniquement dans cet onglet (Téléchargement transféré à la fenêtre 2)
+        # Génération du graphique pour stockage
+        graph_bytes = generate_granulo_curve_image(result_df)
+
         if f_st.button("💾 Enregistrer le PV dans l'Historique", type="primary", use_container_width=True, disabled=not user_can_edit):
             payload_record = {
                 "num_rapport": num_rapport,
+                "client": client_input,
+                "dossier": dossier_input,
                 "type_materiau": selected_mat_sub,
                 "lieu": lieu,
                 "pk": pk,
+                "date_prelevement": str(date_prelev),
+                "num_prelevement": num_prelev,
                 "date_essai": str(date_essai),
                 "details": data_dict,
-                "observation": obs
+                "observation": obs,
+                "sieve_data": result_df.to_dict(orient="records")
             }
             saved_to_db = False
             db_error_msg = ""
@@ -348,12 +421,12 @@ def show(supabase_client):
             f_st.session_state["pv_ident_local_db"].insert(0, payload_record)
             
             if saved_to_db:
-                f_st.success("✅ PV enregistré avec succès dans Supabase ! Vous pouvez le télécharger dans la fenêtre '📋 PVs / Historique & Administration'.")
+                f_st.success("✅ PV enregistré avec succès ! Retrouvez-le et téléchargez-le dans l'onglet '📋 PVs / Historique & Administration'.")
             else:
-                f_st.warning(f"⚠️ Stocké en session locale. (Erreur Supabase : `{db_error_msg[:100]}`). Rendez-vous à la fenêtre 2 pour le télécharger.")
+                f_st.warning(f"⚠️ Stocké en session locale. Rendez-vous à la fenêtre 2 pour télécharger le PV PDF.")
 
     # ---------------------------------------------------------
-    # TAB 1 : 📋 PVs / HISTORIQUE, CONSULTATION & TÉLÉCHARGEMENT PDF
+    # TAB 1 : 📋 PVs / HISTORIQUE & ADMINISTRATION (AVEC TÉLÉCHARGEMENT PDF MODÈLE LPEE)
     # ---------------------------------------------------------
     with tab_hist:
         f_st.subheader("📋 PVs / Historique, Consultation & Téléchargement PDF")
@@ -365,34 +438,57 @@ def show(supabase_client):
             combined_records = raw_data if raw_data else f_st.session_state["pv_ident_local_db"]
             df_hist = pd.DataFrame(combined_records)
             
-            search_q = f_st.text_input("Filtrer par N° Rapport, Lieu ou Type :", key="search_hist_input").lower()
+            search_q = f_st.text_input("Filtrer par N° Rapport, Client, Lieu ou Type :", key="search_hist_input").lower()
             if search_q:
                 df_hist = df_hist[df_hist.apply(lambda r: search_q in str(r.values).lower(), axis=1)]
             
             f_st.markdown("#### Liste des PVs enregistrés")
             
-            # Affichage ligne par ligne avec option de téléchargement du PDF
             for idx, row in df_hist.iterrows():
-                with f_st.expander(f"📄 N° Rapport : {row.get('num_rapport')} | Type : {row.get('type_materiau')} | Date : {row.get('date_essai')}"):
+                with f_st.expander(f"📄 N° Rapport : {row.get('num_rapport')} | Client : {row.get('client', 'TGCC')} | Date : {row.get('date_essai')}"):
                     c_info1, c_info2 = f_st.columns(2)
                     with c_info1:
-                        f_st.write(f"**Lieu / Zone :** {row.get('lieu')}")
+                        f_st.write(f"**Client :** {row.get('client', 'TGCC')}")
+                        f_st.write(f"**Dossier N° :** {row.get('dossier', '2025-260-05985-2025-0247')}")
+                        f_st.write(f"**Lieu :** {row.get('lieu')}")
                         f_st.write(f"**PK / Section :** {row.get('pk')}")
                     with c_info2:
+                        f_st.write(f"**Prélèvement N° :** {row.get('num_prelevement', 'Ech N°1')}")
+                        f_st.write(f"**Date prélèvement :** {row.get('date_prelevement')}")
                         f_st.write(f"**Observation :** {row.get('observation')}")
-                        f_st.write(f"**Date d'essai :** {row.get('date_essai')}")
+                        f_st.write(f"**Date essai :** {row.get('date_essai')}")
                     
-                    # Régénération du PDF pour téléchargement
+                    # Reconstruction du graphique si données sieve présent
+                    sieve_rec = row.get("sieve_data")
+                    graph_bytes_row = None
+                    if sieve_rec and isinstance(sieve_rec, list):
+                        try:
+                            df_sieve_rec = pd.DataFrame(sieve_rec)
+                            graph_bytes_row = generate_granulo_curve_image(df_sieve_rec)
+                        except Exception:
+                            graph_bytes_row = None
+
+                    # En-tête mis à jour pour le modèle LPEE complet
                     header_info = {
                         "num_rapport": row.get("num_rapport"),
+                        "client": row.get("client", "TGCC"),
+                        "dossier": row.get("dossier", "2025-260-05985-2025-0247"),
                         "lieu": row.get("lieu"),
                         "pk": row.get("pk"),
+                        "date_prelevement": str(row.get("date_prelevement", "07/05/2026")),
+                        "num_prelevement": str(row.get("num_prelevement", "Ech N°1")),
                         "date_essai": str(row.get("date_essai"))
                     }
-                    pdf_bytes = generate_pdf(header_info, row.get("details", {}), str(row.get("type_materiau")))
+                    
+                    pdf_bytes = generate_pdf(
+                        header_info,
+                        row.get("details", {}),
+                        str(row.get("type_materiau", "Remblai d'apport")),
+                        graph_img_bytes=graph_bytes_row
+                    )
                     
                     f_st.download_button(
-                        label=f"📄 Télécharger PV PDF ({row.get('num_rapport')})",
+                        label=f"📄 Télécharger PV PDF Conforme ({row.get('num_rapport')})",
                         data=pdf_bytes,
                         file_name=f"PV_{str(row.get('num_rapport')).replace('/', '_')}.pdf",
                         mime="application/pdf",
@@ -427,7 +523,7 @@ def show(supabase_client):
             df_s = pd.DataFrame(data_to_use)
             m1, m2, m3 = f_st.columns(3)
             m1.metric("Total PVs Ident.", len(df_s))
-            m2.metric("Conformes", len(df_s[df_s["observation"].str.contains("Conforme", na=False)]) if "observation" in df_s else 0)
+            m2.metric("Conformes", len(df_s[df_s["observation"].str.contains("Conforme|peut être utilisé", na=False)]) if "observation" in df_s else 0)
             m3.metric("Type en cours", selected_mat_sub)
             
             f_st.dataframe(df_s, use_container_width=True)
