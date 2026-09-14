@@ -941,4 +941,3 @@ def show(supabase_client, can_edit=False, is_admin=False):
 
             except Exception as e:
                 st.error(f"❌ Erreur lors de la génération de la synthèse : {e}")
-```[cite: 3]
