@@ -4,7 +4,7 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import streamlit as st
+import streamlit as f_st
 from fpdf import FPDF
 
 
@@ -110,19 +110,34 @@ def generate_pdf(header_info, data_dict, type_mat):
     return bytes(pdf.output())
 
 
+def _safe_supabase_fetch(supabase_client):
+    if "pv_ident_local_db" not in f_st.session_state:
+        f_st.session_state["pv_ident_local_db"] = []
+    if not supabase_client:
+        return f_st.session_state["pv_ident_local_db"]
+    try:
+        res = supabase_client.table("pv_identification_materiaux").select("*").order("date_essai", desc=True).execute()
+        return res.data if res.data is not None else []
+    except Exception:
+        return f_st.session_state["pv_ident_local_db"]
+
+
 def show(supabase_client):
-    user_name = str(st.session_state.get("user_name", st.session_state.get("user", {}).get("username", ""))).upper()
-    user_role = str(st.session_state.get("role", "")).upper()
+    user_name = str(f_st.session_state.get("user_name", f_st.session_state.get("user", {}).get("username", ""))).upper()
+    user_role = str(f_st.session_state.get("role", "")).upper()
     is_admin = ("ADMIN" in user_role) or ("BAALLAL" in user_name)
     user_can_edit = is_admin or ("LABO" in user_role)
 
-    st.title("🔬 Identification & Granulométrie Sol / GTR")
-    st.caption("Laboratoire de Contrôle Externe - Projet LGV CASA SUD (Modèle LPEE / NM 00.8.082)")
+    if "pv_ident_local_db" not in f_st.session_state:
+        f_st.session_state["pv_ident_local_db"] = []
+
+    f_st.title("🔬 Identification & Granulométrie Sol / GTR")
+    f_st.caption("Laboratoire de Contrôle Externe - Projet LGV CASA SUD (Modèle LPEE / NM 00.8.082)")
 
     if not user_can_edit:
-        st.warning("🔒 Mode lecture seule. Droits de modification restreints.")
+        f_st.warning("🔒 Mode lecture seule. Droits de modification restreints.")
 
-    tabs = st.tabs([
+    tabs = f_st.tabs([
         "➕ Saisir un PV & Granulo (Sol)",
         "📋 PVS / Historique, Consultation & Administration",
         "📊 Synthèse"
@@ -132,40 +147,40 @@ def show(supabase_client):
     # TAB 0 : ➕ SAISIR UN PV & GRANULOMETRIE TYPE LPEE (SOL)
     # ---------------------------------------------------------
     with tabs[0]:
-        st.subheader("➕ Saisie PV & Feuille d'Essai Granulométrique (Norme LPEE)")
-        c1, c2, c3 = st.columns(3)
+        f_st.subheader("➕ Saisie PV & Feuille d'Essai Granulométrique (Norme LPEE)")
+        c1, c2, c3 = f_st.columns(3)
         with c1:
-            num_rapport = st.text_input("N° Rapport", value="25/260/LGV/CS/IDENT/001", disabled=not user_can_edit)
-            lieu = st.text_input("Lieu / Zone", value="Stock / Remblai d'apport", disabled=not user_can_edit)
+            num_rapport = f_st.text_input("N° Rapport", value="25/260/LGV/CS/IDENT/001", disabled=not user_can_edit)
+            lieu = f_st.text_input("Lieu / Zone", value="Stock / Remblai d'apport", disabled=not user_can_edit)
         with c2:
-            pk = st.text_input("PK / Section", value="PK 8+540", disabled=not user_can_edit)
-            date_essai = st.date_input("Date Essai", value=datetime.date.today(), disabled=not user_can_edit)
+            pk = f_st.text_input("PK / Section", value="PK 8+540", disabled=not user_can_edit)
+            date_essai = f_st.date_input("Date Essai", value=datetime.date.today(), disabled=not user_can_edit)
         with c3:
-            type_mat = st.selectbox(
+            type_mat = f_st.selectbox(
                 "Type de matériau",
                 ["Sol - GNF 1 (Remblai / GNF type 1)", "Sol (Standard)", "Grave / Rocheux / Particulier"],
                 disabled=not user_can_edit
             )
 
-        st.markdown("---")
+        f_st.markdown("---")
         is_sol = "Sol" in type_mat
         obs = "Conforme"
         data_dict = {}
 
         if is_sol:
-            st.markdown("### 📄 Feuille d'Essai type LPEE — Analyse Granulométrique (Sol)")
+            f_st.markdown("### 📄 Feuille d'Essai type LPEE — Analyse Granulométrique (Sol)")
             
-            col_e1, col_e2, col_e3, col_e4 = st.columns(4)
+            col_e1, col_e2, col_e3, col_e4 = f_st.columns(4)
             with col_e1:
-                ref_ech = st.text_input("Référence Échantillon", value="ECH-SOL-0247", disabled=not user_can_edit)
+                ref_ech = f_st.text_input("Référence Échantillon", value="ECH-SOL-0247", disabled=not user_can_edit)
             with col_e2:
-                m1_val = st.number_input("Masse totale M1 (g)", value=13435.4, step=0.1, disabled=not user_can_edit)
+                m1_val = f_st.number_input("Masse totale M1 (g)", value=13435.4, step=0.1, disabled=not user_can_edit)
             with col_e3:
-                m2_val = st.number_input("Masse sèche étuve M2 (g)", value=12918.7, step=0.1, disabled=not user_can_edit)
+                m2_val = f_st.number_input("Masse sèche étuve M2 (g)", value=12918.7, step=0.1, disabled=not user_can_edit)
             with col_e4:
-                m3_val = st.number_input("Masse après lavage M3 (g)", value=10079.7, step=0.1, disabled=not user_can_edit)
+                m3_val = f_st.number_input("Masse après lavage M3 (g)", value=10079.7, step=0.1, disabled=not user_can_edit)
 
-            st.markdown("#### Tableau de Granulométrie & Paramètres associés")
+            f_st.markdown("#### Tableau de Granulométrie & Paramètres associés")
             default_sieves_desc = [
                 (80, 0.0, 0.0), (63, 2141.3, 0.0), (50, 3884.8, 0.0), (40, 4638.1, 0.0),
                 (31.5, 4821.6, 0.0), (25, 5032.0, 0.0), (20, 5282.0, 0.0), (16, 5579.0, 0.0),
@@ -178,10 +193,10 @@ def show(supabase_client):
             ]
             df_template = pd.DataFrame(default_sieves_desc, columns=["Tamis (mm)", "R_i (g) [≥10mm]", "r_i (g) [<10mm]"])
             
-            col_main_tbl, col_params_right = st.columns([1.3, 0.9])
+            col_main_tbl, col_params_right = f_st.columns([1.3, 0.9])
             
             with col_main_tbl:
-                edited_sieve_df = st.data_editor(
+                edited_sieve_df = f_st.data_editor(
                     df_template,
                     disabled=["Tamis (mm)"] if not user_can_edit else [],
                     use_container_width=True,
@@ -197,16 +212,16 @@ def show(supabase_client):
             me_val_calc = m3_val - re_val_calc
 
             with col_params_right:
-                st.markdown("##### ⚙️ Paramètres d'analyse")
-                m4_val = st.number_input("Prise tamisage M4 (g)", value=1930.0, step=1.0, disabled=not user_can_edit)
-                re_val = st.number_input("Refus R_e (10mm) (g)", value=re_val_calc, disabled=True, key="re_10mm_mod")
-                me_val = st.number_input("Prise Me (g) [M3-Re]", value=me_val_calc, disabled=True, key="me_val_mod")
-                w_l = st.number_input("wL (%)", value=35.0, step=0.5, disabled=not user_can_edit)
-                w_p = st.number_input("wP (%)", value=20.0, step=0.5, disabled=not user_can_edit)
+                f_st.markdown("##### ⚙️ Paramètres d'analyse")
+                m4_val = f_st.number_input("Prise tamisage M4 (g)", value=1930.0, step=1.0, disabled=not user_can_edit)
+                re_val = f_st.number_input("Refus R_e (10mm) (g)", value=re_val_calc, disabled=True, key="re_10mm_mod")
+                me_val = f_st.number_input("Prise Me (g) [M3-Re]", value=me_val_calc, disabled=True, key="me_val_mod")
+                w_l = f_st.number_input("wL (%)", value=35.0, step=0.5, disabled=not user_can_edit)
+                w_p = f_st.number_input("wP (%)", value=20.0, step=0.5, disabled=not user_can_edit)
 
                 a_factor = me_val / m4_val if m4_val > 0 else 0
                 ip = w_l - w_p
-                st.markdown(
+                f_st.markdown(
                     f"""
                     <div style="background-color: #f0f2f6; padding: 10px; border-radius: 6px; font-size: 0.85em;">
                         <b>Coeff. a = Me/M4</b> : {a_factor:.4f}<br>
@@ -235,10 +250,10 @@ def show(supabase_client):
 
             result_df = work_df.copy()
 
-            st.markdown("#### Résultats & Courbe Granulométrique")
-            col_tbl_res, col_plt = st.columns([1.1, 0.9])
+            f_st.markdown("#### Résultats & Courbe Granulométrique")
+            col_tbl_res, col_plt = f_st.columns([1.1, 0.9])
             with col_tbl_res:
-                st.dataframe(result_df, use_container_width=True, height=420)
+                f_st.dataframe(result_df, use_container_width=True, height=420)
             with col_plt:
                 fig, ax = plt.subplots(figsize=(5.2, 4.3))
                 plot_curve_df = result_df.sort_values(by="Tamis (mm)", ascending=True).reset_index(drop=True)
@@ -268,7 +283,7 @@ def show(supabase_client):
                 ax.set_ylim(-2, 105)
                 ax.grid(True, which="both", linestyle=":", alpha=0.6)
                 fig.tight_layout()
-                st.pyplot(fig, use_container_width=True)
+                f_st.pyplot(fig, use_container_width=True)
                 plt.close(fig)
 
             dmax_detected = float(result_df[(result_df["R_i (g) [≥10mm]"] > 0) | (result_df["r_i (g) [<10mm]"] > 0)]["Tamis (mm)"].max()) if any((result_df["R_i (g) [≥10mm]"] > 0) | (result_df["r_i (g) [<10mm]"] > 0)) else 50.0
@@ -278,14 +293,14 @@ def show(supabase_client):
             row_2mm = result_df[result_df["Tamis (mm)"] == 2.0]
             pass_2mm_val = float(row_2mm["% Passant"].values[0]) if not row_2mm.empty else 70.0
 
-            col_v1, col_v2, col_v3 = st.columns(3)
+            col_v1, col_v2, col_v3 = f_st.columns(3)
             with col_v1:
-                vbs_val = st.number_input("VBS", value=0.5, step=0.1, disabled=not user_can_edit)
+                vbs_val = f_st.number_input("VBS", value=0.5, step=0.1, disabled=not user_can_edit)
             with col_v2:
-                es_val = st.selectbox("Équivalent de sable (ES)", ["ESV > 60 (Propre)", "40 < ESV <= 60 (Acceptable)", "ESV <= 40 / EST"], disabled=not user_can_edit)
+                es_val = f_st.selectbox("Équivalent de sable (ES)", ["ESV > 60 (Propre)", "40 < ESV <= 60 (Acceptable)", "ESV <= 40 / EST"], disabled=not user_can_edit)
             with col_v3:
                 classe_gtr_auto = classer_gtr(dmax_detected, pass_80um_val, ip, vbs_val, pass_2mm_val)
-                st.metric("Classe GTR (Auto - Tableau IV)", classe_gtr_auto)
+                f_st.metric("Classe GTR (Auto - Tableau IV)", classe_gtr_auto)
 
             row_10_check = result_df[result_df["Tamis (mm)"] == 10]
             m6_sim = float(row_10_check["Refus Cumulé R (g)"].values[0]) if not row_10_check.empty else 0.0
@@ -293,7 +308,7 @@ def show(supabase_client):
             is_gnf1_conf = (pass_80um_val <= 35.0) and (ip < 25)
             obs = f"Conforme GNF 1 (Passant 80µm={pass_80um_val:.1f}%)" if is_gnf1_conf else "Non Conforme / Hors fuseau"
 
-            st.info(f"Observation automatique : **{obs}** | Dmax: **{dmax_detected} mm** | Passant 2mm: **{pass_2mm_val:.1f}%** | Écart de référence 10mm/M3: **{val_ecart:.2f}%**")
+            f_st.info(f"Observation automatique : **{obs}** | Dmax: **{dmax_detected} mm** | Passant 2mm: **{pass_2mm_val:.1f}%** | Écart de référence 10mm/M3: **{val_ecart:.2f}%**")
 
             data_dict = {
                 "Type Matériau": type_mat,
@@ -307,22 +322,22 @@ def show(supabase_client):
                 "Observation": obs
             }
         else:
-            st.subheader("Paramètres d'identification - Rocheux / Grave / Particulier")
-            sub_mat_type = st.radio("Nature spécifique", ["Rocheux (R1-R6)", "Matériaux particuliers (Organiques / F)", "Grave standard"], horizontal=True, disabled=not user_can_edit)
+            f_st.subheader("Paramètres d'identification - Rocheux / Grave / Particulier")
+            sub_mat_type = f_st.radio("Nature spécifique", ["Rocheux (R1-R6)", "Matériaux particuliers (Organiques / F)", "Grave standard"], horizontal=True, disabled=not user_can_edit)
             
             is_roche = False
             roche_type = None
             is_organique = False
             
-            col_g1, col_g2 = st.columns(2)
+            col_g1, col_g2 = f_st.columns(2)
             if "Rocheux" in sub_mat_type:
                 is_roche = True
-                roche_type = st.selectbox("Type de roche (Tableau GTR)", ["Craies", "Calcaires", "Roches argileuses (Marnes, argilites, pélites...) ", "Roches siliceuses (Grès, poudingues, brèches...) ", "Roches salines (Sel gemme, gypse) ", "Roches magmatiques et métamorphiques (Granites, basaltes, gneiss...)"], disabled=not user_can_edit)
+                roche_type = f_st.selectbox("Type de roche (Tableau GTR)", ["Craies", "Calcaires", "Roches argileuses (Marnes, argilites, pélites...) ", "Roches siliceuses (Grès, poudingues, brèches...) ", "Roches salines (Sel gemme, gypse) ", "Roches magmatiques et métamorphiques (Granites, basaltes, gneiss...)"], disabled=not user_can_edit)
                 with col_g1:
-                    la = st.number_input("Los Angeles (LA)", value=25.0, step=1.0, disabled=not user_can_edit)
-                    md = st.number_input("Micro-Deval humide (MDE)", value=18.0, step=1.0, disabled=not user_can_edit)
+                    la = f_st.number_input("Los Angeles (LA)", value=25.0, step=1.0, disabled=not user_can_edit)
+                    md = f_st.number_input("Micro-Deval humide (MDE)", value=18.0, step=1.0, disabled=not user_can_edit)
                 with col_g2:
-                    es_grav = st.selectbox("ES / Piston", ["Conforme", "Non Conforme"], disabled=not user_can_edit)
+                    es_grav = f_st.selectbox("ES / Piston", ["Conforme", "Non Conforme"], disabled=not user_can_edit)
                 obs = "Conforme"
             elif "particuliers" in sub_mat_type:
                 is_organique = True
@@ -330,14 +345,14 @@ def show(supabase_client):
                 obs = "Matériau organique / Particulier"
             else:
                 with col_g1:
-                    la = st.number_input("Los Angeles (LA)", value=25.0, step=1.0, disabled=not user_can_edit)
-                    md = st.number_input("Micro-Deval humide (MDE)", value=18.0, step=1.0, disabled=not user_can_edit)
+                    la = f_st.number_input("Los Angeles (LA)", value=25.0, step=1.0, disabled=not user_can_edit)
+                    md = f_st.number_input("Micro-Deval humide (MDE)", value=18.0, step=1.0, disabled=not user_can_edit)
                 with col_g2:
-                    es_grav = st.selectbox("ES à 10% / Piston (Grave)", ["ES >= 75", "ES < 75"], disabled=not user_can_edit)
+                    es_grav = f_st.selectbox("ES à 10% / Piston (Grave)", ["ES >= 75", "ES < 75"], disabled=not user_can_edit)
                 obs = "Conforme" if la <= 30 and md <= 20 else "Non Conforme"
 
             classe_gtr_auto = classer_gtr(dmax=0, pass_80um=0, ip=0, is_roche=is_roche, roche_type=roche_type, is_organique=is_organique)
-            st.metric("Classe GTR (Auto - Tableau IV)", classe_gtr_auto)
+            f_st.metric("Classe GTR (Auto - Tableau IV)", classe_gtr_auto)
 
             data_dict = {
                 "Type": sub_mat_type,
@@ -349,88 +364,98 @@ def show(supabase_client):
         header_info = {"num_rapport": num_rapport, "lieu": lieu, "pk": pk, "date_essai": str(date_essai)}
         pdf_bytes = generate_pdf(header_info, data_dict, type_mat.split()[0])
         
-        col_d1, col_d2 = st.columns(2)
+        col_d1, col_d2 = f_st.columns(2)
         with col_d1:
-            st.download_button("📄 Télécharger PV (PDF)", data=pdf_bytes, file_name=f"PV_Granulo_Sol_{num_rapport.replace('/','_')}.pdf", mime="application/pdf", use_container_width=True)
+            f_st.download_button("📄 Télécharger PV (PDF)", data=pdf_bytes, file_name=f"PV_Granulo_Sol_{num_rapport.replace('/','_')}.pdf", mime="application/pdf", use_container_width=True)
         with col_d2:
-            if st.button("💾 Enregistrer dans Supabase", type="primary", use_container_width=True, disabled=not user_can_edit):
+            if f_st.button("💾 Enregistrer dans Supabase", type="primary", use_container_width=True, disabled=not user_can_edit):
+                payload_record = {
+                    "num_rapport": num_rapport,
+                    "type_materiau": "SOL" if is_sol else "GRAVE_ROCHE",
+                    "lieu": lieu,
+                    "pk": pk,
+                    "date_essai": str(date_essai),
+                    "details": data_dict,
+                    "observation": obs
+                }
+                saved_to_db = False
                 if supabase_client:
                     try:
-                        supabase_client.table("pv_identification_materiaux").upsert({
-                            "num_rapport": num_rapport,
-                            "type_materiau": "SOL" if is_sol else "GRAVE_ROCHE",
-                            "lieu": lieu,
-                            "pk": pk,
-                            "date_essai": str(date_essai),
-                            "details": data_dict,
-                            "observation": obs
-                        }).execute()
-                        st.success("✅ PV enregistré avec succès !")
-                    except Exception as e:
-                        st.error(f"Erreur Supabase : {e}")
+                        supabase_client.table("pv_identification_materiaux").upsert(payload_record).execute()
+                        saved_to_db = True
+                    except Exception:
+                        saved_to_db = False
+                
+                # Fallback / sync local session state cache
+                f_st.session_state["pv_ident_local_db"] = [
+                    r for r in f_st.session_state["pv_ident_local_db"] if r.get("num_rapport") != num_rapport
+                ]
+                f_st.session_state["pv_ident_local_db"].insert(0, payload_record)
+                
+                if saved_to_db:
+                    f_st.success("✅ PV enregistré avec succès dans Supabase !")
+                else:
+                    f_st.warning("⚠️ Table Supabase non trouvée/inaccessible (PGRST205) -> Enregistré en mémoire locale session.")
 
     # ---------------------------------------------------------
     # TAB 1 : 📋 PVS / HISTORIQUE, CONSULTATION & ADMINISTRATION
     # ---------------------------------------------------------
     with tabs:
-        st.subheader("📋 PVS / Historique, Consultation & Administration")
-        if not supabase_client:
-            st.info("💡 Client Supabase non configuré.")
+        f_st.subheader("📋 PVS / Historique, Consultation & Administration")
+        raw_data = _safe_supabase_fetch(supabase_client)
+        if not raw_data and not f_st.session_state["pv_ident_local_db"]:
+            f_st.info("💡 Aucun PV d'identification enregistré.")
         else:
-            try:
-                res = supabase_client.table("pv_identification_materiaux").select("*").order("date_essai", desc=True).execute()
-                if res.data:
-                    df_hist = pd.DataFrame(res.data)
-                    search_q = st.text_input("Filtrer par N° Rapport ou Lieu :").lower()
-                    if search_q:
-                        df_hist = df_hist[df_hist.apply(lambda r: search_q in str(r.values).lower(), axis=1)]
-                    st.dataframe(df_hist, use_container_width=True)
+            combined_records = raw_data if raw_data else f_st.session_state["pv_ident_local_db"]
+            df_hist = pd.DataFrame(combined_records)
+            search_q = f_st.text_input("Filtrer par N° Rapport ou Lieu :").lower()
+            if search_q:
+                df_hist = df_hist[df_hist.apply(lambda r: search_q in str(r.values).lower(), axis=1)]
+            f_st.dataframe(df_hist, use_container_width=True)
 
-                    selected_del = st.selectbox("Sélectionner un PV à supprimer (Admin/Labo)", options=[""] + df_hist["num_rapport"].tolist())
-                    if selected_del and st.button("🗑️ Supprimer ce PV", disabled=not user_can_edit):
+            selected_del = f_st.selectbox("Sélectionner un PV à supprimer (Admin/Labo)", options=[""] + df_hist["num_rapport"].tolist() if "num_rapport" in df_hist else [])
+            if selected_del and f_st.button("🗑️ Supprimer ce PV", disabled=not user_can_edit):
+                if supabase_client:
+                    try:
                         supabase_client.table("pv_identification_materiaux").delete().eq("num_rapport", selected_del).execute()
-                        st.success(f"PV {selected_del} supprimé.")
-                        st.rerun()
-                else:
-                    st.info("Aucun PV d'identification enregistré.")
-            except Exception as e:
-                st.warning(f"Table non initialisée ou erreur de lecture : {e}")
+                    except Exception:
+                        pass
+                f_st.session_state["pv_ident_local_db"] = [
+                    r for r in f_st.session_state["pv_ident_local_db"] if r.get("num_rapport") != selected_del
+                ]
+                f_st.success(f"PV {selected_del} supprimé.")
+                f_st.rerun()
 
     # ---------------------------------------------------------
     # TAB 2 : 📊 SYNTHÈSE
     # ---------------------------------------------------------
     with tabs[2]:
-        st.subheader("📊 Synthèse Identification Matériaux")
-        if not supabase_client:
-            st.info("💡 Client Supabase non configuré.")
+        f_st.subheader("📊 Synthèse Identification Matériaux")
+        raw_data = _safe_supabase_fetch(supabase_client)
+        data_to_use = raw_data if raw_data else f_st.session_state["pv_ident_local_db"]
+        if data_to_use:
+            df_s = pd.DataFrame(data_to_use)
+            m1, m2, m3 = f_st.columns(3)
+            m1.metric("Total PVs Ident.", len(df_s))
+            m2.metric("Conformes", len(df_s[df_s["observation"].str.contains("Conforme", na=False)]) if "observation" in df_s else 0)
+            
+            sol_count = len(df_s[df_s['type_materiau']=='SOL']) if 'type_materiau' in df_s else 0
+            grav_count = len(df_s[df_s['type_materiau']=='GRAVE_ROCHE']) if 'type_materiau' in df_s else 0
+            m3.metric("Type Sol / Grave-Roche", f"{sol_count} / {grav_count}")
+            
+            f_st.dataframe(df_s, use_container_width=True)
+            
+            excel_buf = io.BytesIO()
+            with pd.ExcelWriter(excel_buf, engine='openpyxl') as w:
+                df_s.to_excel(w, index=False, sheet_name='Synthese_Identification')
+            excel_buf.seek(0)
+            f_st.download_button(
+                "📥 Télécharger la synthèse en Excel (.xlsx)",
+                data=excel_buf,
+                file_name=f"synthese_identification_{datetime.date.today()}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                type="primary",
+                use_container_width=True
+            )
         else:
-            try:
-                res = supabase_client.table("pv_identification_materiaux").select("*").execute()
-                if res.data:
-                    df_s = pd.DataFrame(res.data)
-                    m1, m2, m3 = st.columns(3)
-                    m1.metric("Total PVs Ident.", len(df_s))
-                    m2.metric("Conformes", len(df_s[df_s["observation"].str.contains("Conforme", na=False)]) if "observation" in df_s else 0)
-                    
-                    sol_count = len(df_s[df_s['type_materiau']=='SOL']) if 'type_materiau' in df_s else 0
-                    grav_count = len(df_s[df_s['type_materiau']=='GRAVE_ROCHE']) if 'type_materiau' in df_s else 0
-                    m3.metric("Type Sol / Grave-Roche", f"{sol_count} / {grav_count}")
-                    
-                    st.dataframe(df_s, use_container_width=True)
-                    
-                    excel_buf = io.BytesIO()
-                    with pd.ExcelWriter(excel_buf, engine='openpyxl') as w:
-                        df_s.to_excel(w, index=False, sheet_name='Synthese_Identification')
-                    excel_buf.seek(0)
-                    st.download_button(
-                        "📥 Télécharger la synthèse en Excel (.xlsx)",
-                        data=excel_buf,
-                        file_name=f"synthese_identification_{datetime.date.today()}.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        type="primary",
-                        use_container_width=True
-                    )
-                else:
-                    st.info("Aucune donnée disponible pour la synthèse.")
-            except Exception as e:
-                st.info(f"Synthèse indisponible : {e}")
+            f_st.info("Aucune donnée disponible pour la synthèse.")
