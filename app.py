@@ -92,13 +92,19 @@ if ('serviceWorker' in navigator) {
 components.html(pwa_code, height=0, width=0)
 
 # ==========================================
-# 2. CONNEXION SUPABASE & UTILISATEURS
+# 2. CONNEXION SUPABASE & UTILISATEURS (ROBUSTE)
 # ==========================================
 supabase = None
 supabase_status_msg = "Non initialisé"
 try:
-    SUPABASE_URL = st.secrets["supabase"]["url"]
-    SUPABASE_KEY = st.secrets["supabase"]["key"]
+    # Support des deux structures de st.secrets (racine ou dict [supabase])
+    if "supabase" in st.secrets:
+        SUPABASE_URL = st.secrets["supabase"].get("url") or st.secrets.get("SUPABASE_URL", "https://pfyfmfujccibiwfiwknu.supabase.co")
+        SUPABASE_KEY = st.secrets["supabase"].get("key") or st.secrets.get("SUPABASE_KEY", "sb_publishable_6h8ZUeV8ii5TjKUV9B1Ewg_eDawQRkW")
+    else:
+        SUPABASE_URL = st.secrets.get("SUPABASE_URL", "https://pfyfmfujccibiwfiwknu.supabase.co")
+        SUPABASE_KEY = st.secrets.get("SUPABASE_KEY", "sb_publishable_6h8ZUeV8ii5TjKUV9B1Ewg_eDawQRkW")
+        
     CODE_ACCES_TERRAIN = st.secrets.get("CODE_ACCES_TERRAIN", "lpee2026")
 
     supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -111,7 +117,7 @@ try:
     res_test = supabase.table("pv_identification_materiaux").select("num_rapport").limit(1).execute()
     supabase_status_msg = "Connecté (Supabase OK)"
 except Exception as e:
-    supabase_status_msg = f"Mode hors-ligne / Erreur DB ({str(e)[:30]})"
+    supabase_status_msg = f"Mode hors-ligne / Erreur DB ({str(e)[:35]})"
 
 DEFAULT_USERS = {
     "BAALLAL": {"password": "arwa2020", "role": "admin", "can_edit": True},
@@ -204,7 +210,6 @@ if st.session_state["user"] is None:
     st.stop()
 
 current_username = st.session_state["user"]["username"]
-# Synchronisation de sécurité pour les vues enfants
 st.session_state["user_name"] = current_username
 
 # ==========================================
@@ -257,7 +262,6 @@ with st.sidebar:
     st.title("Smart Control Béton")
     st.caption(f"👤 Connecté : **{current_username}**")
     
-    # Indicateur d'état Supabase visuel
     if supabase is not None and "Connecté" in supabase_status_msg:
         st.success(f"🟢 {supabase_status_msg}")
     else:
