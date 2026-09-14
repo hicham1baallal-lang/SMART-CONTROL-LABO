@@ -91,10 +91,10 @@ def evaluer_compacite(density_seche, density_ref, type_mesure="mc", exigence_mc=
 # ==========================================
 class LPEECompacitePDF(FPDF):
     def header(self):
-        # Inclusion du logo si présent
+        # Logo déplacé légèrement plus haut (y=4 au lieu de y=8)
         logo_path = "logo.png.jpg"
         if os.path.exists(logo_path):
-            self.image(logo_path, x=10, y=8, w=25)
+            self.image(logo_path, x=10, y=4, w=25)
 
         self.set_font("Helvetica", "B", 11)
         self.cell(0, 5, clean_text("LABORATOIRE PUBLIC D'ESSAIS ET D'ETUDES - LPEE"), 0, 1, "C")
@@ -154,7 +154,6 @@ def generate_pv_compacite_pdf(header_info, points_data):
     pdf.set_font("Helvetica", "B", 9.5)
     pdf.cell(190, 7, clean_text(" II - Résultats des Essais de Compacité"), 1, 1, "L", fill=True)
 
-    # Ajout de la colonne "Niveau" juste après "Désignation"
     headers = ["Réf", "Désignation", "Niveau", "D. Sèche", "D. Réf", "w (%)", "% > 20mm", "IC (%)", "Commentaire"]
     widths = [8, 58, 14, 18, 20, 16, 18, 16, 22]
 
@@ -163,10 +162,9 @@ def generate_pv_compacite_pdf(header_info, points_data):
         pdf.cell(widths[i], 7, clean_text(h), 1, 0, "C")
     pdf.ln()
 
-    # Corps du tableau
+    # Corps du tableau (hauteur des lignes augmentée à 9)
     pdf.set_font("Helvetica", "", 7.5)
-    nb_samples = max(len(points_data), 1)
-    row_height = 8 if nb_samples <= 6 else 6.5
+    row_height = 9
 
     for p in points_data:
         desig = p.get('designation', '')
