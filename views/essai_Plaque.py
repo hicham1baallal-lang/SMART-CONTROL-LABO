@@ -437,7 +437,6 @@ def generer_excel_synthese(df, mois_str, empl_str, couche_str, nom_projet):
         bottom=Side(style='double', color='1F4E78')
     )
 
-    # Insertion du Logo LPEE (logo.png.jpg)
     logo_path = "logo.png.jpg"
     if os.path.exists(logo_path):
         try:
@@ -553,10 +552,7 @@ def generer_excel_synthese(df, mois_str, empl_str, couche_str, nom_projet):
         ws.cell(row=row_idx, column=1, value="RÉSUMÉ STATISTIQUE QUALITÉ").font = bold_font
         row_idx += 1
 
-        stat_headers =
-        for col_start, col_end in [(1, 6), (7, 7), (8, 8), (9, 9)]:
-            pass
-        for sh_idx, (col_num, header_title) in enumerate([(1, "Indicateur"), (7, "EV1 (MPa)"), (8, "EV2 (MPa)"), (9, "Ratio K (EV2/EV1)")], 1):
+        for col_num, header_title in [(1, "Indicateur"), (7, "EV1 (MPa)"), (8, "EV2 (MPa)"), (9, "Ratio K (EV2/EV1)")]:
             cell = ws.cell(row=row_idx, column=col_num)
             cell.value = header_title
             cell.font = header_font
