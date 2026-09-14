@@ -118,7 +118,7 @@ def generate_pv_compacite_pdf(header_info, points_data):
         pdf.cell(widths[i], 7, clean_text(h), 1, 0, "C")
     pdf.ln()
 
-    # Corps du tableau avec hauteur adaptable
+    # Corps du tableau avec hauteur adaptable et indexation correcte des largeurs (correction du bug list/float)
     pdf.set_font("Helvetica", "", 7.5)
     nb_samples = max(len(points_data), 1)
     row_height = 8 if nb_samples <= 6 else 6.5
