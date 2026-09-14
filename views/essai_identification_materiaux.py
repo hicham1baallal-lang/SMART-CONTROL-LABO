@@ -382,7 +382,7 @@ def show(supabase_client):
                 db_error_msg = ""
                 if supabase_client:
                     try:
-                        res = supabase_client.table("pv_identification_materiaux").upsert(payload_record, on_conflict="num_rapport").execute()
+                        res = supabase_client.table("pv_identification_materiaux").upsert(payload_record).execute()
                         saved_to_db = True
                     except Exception as e:
                         saved_to_db = False
