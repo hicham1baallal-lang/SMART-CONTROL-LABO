@@ -167,6 +167,7 @@ if st.session_state["user"] is None:
                 }
                 st.session_state["role"] = remembered_role
                 st.session_state["can_edit"] = remembered_can_edit
+                st.session_state["selected_page"] = "🏠 Accueil"
                 st.session_state["users_db"] = load_users()
         except Exception:
             pass
@@ -192,6 +193,7 @@ if st.session_state["user"] is None:
                     }
                     st.session_state["role"] = fresh_users[username_input]["role"]
                     st.session_state["can_edit"] = fresh_users[username_input]["can_edit"]
+                    st.session_state["selected_page"] = "🏠 Accueil"
                     st.rerun()
                 else:
                     st.error("❌ Identifiants incorrects.")
@@ -264,25 +266,25 @@ with st.sidebar:
     st.caption(f"👤 Connecté : **{current_username}**")
     st.markdown("---")
 
-    menu_options = {
-        "🏠 Accueil": "accueil",
+    menu_options = {"🏠 Accueil": "accueil"}
+    if str(st.session_state.get("role", "")).lower() == "admin":
+        menu_options["👤 Gestion Utilisateurs"] = gestion_utilisateurs
+    
+    menu_options.update({
         "🚜 Essai à la Plaque": essai_Plaque,
         "💧 Teneur en Eau": essai_teneur_eau,
         "🏗️ Compacité": essai_compacite,
         "🪨 Granulats pour Béton": pv_granulats,
         "🔬 Identification Matériau": essai_identification_materiaux,
         "📜 Historique & Audit": historique_pvs,
-    }
-
-    if str(st.session_state.get("role", "")).lower() == "admin":
-        menu_options = {"👤 Gestion Utilisateurs": gestion_utilisateurs, **menu_options}
+    })
 
     st.session_state.setdefault("page_widget_seed", 0)
-    st.session_state.setdefault("selected_page", list(menu_options.keys())[0])
+    st.session_state.setdefault("selected_page", "🏠 Accueil")
 
     page_par_defaut = st.session_state.get("selected_page")
     if page_par_defaut not in menu_options:
-        page_par_defaut = list(menu_options.keys())[0]
+        page_par_defaut = "🏠 Accueil"
 
     selected_page_label = st.radio(
         "📍 Navigation",
