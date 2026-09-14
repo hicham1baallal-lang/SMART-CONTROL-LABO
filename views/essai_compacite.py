@@ -1,5 +1,6 @@
 import datetime
 import io
+import os
 import pandas as pd
 import streamlit as st
 from fpdf import FPDF
@@ -90,6 +91,11 @@ def evaluer_compacite(density_seche, density_ref, type_mesure="mc", exigence_mc=
 # ==========================================
 class LPEECompacitePDF(FPDF):
     def header(self):
+        # Inclusion du logo si présent
+        logo_path = "logo.png.jpg"
+        if os.path.exists(logo_path):
+            self.image(logo_path, x=10, y=8, w=25)
+
         self.set_font("Helvetica", "B", 11)
         self.cell(0, 5, clean_text("LABORATOIRE PUBLIC D'ESSAIS ET D'ETUDES - LPEE"), 0, 1, "C")
         self.set_font("Helvetica", "B", 9)
@@ -148,8 +154,9 @@ def generate_pv_compacite_pdf(header_info, points_data):
     pdf.set_font("Helvetica", "B", 9.5)
     pdf.cell(190, 7, clean_text(" II - Résultats des Essais de Compacité"), 1, 1, "L", fill=True)
 
-    headers = ["Réf", "Désignation", "D. Sèche", "D. Réf", "w (%)", "% > 20mm", "IC (%)", "Commentaire"]
-    widths = [10, 68, 18, 22, 16, 18, 16, 22]
+    # Ajout de la colonne "Niveau" juste après "Désignation"
+    headers = ["Réf", "Désignation", "Niveau", "D. Sèche", "D. Réf", "w (%)", "% > 20mm", "IC (%)", "Commentaire"]
+    widths = [8, 58, 14, 18, 20, 16, 18, 16, 22]
 
     pdf.set_font("Helvetica", "B", 7.5)
     for i, h in enumerate(headers):
@@ -162,16 +169,18 @@ def generate_pv_compacite_pdf(header_info, points_data):
     row_height = 8 if nb_samples <= 6 else 6.5
 
     for p in points_data:
-        desig = f"{p.get('designation', '')} ({p.get('type_mesure', 'mc')})"
+        desig = p.get('designation', '')
+        niveau = str(p.get('type_mesure', 'mc')).lower()
         
         pdf.cell(widths[0], row_height, clean_text(str(p.get("ref_num", ""))), 1, 0, "C")
-        pdf.cell(widths[1], row_height, clean_text(desig[:45]), 1, 0, "L")
-        pdf.cell(widths[2], row_height, f"{float(p.get('densite_seche', 0.0)):.3f}", 1, 0, "C")
-        pdf.cell(widths[3], row_height, f"{float(p.get('densite_ref', 0.0)):.3f}", 1, 0, "C")
-        pdf.cell(widths[4], row_height, f"{float(p.get('w_mesure', 0.0)):.1f}%", 1, 0, "C")
-        pdf.cell(widths[5], row_height, f"{float(p.get('refus_20mm', 0.0)):.1f}%", 1, 0, "C")
-        pdf.cell(widths[6], row_height, f"{float(p.get('ic', 0.0)):.1f}%", 1, 0, "C")
-        pdf.cell(widths[7], row_height, clean_text(str(p.get("observation", "Conforme"))), 1, 1, "C")
+        pdf.cell(widths[1], row_height, clean_text(desig[:40]), 1, 0, "L")
+        pdf.cell(widths[2], row_height, clean_text(niveau), 1, 0, "C")
+        pdf.cell(widths[3], row_height, f"{float(p.get('densite_seche', 0.0)):.3f}", 1, 0, "C")
+        pdf.cell(widths[4], row_height, f"{float(p.get('densite_ref', 0.0)):.3f}", 1, 0, "C")
+        pdf.cell(widths[5], row_height, f"{float(p.get('w_mesure', 0.0)):.1f}%", 1, 0, "C")
+        pdf.cell(widths[6], row_height, f"{float(p.get('refus_20mm', 0.0)):.1f}%", 1, 0, "C")
+        pdf.cell(widths[7], row_height, f"{float(p.get('ic', 0.0)):.1f}%", 1, 0, "C")
+        pdf.cell(widths[8], row_height, clean_text(str(p.get("observation", "Conforme"))), 1, 1, "C")
 
     pdf.ln(3)
     pdf.set_font("Helvetica", "I", 7.5)
@@ -556,7 +565,6 @@ def show(supabase_client, can_edit=False, is_admin=False):
             st.info("💡 Connexion Supabase non configurée pour la synthèse.")
         else:
             try:
-                # Jointure logique via récupération des 2 tables
                 res_pv = supabase_client.table("pv_compacite").select("*").execute()
                 res_essais = supabase_client.table("essai_compacite").select("*").execute()
 
@@ -566,10 +574,8 @@ def show(supabase_client, can_edit=False, is_admin=False):
                 if df_pv.empty or df_essais.empty:
                     st.warning("⚠️ Pas assez de données enregistrées pour constituer une synthèse.")
                 else:
-                    # Fusion des données PV et Essais
                     df_merged = pd.merge(df_essais, df_pv, on="num_rapport", how="inner", suffixes=("_essai", "_pv"))
 
-                    # Formatage date et libellé des mois en français
                     df_merged["date_prelevement_dt"] = pd.to_datetime(df_merged["date_prelevement"], errors="coerce")
                     
                     MOIS_FR = {
@@ -586,11 +592,9 @@ def show(supabase_client, can_edit=False, is_admin=False):
                     periods_df = df_merged[["year_month_sort", "Période_Mois"]].drop_duplicates().sort_values("year_month_sort", ascending=False)
                     all_period_labels = periods_df["Période_Mois"].tolist()
 
-                    # --- ZONES DE FILTRES MULTI-CRITÈRES ---
                     st.markdown("#### 🎯 Filtres de recherche")
                     f_col1, f_col2, f_col3 = st.columns(3)
 
-                    # Filtre 1: Période (Mois) en français
                     with f_col1:
                         selected_months = st.multiselect(
                             "📅 Période (Mois)",
@@ -599,7 +603,6 @@ def show(supabase_client, can_edit=False, is_admin=False):
                             key="filter_months"
                         )
 
-                    # Filtre 2: Emplacement / Zone
                     all_locations = sorted(df_merged["lieu_prelevement"].dropna().unique().tolist())
                     with f_col2:
                         selected_locations = st.multiselect(
@@ -609,7 +612,6 @@ def show(supabase_client, can_edit=False, is_admin=False):
                             key="filter_locations"
                         )
 
-                    # Filtre 3: Type de couche / Matériau
                     all_materials = sorted(df_merged["type_materiau"].dropna().unique().tolist())
                     with f_col3:
                         selected_materials = st.multiselect(
@@ -619,7 +621,6 @@ def show(supabase_client, can_edit=False, is_admin=False):
                             key="filter_materials"
                         )
 
-                    # --- APPLICATION DES FILTRES ---
                     filtered_df = df_merged[
                         (df_merged["Période_Mois"].isin(selected_months)) &
                         (df_merged["lieu_prelevement"].isin(selected_locations)) &
@@ -628,7 +629,6 @@ def show(supabase_client, can_edit=False, is_admin=False):
 
                     st.markdown("---")
 
-                    # --- KPI / STATISTIQUES RÉSUMÉES ---
                     total_points = len(filtered_df)
                     if total_points > 0:
                         conformes = len(filtered_df[filtered_df["observation"] == "Conforme"])
@@ -642,7 +642,6 @@ def show(supabase_client, can_edit=False, is_admin=False):
                         kpi3.metric("Non Conformes", non_conformes, delta_color="inverse")
                         kpi4.metric("IC Moyen", f"{ic_moyen:.1f} %")
 
-                        # --- TABLEAU SYNTHÉTIQUE AFFICHÉ ---
                         st.markdown("#### 📄 Résultats de la Synthèse")
                         
                         cols_to_display = [
@@ -654,11 +653,9 @@ def show(supabase_client, can_edit=False, is_admin=False):
                         cols_existing = [c for c in cols_to_display if c in filtered_df.columns]
                         st.dataframe(filtered_df[cols_existing], use_container_width=True)
 
-                        # --- MODULE DE TÉLÉCHARGEMENT ---
                         st.markdown("#### 📥 Téléchargement des Données Filtrées")
                         d_col1, d_col2 = st.columns(2)
 
-                        # Exporter en CSV
                         csv_data = filtered_df[cols_existing].to_csv(index=False).encode('utf-8')
                         with d_col1:
                             st.download_button(
@@ -669,7 +666,6 @@ def show(supabase_client, can_edit=False, is_admin=False):
                                 use_container_width=True
                             )
 
-                        # Exporter en Excel (.xlsx)
                         buffer_excel = io.BytesIO()
                         with pd.ExcelWriter(buffer_excel, engine='openpyxl') as writer:
                             filtered_df[cols_existing].to_excel(writer, index=False, sheet_name='Synthèse Compacité')
