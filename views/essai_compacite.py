@@ -143,7 +143,7 @@ def generate_pv_compacite_pdf(header_info, points_data, signataire_coord="O. IKE
 
     pdf.cell(190, 7, clean_text(f"  Lieu de prélèvement : {header_info.get('lieu_prelevement', '')}"), 1, 1, "L")
 
-    type_mat_str = clean_text(header_info.get('type_materiau', '')[:48])
+    type_mat_str = clean_text(str(header_info.get('type_materiau', ''))[:48])
     pdf.cell(95, 7, f"  Type de materiau : {type_mat_str}", 1, 0, "L")
     pdf.cell(95, 7, clean_text(f"  Densité Proctor OPN/OPM : {header_info.get('densite_opn', '2.09')} t/m3"), 1, 1, "L")
 
@@ -172,7 +172,7 @@ def generate_pv_compacite_pdf(header_info, points_data, signataire_coord="O. IKE
     row_height = 10
 
     for idx, p in enumerate(points_data):
-        desig = p.get('designation', '')
+        desig = str(p.get('designation', ''))
         niveau = str(p.get('type_mesure', 'mc')).lower()
         
         if idx % 2 == 1:
@@ -221,7 +221,7 @@ def generate_pv_compacite_pdf(header_info, points_data, signataire_coord="O. IKE
 
 
 # ==========================================
-# FONCTION DE GÉNÉRATION DU FICHIER EXCEL DE SYNTHÈSE FORMATÉ LPEE (SANS ERREUR MERGEDCELL)
+# FONCTION DE GÉNÉRATION DU FICHIER EXCEL DE SYNTHÈSE FORMATÉ LPEE
 # ==========================================
 def generate_excel_synthese_lpee(df_filtered):
     wb = openpyxl.Workbook()
@@ -288,10 +288,8 @@ def generate_excel_synthese_lpee(df_filtered):
     # Titre principal
     ws["A5"] = "SYNTHÈSE ET STATISTIQUES DES ESSAIS DE COMPACITÉ (NF P 94-093 / NF P 94-061-2)"
     ws["A5"].font = Font(name="Arial", size=11, bold=True, color="FFFFFF")
-    ws["A5"].fill = fill_navy
     ws["A5"].alignment = align_center
     
-    # Application style avant merge pour éviter MergedCell error
     for col in range(1, 14):
         ws.cell(row=5, column=col).fill = fill_navy
     ws.merge_cells("A5:M5")
@@ -315,7 +313,7 @@ def generate_excel_synthese_lpee(df_filtered):
 
     # Données du tableau principal
     current_row = start_row + 1
-    for idx, row in df_filtered.iterrows():
+    for idx, (_, row) in enumerate(df_filtered.iterrows()):
         ws.row_dimensions[current_row].height = 18
         fill_to_use = fill_zebra if idx % 2 == 1 else None
 
@@ -361,10 +359,9 @@ def generate_excel_synthese_lpee(df_filtered):
 
         current_row += 1
 
-    # --- BLOC STATISTIQUE GLOBAL (SÉCURISÉ) ---
+    # --- BLOC STATISTIQUE GLOBAL ---
     current_row += 1
     
-    # Titre section stats
     for c_idx in range(1, 14):
         c = ws.cell(row=current_row, column=c_idx)
         c.fill = fill_navy
@@ -397,10 +394,9 @@ def generate_excel_synthese_lpee(df_filtered):
     stat_headers = ["Indicateur Statistique", "Densité Sèche (t/m³)", "Teneur en eau w (%)", "Refus > 20mm (%)", "Indice Compacité IC (%)"]
     
     for idx, sh in enumerate(stat_headers, 1):
-        col_start = 1 if idx == 1 else (idx * 2) - 1
-        col_end = col_start + 2 if idx == 1 else col_start + 1
+        col_start = 1 if idx == 1 else (idx * 2) + 2
+        col_end = 3 if idx == 1 else col_start + 1
         
-        # Styliser toutes les cellules concernées AVANT la fusion
         for c in range(col_start, col_end + 1):
             cell = ws.cell(row=current_row, column=c)
             cell.fill = fill_stat_hdr
@@ -428,7 +424,6 @@ def generate_excel_synthese_lpee(df_filtered):
         current_row += 1
         ws.row_dimensions[current_row].height = 18
 
-        # 1. Libellé Indicateur (Colonnes A à C)
         for c in range(1, 4):
             ws.cell(row=current_row, column=c).border = thin_border
 
@@ -437,14 +432,12 @@ def generate_excel_synthese_lpee(df_filtered):
         lbl_cell.alignment = align_left
         ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=3)
 
-        # 2. Valeurs des 4 paramètres
         vals = [ds_v, w_v, ref_v, ic_v]
         for idx, val in enumerate(vals, 1):
-            col_start = (idx * 2) + 1
+            col_start = (idx * 2) + 2
             col_end = col_start + 1
             val_fmt = round(val, 3) if idx == 1 else round(val, 1)
 
-            # Application des bordures sur chaque cellule de la plage
             for c in range(col_start, col_end + 1):
                 ws.cell(row=current_row, column=c).border = thin_border
 
@@ -473,7 +466,6 @@ def show(supabase_client, can_edit=False, is_admin=False):
     user_is_admin = is_admin or ("ADMIN" in user_role)
     user_can_edit = can_edit or user_is_admin or ("LABO" in user_role)
 
-    # Récupération dynamique des noms de signataires (depuis session ou valeurs par défaut)
     signataire_coord = st.session_state.get("signataire_coordinateur", "O. IKEN")
     signataire_chef = st.session_state.get("signataire_chef_labo", "H. BAALLAL")
 
