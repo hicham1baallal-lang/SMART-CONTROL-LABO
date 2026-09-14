@@ -267,7 +267,7 @@ def generate_excel_synthese_lpee(df_filtered):
         except Exception:
             pass
 
-    # En-tête LPEE
+    # En-tête LPEE (Ecriture PUIS Fusion)
     ws["C1"] = "LABORATOIRE PUBLIC D'ESSAIS ET D'ETUDES - LPEE"
     ws["C1"].font = font_header_title
     ws["C1"].alignment = align_center
@@ -283,7 +283,7 @@ def generate_excel_synthese_lpee(df_filtered):
     ws["C3"].alignment = align_center
     ws.merge_cells("C3:I3")
 
-    # Titre principal
+    # Titre principal (Ecriture PUIS Fusion)
     ws["A5"] = "SYNTHÈSE ET STATISTIQUES DES ESSAIS DE COMPACITÉ (NF P 94-093 / NF P 94-061-2)"
     ws["A5"].font = Font(name="Arial", size=11, bold=True, color="FFFFFF")
     ws["A5"].fill = fill_navy
@@ -370,7 +370,7 @@ def generate_excel_synthese_lpee(df_filtered):
     non_conf_pts = len(df_filtered[df_filtered["observation"] == "Non Conforme"])
     taux_conf = (conf_pts / total_pts * 100) if total_pts > 0 else 0.0
 
-    # Résumé conformité
+    # Résumé conformité (Ecriture PUIS Fusion)
     c_tot = ws.cell(row=current_row, column=1, value=f"Nombre total d'essais : {total_pts}")
     c_tot.font = font_bold
     ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=4)
@@ -379,7 +379,7 @@ def generate_excel_synthese_lpee(df_filtered):
     c_conf.font = font_bold
     ws.merge_cells(start_row=current_row, start_column=5, end_row=current_row, end_column=8)
 
-    # Entêtes du Tableau Statistique
+    # Entêtes du Tableau Statistique (Ecriture PUIS Fusion)
     current_row += 2
     stat_headers = ["Indicateur Statistique", "Densité Sèche (t/m³)", "Teneur en eau w (%)", "Refus > 20mm (%)", "Indice Compacité IC (%)"]
     
@@ -395,7 +395,7 @@ def generate_excel_synthese_lpee(df_filtered):
         end_col = col_target + 1 if idx > 1 else 3
         ws.merge_cells(start_row=current_row, start_column=col_target, end_row=current_row, end_column=end_col)
 
-    # Valeurs Min, Moy, Max
+    # Valeurs Min, Moy, Max (Ecriture PUIS Fusion)
     ds_vals = df_filtered["densite_seche"].astype(float)
     w_vals = df_filtered["w_mesure"].astype(float)
     ref_vals = df_filtered["refus_20mm"].astype(float)
