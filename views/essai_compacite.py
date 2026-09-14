@@ -18,18 +18,17 @@ def clean_text(text):
 
 
 # ==========================================
-# TABLEAU DE RÉFÉRENCE MATÉRIAUX & EXIGENCES CCTP
+# TABLEAU DE RÉFÉRENCE MATÉRIAUX & EXIGENCES CCTP (MAJ)
 # ==========================================
 REFERENTIEL_MATERIAUX = {
-    "GNT 0/31,5 - sous-couche LGV": {"exigence_str": "q1", "exigence_mc": 98.0, "exigence_fc": 95.0},
-    "GNT / Grave 0/60 - couche de forme LGV": {"exigence_str": "q3", "exigence_mc": 98.5, "exigence_fc": 96.0},
-    "GNT - PST": {"exigence_str": "95 % OPM", "exigence_mc": 95.0, "exigence_fc": 95.0},
-    "GNT / matériaux Type 1 ou Type 2 - remblais contigus OA": {"exigence_str": "q4 (zones courantes) / q3 (partie sup.)", "exigence_mc": 98.5, "exigence_fc": 96.0},
-    "Sols de remblai courant": {"exigence_str": "q4", "exigence_mc": 95.0, "exigence_fc": 92.0},
-    "Sols en place - assise des remblais": {"exigence_str": "95 % OPM", "exigence_mc": 95.0, "exigence_fc": 95.0},
-    "Sols réutilisables / D2-D3 - remblais de fouilles": {"exigence_str": ">= 95 % OPM", "exigence_mc": 95.0, "exigence_fc": 95.0},
-    "GNA/GNB 0/31,5 - couche de base": {"exigence_str": ">= 98 % OPM", "exigence_mc": 98.0, "exigence_fc": 98.0},
-    "GNF 0/40 - couche de fondation": {"exigence_str": "Critère stat : 95% >= 95% OPM & 100% >= 95% OPM", "exigence_mc": 95.0, "exigence_fc": 95.0},
+    "Remblai ordinaire": {"exigence_str": "q4 : pdmc >= 95 % OPN ; pdfc >= 92 % OPN", "exigence_mc": 95.0, "exigence_fc": 92.0},
+    "GNT pour PST": {"exigence_str": "q4 : pdmc >= 95 % ; pdfc >= 92 % OPN", "exigence_mc": 95.0, "exigence_fc": 92.0},
+    "Remblai contigu": {"exigence_str": "<1.50m de mur : q4 : pdmc >= 95 % ; pdfc >= 92 % OPN / > a 1.50 m de mur : q3 : pdmc >= 98.5 % ; pdfc >= 96 % OPN", "exigence_mc": 98.5, "exigence_fc": 96.0},
+    "Remblai renforcé": {"exigence_str": "95 % OPN", "exigence_mc": 95.0, "exigence_fc": 95.0},
+    "Remblai de fouille": {"exigence_str": "95 % OPN", "exigence_mc": 95.0, "exigence_fc": 95.0},
+    "GNF 1": {"exigence_str": "98 % OPN", "exigence_mc": 98.0, "exigence_fc": 98.0},
+    "couche de forme 0/60": {"exigence_str": "q3 : pdmc >= 98,5 % OPN ; pdfc >= 96 % OPN", "exigence_mc": 98.5, "exigence_fc": 96.0},
+    "Sous-couche GNT 0/31,5": {"exigence_str": "q1 : pdmc >= 100 % ; pdfc >= 98 % OPN", "exigence_mc": 100.0, "exigence_fc": 98.0},
     "Autre / Saisie Personnalisée": {"exigence_str": "Personnalisée", "exigence_mc": 95.0, "exigence_fc": 92.0}
 }
 
@@ -105,7 +104,7 @@ def generate_pv_compacite_pdf(header_info, points_data):
 
     pdf.cell(95, 6, clean_text(f"  Teneur en eau opt. : {header_info.get('w_opn', '6.3')} %"), 1, 0, "L")
     exig_str = clean_text(header_info.get('exigence_str', ''))
-    pdf.cell(95, 6, clean_text(f"  Exigence CCTP : {exig_str} (mc > {header_info.get('exigence_mc', 95)}% | fc > {header_info.get('exigence_fc', 92)}%)"), 1, 1, "L")
+    pdf.cell(95, 6, clean_text(f"  Exigence CCTP : {exig_str}"), 1, 1, "L")
     pdf.ln(6)
 
     # --- SECTION II : RÉSULTATS DES ESSAIS DE COMPACITÉ ---
@@ -129,10 +128,10 @@ def generate_pv_compacite_pdf(header_info, points_data):
         desig = f"{p.get('designation', '')} ({p.get('type_mesure', 'mc')})"
         
         pdf.cell(widths[0], row_height, clean_text(str(p.get("ref_num", ""))), 1, 0, "C")
-        pdf.cell(widths[1], row_height, clean_text(desig[:45]), 1, 0, "L")
-        pdf.cell(widths[2], row_height, f"{float(p.get('densite_seche', 0.0)):.3f}", 1, 0, "C")
-        pdf.cell(widths[3], row_height, f"{float(p.get('densite_ref', 0.0)):.3f}", 1, 0, "C")
-        pdf.cell(widths[4], row_height, f"{float(p.get('w_mesure', 0.0)):.1f}%", 1, 0, "C")
+        pdf.cell(widths, row_height, clean_text(desig[:45]), 1, 0, "L")
+        pdf.cell(widths, row_height, f"{float(p.get('densite_seche', 0.0)):.3f}", 1, 0, "C")
+        pdf.cell(widths, row_height, f"{float(p.get('densite_ref', 0.0)):.3f}", 1, 0, "C")
+        pdf.cell(widths, row_height, f"{float(p.get('w_mesure', 0.0)):.1f}%", 1, 0, "C")
         pdf.cell(widths[5], row_height, f"{float(p.get('refus_20mm', 0.0)):.1f}", 1, 0, "C")
         pdf.cell(widths[6], row_height, f"{float(p.get('ic', 0.0)):.1f}%", 1, 0, "C")
         pdf.cell(widths[7], row_height, clean_text(str(p.get("observation", "Conforme"))), 1, 1, "C")
@@ -196,7 +195,7 @@ def show(supabase_client, can_edit=False, is_admin=False):
         default_lieu = st.session_state.get("edit_comp_lieu", "OA-SOUS-RN11/12éme couche de remblai contigu du plot 2 gauche (Inferieur 1,50m)")
         default_d_opn = float(st.session_state.get("edit_comp_d_opn", 2.09))
         default_w_opn = float(st.session_state.get("edit_comp_w_opn", 6.3))
-        default_mat = st.session_state.get("edit_comp_mat", "GNT / Grave 0/60 - couche de forme LGV")
+        default_mat = st.session_state.get("edit_comp_mat", "Remblai contigu")
 
         with col_h1:
             st.markdown("**N° Rapport d'essai**")
@@ -217,7 +216,7 @@ def show(supabase_client, can_edit=False, is_admin=False):
             
             # SELECTBOX DYNAMIQUE MATÉRIAUX
             mat_keys = list(REFERENTIEL_MATERIAUX.keys())
-            default_mat_idx = mat_keys.index(default_mat) if default_mat in mat_keys else 1
+            default_mat_idx = mat_keys.index(default_mat) if default_mat in mat_keys else 2
 
             type_materiau = st.selectbox(
                 "Type de matériau / Famille",
@@ -235,7 +234,7 @@ def show(supabase_client, can_edit=False, is_admin=False):
         # SYNCHRONISATION AUTOMATIQUE DES EXIGENCES D'APRÈS LE TABLEAU
         mat_info = REFERENTIEL_MATERIAUX[type_materiau]
 
-        c_exig1, c_exig2, c_exig3 = st.columns([2, 1, 1])
+        c_exig1, c_exig2, c_exig3 = st.columns()
         with c_exig1:
             exigence_str = st.text_input("Exigence CCTP", value=mat_info['exigence_str'], disabled=not user_can_edit)
         with c_exig2:
@@ -246,7 +245,7 @@ def show(supabase_client, can_edit=False, is_admin=False):
         st.markdown("---")
         st.subheader("2. Points de Mesure de Compacité")
 
-        # Initialisation avec rérérences successives strictes
+        # Initialisation avec références successives strictes
         if "compacite_samples" not in st.session_state:
             st.session_state["compacite_samples"] = [
                 {"ref_num": 1, "designation": lieu_prelevement, "type_mesure": "mc", "densite_seche": 2.162, "densite_ref": 2.217, "w_mesure": 6.2, "refus_20mm": 27.0},
@@ -254,7 +253,7 @@ def show(supabase_client, can_edit=False, is_admin=False):
                 {"ref_num": 3, "designation": lieu_prelevement, "type_mesure": "mc", "densite_seche": 2.144, "densite_ref": 2.211, "w_mesure": 6.9, "refus_20mm": 26.0},
             ]
 
-        col_b1, col_b2, col_b3 = st.columns([1.5, 1.5, 3])
+        col_b1, col_b2, col_b3 = st.columns()
         with col_b1:
             if st.button("➕ Ajouter un point de mesure", disabled=not user_can_edit):
                 next_ref = len(st.session_state["compacite_samples"]) + 1
@@ -277,11 +276,10 @@ def show(supabase_client, can_edit=False, is_admin=False):
         samples_calculated = []
 
         for i, sample in enumerate(st.session_state["compacite_samples"]):
-            # Synchronisation stricte : Point N° X = Réf X
             point_num = i + 1
 
             with st.expander(f"📍 Point N° {point_num} : Réf {point_num} [{sample['type_mesure'].upper()}]", expanded=True):
-                c1, c2, c3, c4, c5, c6, c7 = st.columns([1, 2.5, 1.2, 1.5, 1.5, 1.2, 1.2])
+                c1, c2, c3, c4, c5, c6, c7 = st.columns()
                 with c1:
                     ref_num = st.number_input("Réf", value=point_num, step=1, key=f"comp_ref_{i}", disabled=True)
                 with c2:
@@ -301,7 +299,6 @@ def show(supabase_client, can_edit=False, is_admin=False):
 
                 st.caption(f"📊 **Indice de Compacité (IC)** = `{ic:.1f} %` | **Observation** = `{obs}`")
 
-                # Mise à jour synchronisée dans la session
                 st.session_state["compacite_samples"][i] = {
                     "ref_num": point_num,
                     "designation": desig,
@@ -359,21 +356,17 @@ def show(supabase_client, can_edit=False, is_admin=False):
                     st.error("❌ Connexion Supabase indisponible.")
                 else:
                     try:
-                        # VÉRIFICATION ANTI-DOUBLON
                         if not is_editing_mode:
                             check_pv = supabase_client.table("pv_compacite").select("num_rapport").eq("num_rapport", num_rapport).execute()
                             if check_pv.data:
                                 st.error(f"⛔ **Enregistrement bloqué** : Le PV n° **{num_rapport}** existe déjà dans la base de données. Choisissez un autre numéro.")
                                 st.stop()
 
-                        # ENREGISTREMENT DE L'EN-TÊTE
                         supabase_client.table("pv_compacite").upsert(header_data).execute()
 
-                        # NETTOYAGE ANCIENS POINTS
                         if is_editing_mode:
                             supabase_client.table("essai_compacite").delete().eq("num_rapport", num_rapport).execute()
 
-                        # INSERTION DES POINTS DE MESURE
                         for item in samples_calculated:
                             item_to_insert = item.copy()
                             item_to_insert["num_rapport"] = num_rapport
@@ -391,7 +384,7 @@ def show(supabase_client, can_edit=False, is_admin=False):
     # ---------------------------------------------------------
     # TAB 2 : HISTORIQUE & ADMINISTRATION
     # ---------------------------------------------------------
-    with tabs[1]:
+    with tabs:
         st.subheader("🖨️ Historique et Gestion des PV de Compacité")
 
         if not supabase_client:
@@ -438,7 +431,7 @@ def show(supabase_client, can_edit=False, is_admin=False):
                                 display_cols = [c for c in ["ref_num", "designation", "type_mesure", "densite_seche", "densite_ref", "w_mesure", "refus_20mm", "ic", "observation"] if c in df_samples.columns]
                                 st.dataframe(df_samples[display_cols], use_container_width=True)
 
-                        col_act1, col_act2, col_act3 = st.columns([2, 1.5, 1.5])
+                        col_act1, col_act2, col_act3 = st.columns()
 
                         with col_act1:
                             pdf_reprint = generate_pv_compacite_pdf(selected_pv, samples_data)
