@@ -219,21 +219,21 @@ def generate_pv_compacite_pdf(header_info, points_data):
 
 
 # ==========================================
-# FONCTION DE GÉNÉRATION DU FICHIER EXCEL DE SYNTHÈSE FORMATÉ LPEE
+# FONCTION DE GÉNÉRATION DU FICHIER EXCEL DE SYNTHÈSE FORMATÉ LPEE (CORRIGÉE)
 # ==========================================
 def generate_excel_synthese_lpee(df_filtered):
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Synthèse Compacité"
 
-    # Configurer l'impression en format A4 Portrait adapté
+    # Configuration Impression A4 Portrait
     ws.page_setup.orientation = ws.ORIENTATION_PORTRAIT
     ws.page_setup.paperSize = ws.PAPERSIZE_A4
     ws.sheet_properties.pageSetUpPr.fitToPage = True
     ws.page_setup.fitToWidth = 1
     ws.page_setup.fitToHeight = 0
 
-    # Styles réutilisables
+    # Styles
     font_header_title = Font(name="Arial", size=11, bold=True, color="1F4E79")
     font_sub_title = Font(name="Arial", size=9, italic=True)
     font_section = Font(name="Arial", size=10, bold=True, color="FFFFFF")
@@ -251,13 +251,12 @@ def generate_excel_synthese_lpee(df_filtered):
         top=Side(style='thin', color='D3D3D3'),
         bottom=Side(style='thin', color='D3D3D3')
     )
-    thick_bottom = Border(bottom=Side(style='medium', color='1F4E79'))
 
     align_center = Alignment(horizontal='center', vertical='center', wrap_text=True)
     align_left = Alignment(horizontal='left', vertical='center', wrap_text=True)
     align_right = Alignment(horizontal='right', vertical='center')
 
-    # Intégration du Logo si disponible
+    # Intégration Logo
     logo_path = "logo.png.jpg"
     if os.path.exists(logo_path):
         try:
@@ -269,28 +268,27 @@ def generate_excel_synthese_lpee(df_filtered):
             pass
 
     # En-tête LPEE
-    ws.merge_cells("C1:I1")
     ws["C1"] = "LABORATOIRE PUBLIC D'ESSAIS ET D'ETUDES - LPEE"
     ws["C1"].font = font_header_title
     ws["C1"].alignment = align_center
+    ws.merge_cells("C1:I1")
 
-    ws.merge_cells("C2:I2")
     ws["C2"] = "CENTRE TECHNIQUE REGIONAL DE CASABLANCA-SETTAT-BENI MELLAL (CTR-CSB)"
     ws["C2"].font = Font(name="Arial", size=9, bold=True)
     ws["C2"].alignment = align_center
+    ws.merge_cells("C2:I2")
 
-    ws.merge_cells("C3:I3")
     ws["C3"] = "Laboratoire de Contrôle Externe - Projet LGV CASA SUD"
     ws["C3"].font = font_sub_title
     ws["C3"].alignment = align_center
+    ws.merge_cells("C3:I3")
 
-    # Titre du document
-    ws.merge_cells("A5:I5")
+    # Titre principal
     ws["A5"] = "SYNTHÈSE ET STATISTIQUES DES ESSAIS DE COMPACITÉ (NF P 94-093 / NF P 94-061-2)"
     ws["A5"].font = Font(name="Arial", size=11, bold=True, color="FFFFFF")
     ws["A5"].fill = fill_navy
     ws["A5"].alignment = align_center
-
+    ws.merge_cells("A5:M5")
     ws.row_dimensions[5].height = 24
 
     # En-têtes du tableau principal
@@ -309,7 +307,7 @@ def generate_excel_synthese_lpee(df_filtered):
         cell.alignment = align_center
         cell.border = thin_border
 
-    # Remplissage du tableau de données
+    # Données du tableau
     current_row = start_row + 1
     for idx, row in df_filtered.iterrows():
         ws.row_dimensions[current_row].height = 18
@@ -338,7 +336,6 @@ def generate_excel_synthese_lpee(df_filtered):
             if fill_to_use:
                 cell.fill = fill_to_use
 
-            # Formatage spécifique selon la colonne
             if col_idx in [1, 2, 3, 6, 7]:
                 cell.alignment = align_center
             elif col_idx in [4, 5]:
@@ -358,13 +355,13 @@ def generate_excel_synthese_lpee(df_filtered):
 
         current_row += 1
 
-    # --- BLOC STATISTIQUE COMPLET ---
+    # --- BLOC STATISTIQUE COMPLET (CORRIGÉ DES CELLULES FUSIONNÉES) ---
     current_row += 1
-    ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=13)
     stat_title_cell = ws.cell(row=current_row, column=1, value="📊 STATISTIQUES GLOBALES DES ESSAIS")
     stat_title_cell.font = font_section
     stat_title_cell.fill = fill_navy
     stat_title_cell.alignment = align_left
+    ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=13)
     ws.row_dimensions[current_row].height = 20
 
     current_row += 1
@@ -373,26 +370,32 @@ def generate_excel_synthese_lpee(df_filtered):
     non_conf_pts = len(df_filtered[df_filtered["observation"] == "Non Conforme"])
     taux_conf = (conf_pts / total_pts * 100) if total_pts > 0 else 0.0
 
+    # Résumé conformité
+    c_tot = ws.cell(row=current_row, column=1, value=f"Nombre total d'essais : {total_pts}")
+    c_tot.font = font_bold
     ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=4)
-    ws.cell(row=current_row, column=1, value=f"Nombre total d'essais : {total_pts}").font = font_bold
 
+    c_conf = ws.cell(row=current_row, column=5, value=f"Conformes : {conf_pts} ({taux_conf:.1f}%) | Non Conformes : {non_conf_pts}")
+    c_conf.font = font_bold
     ws.merge_cells(start_row=current_row, start_column=5, end_row=current_row, end_column=8)
-    ws.cell(row=current_row, column=5, value=f"Conformes : {conf_pts} ({taux_conf:.1f}%) | Non Conformes : {non_conf_pts}").font = font_bold
 
+    # Entêtes du Tableau Statistique
     current_row += 2
     stat_headers = ["Indicateur Statistique", "Densité Sèche (t/m³)", "Teneur en eau w (%)", "Refus > 20mm (%)", "Indice Compacité IC (%)"]
     
     ws.row_dimensions[current_row].height = 20
     for idx, sh in enumerate(stat_headers, 1):
         col_target = 1 if idx == 1 else (idx + 1) * 2 - 2
-        ws.merge_cells(start_row=current_row, start_column=col_target, end_row=current_row, end_column=col_target+1 if idx > 1 else 3)
         c = ws.cell(row=current_row, column=col_target, value=sh)
         c.font = font_bold
         c.fill = fill_stat_hdr
         c.alignment = align_center
         c.border = thin_border
+        
+        end_col = col_target + 1 if idx > 1 else 3
+        ws.merge_cells(start_row=current_row, start_column=col_target, end_row=current_row, end_column=end_col)
 
-    # Valeurs Min, Moyenne, Max
+    # Valeurs Min, Moy, Max
     ds_vals = df_filtered["densite_seche"].astype(float)
     w_vals = df_filtered["w_mesure"].astype(float)
     ref_vals = df_filtered["refus_20mm"].astype(float)
@@ -408,19 +411,21 @@ def generate_excel_synthese_lpee(df_filtered):
         current_row += 1
         ws.row_dimensions[current_row].height = 18
         
-        ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=3)
         c_lbl = ws.cell(row=current_row, column=1, value=label)
         c_lbl.font = font_data
         c_lbl.border = thin_border
+        ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=3)
         
         vals = [ds_v, w_v, ref_v, ic_v]
         for i, val in enumerate(vals):
             col_target = (i + 2) * 2 - 2
-            ws.merge_cells(start_row=current_row, start_column=col_target, end_row=current_row, end_column=col_target+1)
-            c_val = ws.cell(row=current_row, column=col_target, value=round(val, 3) if i == 0 else round(val, 1))
+            val_formatted = round(val, 3) if i == 0 else round(val, 1)
+            
+            c_val = ws.cell(row=current_row, column=col_target, value=val_formatted)
             c_val.font = font_bold
             c_val.alignment = align_center
             c_val.border = thin_border
+            ws.merge_cells(start_row=current_row, start_column=col_target, end_row=current_row, end_column=col_target+1)
 
     # Ajustement des largeurs de colonnes
     col_widths = {1: 18, 2: 12, 3: 15, 4: 28, 5: 24, 6: 8, 7: 10, 8: 12, 9: 12, 10: 10, 11: 12, 12: 10, 13: 15}
@@ -632,7 +637,7 @@ def show(supabase_client, can_edit=False, is_admin=False):
                         if not is_editing_mode:
                             check_pv = supabase_client.table("pv_compacite").select("num_rapport").eq("num_rapport", num_rapport).execute()
                             if check_pv.data:
-                                st.error(f"⛔ **Enregistrement bloqué** : Le PV n° **{num_rapport}** existe déjà dans la base de données. Choisissez un autre numéro.")
+                                st.error(f"⛔ **Enregistrement bloqué** : Le PV n° **{num_rapport}** existe déjà dans la base de données.")
                                 st.stop()
 
                         supabase_client.table("pv_compacite").upsert(header_data).execute()
@@ -897,7 +902,6 @@ def show(supabase_client, can_edit=False, is_admin=False):
                                 use_container_width=True
                             )
 
-                        # Génération du fichier Excel formaté LPEE avec Logo et Statistiques
                         excel_lpee_bytes = generate_excel_synthese_lpee(filtered_df)
                         
                         with d_col2:
