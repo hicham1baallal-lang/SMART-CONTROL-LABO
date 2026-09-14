@@ -5,7 +5,10 @@ from datetime import date, datetime
 from audit_log import enregistrer_modification, afficher_historique_modifications
 import projets_config
 
-# Repli hors-ligne (optionnel)
+# Repli hors-ligne (optionnel) : mêmes fonctions que celles chargées par
+# app.py. Importé ici aussi (indépendamment) car app.py ne transmet pas ces
+# fonctions à ce module — sans cet import, aucun filet de sécurité n'existe
+# en cas d'échec réseau prolongé vers Supabase.
 try:
     from offline_manager import insert_safe
     OFFLINE_SUPPORT = True
@@ -13,10 +16,16 @@ except ImportError:
     OFFLINE_SUPPORT = False
 
 def _est_erreur_timeout(exc):
+    """Détecte une erreur réseau transitoire (timeout / passerelle lente)
+    plutôt qu'une vraie erreur de données, pour décider s'il faut réessayer
+    ou basculer en mode local."""
     msg = str(exc).lower()
     return any(motif in msg for motif in ["timed out", "timeout", "504", "gateway", "connection reset", "temporarily unavailable"])
 
 def _executer_avec_reprise(fn, tentatives=2, delai=1.0):
+    """Exécute fn() en réessayant automatiquement en cas d'erreur réseau
+    transitoire (timeout), avec un court délai entre les tentatives.
+    Relance la dernière exception si toutes les tentatives échouent."""
     derniere_erreur = None
     for i in range(tentatives):
         try:
@@ -30,7 +39,7 @@ def _executer_avec_reprise(fn, tentatives=2, delai=1.0):
 
 # Import pour la génération du PDF
 from reportlab.lib.pagesizes import A4
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as ReportLabImage
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 import io
@@ -39,46 +48,50 @@ import os
 # Import pour la génération Excel avancée
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-from openpyxl.drawing.image import Image as OpenpyxlImage
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=300)
 def charger_essais_plaque(projet_id):
-    """Charge les essais de plaque avec tolérance étendue et repli global en cas de discordance d'ID projet."""
-    colonnes_sans_zone = "id, reference, date_essai, client, projet, emplacement, pk_profil, couche, nature_materiau, ev1, ev2, k_ratio, technicien, observations, points_mesure, projet_id"
-    
-    try:
-        # Récupération globale souple pour éviter les blocages de cloisonnement stricts
-        response_all = (
-            supabase.table("essai_plaque")
-            .select(colonnes_sans_zone)
-            .order("id", desc=True)
-            .limit(200)
-            .execute()
-        )
-        if response_all.data and len(response_all.data) > 0:
-            p_str_clean = str(projet_id).strip().lower() if projet_id else ""
-            filtered = []
-            for row in response_all.data:
-                r_pid = str(row.get("projet_id", "")).strip().lower()
-                r_proj = str(row.get("projet", "")).strip().lower()
-                if not r_pid and not r_proj:
-                    filtered.append(row)
-                    continue
-                if p_str_clean in r_pid or p_str_clean in r_proj or r_pid in p_str_clean or r_proj in p_str_clean:
-                    filtered.append(row)
-            
-            # Si le filtre trouve des correspondances, on les retourne
-            if filtered:
-                return filtered
-            # Si le filtrage strict ne matche rien mais que la table contient des données (ex: format d'ID différent),
-            # on retourne la table globale pour éviter le blocage visuel "aucun essai trouvé"
-            return response_all.data
-    except Exception as e:
-        print(f"Erreur lecture Supabase : {e}")
+    """Charge uniquement les colonnes indispensables des essais de plaque avec un filtre strict et rapide.
 
+    Tente d'abord avec la colonne `zone_pro` (utilisée pour le seuil PRO) ;
+    si cette colonne n'existe pas encore côté Supabase (migration pas encore
+    appliquée), se rabat automatiquement sur une requête sans elle plutôt
+    qu'd'échouer complètement et d'afficher "Aucun essai enregistré" alors
+    que des essais existent bel et bien en base.
+    """
+    colonnes_avec_zone = "id, reference, date_essai, client, emplacement, pk_profil, couche, zone_pro, nature_materiau, ev1, ev2, k_ratio, technicien, observations, points_mesure"
+    colonnes_sans_zone = "id, reference, date_essai, client, emplacement, pk_profil, couche, nature_materiau, ev1, ev2, k_ratio, technicien, observations, points_mesure"
+
+    for colonnes in (colonnes_avec_zone, colonnes_sans_zone):
+        try:
+            response = (
+                supabase.table("essai_plaque")
+                .select(colonnes)
+                .eq("projet_id", projet_id)
+                .order("id", desc=True)
+                .limit(100)
+                .execute()
+            )
+            return response.data if response.data else []
+        except Exception as e:
+            print(f"Erreur chargement plaque (colonnes={'avec' if colonnes is colonnes_avec_zone else 'sans'} zone_pro): {e}")
+            continue
     return []
 
 def evaluer_conformite_couche(couche, ev2_values, zone_pro=None):
+    """Évalue la conformité d'un essai à la plaque selon la couche/l'ouvrage
+    testé, à partir de TOUS les points de mesure EV2 (MPa) de l'essai (et
+    non plus seulement du premier point).
+
+    - couche : libellé de la couche/l'ouvrage (voir couche_options).
+    - ev2_values : liste des valeurs EV2 (MPa) de chaque point mesuré.
+    - zone_pro : uniquement pour "Remblais contigus aux Ouvrages d\'Art
+      (PRO)" -> "Partie supérieure (zone Q3)" ou "Plateforme", détermine le
+      seuil applicable (100 MPa vs 80 MPa).
+
+    Retourne toujours l'un de : "Résultats Conforme" ou
+    "Résultats non Conforme (motif détaillé)".
+    """
     ev2_values = [float(v) for v in (ev2_values or []) if v is not None]
     if not ev2_values:
         return "Résultats non Conforme (aucune mesure EV2 disponible)"
@@ -95,8 +108,12 @@ def evaluer_conformite_couche(couche, ev2_values, zone_pro=None):
             motifs.append(f"EV2 min = {ev2_min:.1f} MPa (requis > {seuil:.0f} MPa)")
 
     elif couche == "Remblais contigus aux Ouvrages d\'Art (PRO)":
-        seuil = 100.0 if zone_pro == "Partie supérieure (zone Q3)" else 80.0
-        zone_txt = "partie supérieure, zone Q3" if zone_pro == "Partie supérieure (zone Q3)" else "plateforme"
+        if zone_pro == "Partie supérieure (zone Q3)":
+            seuil = 100.0
+            zone_txt = "partie supérieure, zone Q3"
+        else:
+            seuil = 80.0
+            zone_txt = "plateforme"
         if ev2_min <= seuil:
             conforme = False
             motifs.append(f"EV2 min = {ev2_min:.1f} MPa (requis > {seuil:.0f} MPa en {zone_txt})")
@@ -129,6 +146,10 @@ def evaluer_conformite_couche(couche, ev2_values, zone_pro=None):
 
 
 def point_est_conforme(couche, ev2_v, zone_pro=None):
+    """Conformité d'UN SEUL point de mesure (colonne "Résultat" du tableau
+    des points). Pour la couche PST (critère basé sur un pourcentage de
+    points, pas un seuil individuel), le seuil plancher absolu de 50 MPa
+    (100% des mesures requises) est utilisé comme critère par point."""
     if ev2_v is None:
         return False
     if couche == "Sous-couche et Couche de forme":
@@ -147,6 +168,8 @@ def point_est_conforme(couche, ev2_v, zone_pro=None):
 
 
 def construire_texte_exigence(couche, ev2_values, zone_pro=None):
+    """Décrit l'exigence normative de la couche/l'ouvrage testé, avec les
+    valeurs réellement mesurées en regard."""
     ev2_values = [float(v) for v in (ev2_values or []) if v is not None]
     if not ev2_values:
         return "Aucune mesure EV2 disponible pour établir l\'exigence."
@@ -182,16 +205,49 @@ def generer_pdf_pv(essai):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
     elements = []
+    
     styles = getSampleStyleSheet()
     
-    title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=12, textColor=colors.HexColor('#1f4e78'), alignment=1, spaceAfter=10)
-    subtitle_style = ParagraphStyle('SubTitleStyle', parent=styles['Normal'], fontSize=9.5, textColor=colors.HexColor('#595959'), alignment=1, spaceAfter=12)
-    section_style = ParagraphStyle('SectionStyle', parent=styles['Heading2'], fontSize=11, textColor=colors.HexColor('#1f4e78'), spaceBefore=10, spaceAfter=4)
+    title_style = ParagraphStyle(
+        'TitleStyle',
+        parent=styles['Heading1'],
+        fontSize=12,
+        textColor=colors.HexColor('#1f4e78'),
+        alignment=1,
+        spaceAfter=10
+    )
+    
+    subtitle_style = ParagraphStyle(
+        'SubTitleStyle',
+        parent=styles['Normal'],
+        fontSize=9.5,
+        textColor=colors.HexColor('#595959'),
+        alignment=1,
+        spaceAfter=12
+    )
+    
+    section_style = ParagraphStyle(
+        'SectionStyle',
+        parent=styles['Heading2'],
+        fontSize=11,
+        textColor=colors.HexColor('#1f4e78'),
+        spaceBefore=10,
+        spaceAfter=4
+    )
+    
     normal_style = ParagraphStyle('NormalText', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#262626'))
     bold_style = ParagraphStyle('BoldText', parent=normal_style, fontName='Helvetica-Bold')
 
     logo_path = "logo.png.jpg"
-    org_style = ParagraphStyle('OrgStyle', parent=bold_style, alignment=0, fontSize=14, textColor=colors.HexColor('#1f4e78'))
+    
+    org_style = ParagraphStyle(
+        'OrgStyle',
+        parent=bold_style,
+        alignment=0,
+        fontSize=14,
+        textColor=colors.HexColor('#1f4e78')
+    )
+    
     header_text = (
         "<b>LABORATOIRE PUBLIC D\'ESSAIS ET D\'ÉTUDES (LPEE)</b><br/>"
         "<font size=8.5 color=\'#595959\'>CENTRE TECHNIQUE REGIONALE DE CASABLANCA -SETTAT BENIMELLAL</font>"
@@ -199,11 +255,18 @@ def generer_pdf_pv(essai):
     
     if os.path.exists(logo_path):
         try:
-            img = ReportLabImage(logo_path, width=90, height=90)
+            # Taille augmentée à width=90, height=90 et adaptation de la largeur de colonne à 105
+            img = Image(logo_path, width=90, height=90)
             img.hAlign = 'LEFT'
             txt_header = Paragraph(header_text, org_style)
             header_table = Table([[img, txt_header]], colWidths=[105, 420])
-            header_table.setStyle(TableStyle([('VALIGN', (0,0), (-1,-1), 'MIDDLE'), ('LEFTPADDING', (0,0), (-1,-1), 0), ('RIGHTPADDING', (0,0), (-1,-1), 0), ('BOTTOMPADDING', (0,0), (-1,-1), 0), ('TOPPADDING', (0,0), (-1,-1), 0)]))
+            header_table.setStyle(TableStyle([
+                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                ('LEFTPADDING', (0,0), (-1,-1), 0),
+                ('RIGHTPADDING', (0,0), (-1,-1), 0),
+                ('BOTTOMPADDING', (0,0), (-1,-1), 0),
+                ('TOPPADDING', (0,0), (-1,-1), 0),
+            ]))
             elements.append(header_table)
         except Exception:
             elements.append(Paragraph(header_text, org_style))
@@ -211,25 +274,36 @@ def generer_pdf_pv(essai):
         elements.append(Paragraph(header_text, org_style))
 
     elements.append(Spacer(1, 6))
+
     elements.append(Paragraph("PROCÈS-VERBAL D\'ESSAI À LA PLAQUE (NF P 94-117-1)", title_style))
     elements.append(Paragraph(f"Référence : <b>{essai.get('reference', '-')}</b> | Date : {essai.get('date_essai', '-')}", subtitle_style))
 
-    projet_val_pdf = essai.get('projet') or 'LGV CASA SUD'
     data_infos = [
         [Paragraph("Client / Organisme :", bold_style), Paragraph(str(essai.get('client', '-')), normal_style),
-         Paragraph("Chantier / Projet :", bold_style), Paragraph(str(projet_val_pdf), normal_style)],
+         Paragraph("Chantier / Projet :", bold_style), Paragraph(str(essai.get('projet', '-')), normal_style)],
         [Paragraph("Emplacement / Zone :", bold_style), Paragraph(str(essai.get('emplacement', '-')), normal_style),
          Paragraph("PK / Profil :", bold_style), Paragraph(str(essai.get('pk_profil', '-')), normal_style)],
         [Paragraph("Couche / Ouvrage :", bold_style), Paragraph(str(essai.get('couche', '-')), normal_style),
          Paragraph("Nature du matériau :", bold_style), Paragraph(str(essai.get('nature_materiau', '-')), normal_style)],
-        [Paragraph("Technicien :", bold_style), Paragraph(str(essai.get('technicien', '-')), normal_style), Paragraph("", normal_style), Paragraph("", normal_style)]
+        [Paragraph("Technicien :", bold_style), Paragraph(str(essai.get('technicien', '-')), normal_style),
+         Paragraph("", normal_style), Paragraph("", normal_style)]
     ]
+    
     t_infos = Table(data_infos, colWidths=[115, 147.5, 115, 147.5])
-    t_infos.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#f2f2f2')), ('BOX', (0,0), (-1,-1), 0.5, colors.HexColor('#d9d9d9')), ('VALIGN', (0,0), (-1,-1), 'MIDDLE'), ('BOTTOMPADDING', (0,0), (-1,-1), 8), ('TOPPADDING', (0,0), (-1,-1), 8), ('LEFTPADDING', (0,0), (-1,-1), 6), ('RIGHTPADDING', (0,0), (-1,-1), 6)]))
+    t_infos.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#f2f2f2')),
+        ('BOX', (0,0), (-1,-1), 0.5, colors.HexColor('#d9d9d9')),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 8),
+        ('TOPPADDING', (0,0), (-1,-1), 8),
+        ('LEFTPADDING', (0,0), (-1,-1), 6),
+        ('RIGHTPADDING', (0,0), (-1,-1), 6),
+    ]))
     elements.append(t_infos)
     elements.append(Spacer(1, 10))
 
     elements.append(Paragraph("Détail des Points de Mesure et Résultats (NF P 94-117-1)", section_style))
+    
     points = essai.get('points_mesure', [])
     if not points:
         points = [{"z1": essai.get('z1', 0.53), "z2": essai.get('z2', 0.52), "pk_point": essai.get('pk_profil', '-')}]
@@ -254,12 +328,26 @@ def generer_pdf_pv(essai):
 
         table_pts_data.append([
             str(pt.get("pk_point", f"P{idx+1}")),
-            f"{z1_v:.2f}", f"{z2_v:.2f}", f"{ev1_v:.2f}", f"{ev2_v:.2f}", f"{k_v:.2f}",
+            f"{z1_v:.2f}",
+            f"{z2_v:.2f}",
+            f"{ev1_v:.2f}",
+            f"{ev2_v:.2f}",
+            f"{k_v:.2f}",
             "Résultat conforme" if point_conforme else "Résultat non conforme"
         ])
 
     t_pts = Table(table_pts_data, colWidths=[75, 75, 75, 65, 65, 60, 110])
-    t_pts_style = [('BACKGROUND', (0,0), (-1,0), colors.HexColor('#1f4e78')), ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke), ('ALIGN', (0,0), (-1,-1), 'CENTER'), ('VALIGN', (0,0), (-1,-1), 'MIDDLE'), ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'), ('FONTSIZE', (0,0), (-1,-1), 8.5), ('BOTTOMPADDING', (0,0), (-1,-1), 6), ('TOPPADDING', (0,0), (-1,-1), 6), ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#bfbfbf'))]
+    t_pts_style = [
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#1f4e78')),
+        ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
+        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0,0), (-1,-1), 8.5),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 6),
+        ('TOPPADDING', (0,0), (-1,-1), 6),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#bfbfbf')),
+    ]
     for row_idx, est_conforme in enumerate(lignes_conformes, start=1):
         couleur = colors.HexColor('#1e7e34') if est_conforme else colors.HexColor('#c0392b')
         t_pts_style.append(('TEXTCOLOR', (6, row_idx), (6, row_idx), couleur))
@@ -276,20 +364,38 @@ def generer_pdf_pv(essai):
         elements.append(Spacer(1, 10))
 
     elements.append(Paragraph("Exigence et Commentaire", section_style))
+
     texte_exigence = construire_texte_exigence(couche_nom, ev2_tous_points, zone_pro=zone_pro_essai)
     verdict_global = evaluer_conformite_couche(couche_nom, ev2_tous_points, zone_pro=zone_pro_essai)
     verdict_court = "Résultats Conforme" if verdict_global.startswith("Résultats Conforme") else "Résultats non Conforme"
     texte_exigence_et_commentaire = f"{texte_exigence} {verdict_court}"
 
     t_obs = Table([[Paragraph(texte_exigence_et_commentaire, normal_style)]], colWidths=[525])
-    t_obs.setStyle(TableStyle([('BOX', (0,0), (-1,-1), 0.5, colors.HexColor('#d9d9d9')), ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#fafafa')), ('TOPPADDING', (0,0), (-1,-1), 10), ('BOTTOMPADDING', (0,0), (-1,-1), 10), ('LEFTPADDING', (0,0), (-1,-1), 6), ('RIGHTPADDING', (0,0), (-1,-1), 6)]))
+    t_obs.setStyle(TableStyle([
+        ('BOX', (0,0), (-1,-1), 0.5, colors.HexColor('#d9d9d9')),
+        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#fafafa')),
+        ('TOPPADDING', (0,0), (-1,-1), 10),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 10),
+        ('LEFTPADDING', (0,0), (-1,-1), 6),
+        ('RIGHTPADDING', (0,0), (-1,-1), 6),
+    ]))
     elements.append(t_obs)
     elements.append(Spacer(1, 15))
 
     sig_style = ParagraphStyle('SigStyle', parent=normal_style, alignment=1)
-    data_sig = [[Paragraph("<b>Responsable d\'essai</b><br/><br/>O. IKKEN", sig_style), Paragraph("<b>Chef du laboratoire</b><br/><br/>H. BAALLAL", sig_style)]]
+    data_sig = [
+        [
+            Paragraph("<b>Responsable d\'essai</b><br/><br/>O. IKKEN", sig_style), 
+            Paragraph("<b>Chef du laboratoire</b><br/><br/>H. BAALLAL", sig_style)
+        ]
+    ]
     t_sig = Table(data_sig, colWidths=[262.5, 262.5])
-    t_sig.setStyle(TableStyle([('ALIGN', (0,0), (-1,-1), 'CENTER'), ('VALIGN', (0,0), (-1,-1), 'TOP'), ('BOTTOMPADDING', (0,0), (-1,-1), 10), ('TOPPADDING', (0,0), (-1,-1), 10)]))
+    t_sig.setStyle(TableStyle([
+        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 10),
+        ('TOPPADDING', (0,0), (-1,-1), 10),
+    ]))
     elements.append(t_sig)
 
     doc.build(elements)
@@ -316,42 +422,41 @@ def generer_excel_synthese(df, mois_str, empl_str, couche_str, nom_projet):
     subtitle_font = Font(name="Calibri", size=10, italic=True, color="595959")
     bold_font = Font(name="Calibri", size=10, bold=True)
     normal_font = Font(name="Calibri", size=10)
-    thin_border = Border(left=Side(style='thin', color='D9D9D9'), right=Side(style='thin', color='D9D9D9'), top=Side(style='thin', color='D9D9D9'), bottom=Side(style='thin', color='D9D9D9'))
-    double_bottom_border = Border(left=Side(style='thin', color='D9D9D9'), right=Side(style='thin', color='D9D9D9'), top=Side(style='thin', color='D9D9D9'), bottom=Side(style='double', color='1F4E78'))
-
-    logo_path = "logo.png.jpg"
-    if os.path.exists(logo_path):
-        try:
-            img = OpenpyxlImage(logo_path)
-            img.width = 65
-            img.height = 65
-            ws.add_image(img, 'A1')
-            for r in range(1, 5):
-                ws.row_dimensions[r].height = 20
-        except Exception:
-            pass
+    
+    thin_border = Border(
+        left=Side(style='thin', color='D9D9D9'),
+        right=Side(style='thin', color='D9D9D9'),
+        top=Side(style='thin', color='D9D9D9'),
+        bottom=Side(style='thin', color='D9D9D9')
+    )
+    double_bottom_border = Border(
+        left=Side(style='thin', color='D9D9D9'),
+        right=Side(style='thin', color='D9D9D9'),
+        top=Side(style='thin', color='D9D9D9'),
+        bottom=Side(style='double', color='1F4E78')
+    )
 
     ws['A1'] = "LABORATOIRE LPEE — CENTRE TECHNIQUE RÉGIONAL"
     ws['A1'].font = title_font
-    ws.merge_cells('A1:I1')
+    ws.merge_cells('A1:G1')
     ws['A1'].alignment = Alignment(horizontal='center')
 
     ws['A2'] = "Norme : NF P 94-117-1 (Plaque Ø 600 mm)"
     ws['A2'].font = bold_font
-    ws.merge_cells('A2:I2')
+    ws.merge_cells('A2:G2')
     ws['A2'].alignment = Alignment(horizontal='center')
 
-    ws['A3'] = f"Contexte : {nom_projet} | Filtres -> Mois: {mois_str} | Emplacement: {empl_str} | Couche: {couche_str}"
+    ws['A3'] = f"Projet : {nom_projet} | Filtres -> Mois: {mois_str} | Emplacement: {empl_str} | Couche: {couche_str}"
     ws['A3'].font = subtitle_font
-    ws.merge_cells('A3:I3')
+    ws.merge_cells('A3:G3')
     ws['A3'].alignment = Alignment(horizontal='center')
 
     ws['A4'] = f"SYNTHÈSE DES ESSAIS DE PORTANCE À LA PLAQUE — MENSUEL - {mois_str}"
     ws['A4'].font = bold_font
-    ws.merge_cells('A4:I4')
+    ws.merge_cells('A4:G4')
     ws['A4'].alignment = Alignment(horizontal='center')
 
-    headers = ["Date Essai", "Client", "Projet", "Couche", "Emplacement", "PK / Profil", "EV1 (MPa)", "EV2 (MPa)", "K (EV2/EV1)"]
+    headers = ["Date Essai", "Couche", "Emplacement", "PK / Profil", "EV1 (MPa)", "EV2 (MPa)", "K (EV2/EV1)"]
     for col_num, header_title in enumerate(headers, 1):
         cell = ws.cell(row=6, column=col_num)
         cell.value = header_title
@@ -365,11 +470,9 @@ def generer_excel_synthese(df, mois_str, empl_str, couche_str, nom_projet):
 
     for _, row in df.iterrows():
         ws.cell(row=row_idx, column=1, value=str(row.get('date_essai', ''))).alignment = Alignment(horizontal='center', vertical='center')
-        ws.cell(row=row_idx, column=2, value=str(row.get('client', ''))).alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
-        ws.cell(row=row_idx, column=3, value=str(row.get('projet', 'LGV CASA SUD'))).alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
-        ws.cell(row=row_idx, column=4, value=str(row.get('couche', ''))).alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
-        ws.cell(row=row_idx, column=5, value=str(row.get('emplacement', ''))).alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
-        ws.cell(row=row_idx, column=6, value=str(row.get('pk_profil', ''))).alignment = Alignment(horizontal='center', vertical='center')
+        ws.cell(row=row_idx, column=2, value=str(row.get('couche', ''))).alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+        ws.cell(row=row_idx, column=3, value=str(row.get('emplacement', ''))).alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+        ws.cell(row=row_idx, column=4, value=str(row.get('pk_profil', ''))).alignment = Alignment(horizontal='center', vertical='center')
 
         ev1_v = float(row.get('ev1', 0) or 0)
         ev2_v = float(row.get('ev2', 0) or 0)
@@ -379,20 +482,20 @@ def generer_excel_synthese(df, mois_str, empl_str, couche_str, nom_projet):
         ev2_vals.append(ev2_v)
         k_vals.append(k_v)
 
-        c_ev1 = ws.cell(row=row_idx, column=7, value=ev1_v)
+        c_ev1 = ws.cell(row=row_idx, column=5, value=ev1_v)
         c_ev1.number_format = '#,##0.00'
         c_ev1.alignment = Alignment(horizontal='right', vertical='center')
 
-        c_ev2 = ws.cell(row=row_idx, column=8, value=ev2_v)
+        c_ev2 = ws.cell(row=row_idx, column=6, value=ev2_v)
         c_ev2.number_format = '#,##0.00'
         c_ev2.alignment = Alignment(horizontal='right', vertical='center')
 
-        c_k = ws.cell(row=row_idx, column=9, value=k_v)
+        c_k = ws.cell(row=row_idx, column=7, value=k_v)
         c_k.number_format = '#,##0.00'
         c_k.alignment = Alignment(horizontal='right', vertical='center')
         c_k.fill = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
 
-        for c in range(1, 10):
+        for c in range(1, 8):
             ws.cell(row=row_idx, column=c).font = normal_font
             ws.cell(row=row_idx, column=c).border = thin_border
 
@@ -403,39 +506,41 @@ def generer_excel_synthese(df, mois_str, empl_str, couche_str, nom_projet):
         avg_ev2 = sum(ev2_vals) / len(ev2_vals)
         avg_k = sum(k_vals) / len(k_vals)
 
-        ws.merge_cells(start_row=row_idx, start_column=1, end_row=row_idx, end_column=6)
+        ws.merge_cells(start_row=row_idx, start_column=1, end_row=row_idx, end_column=4)
         m_cell = ws.cell(row=row_idx, column=1, value="MOYENNE DES ESSAIS")
         m_cell.font = bold_font
         m_cell.alignment = Alignment(horizontal='right', vertical='center')
 
-        for c in range(1, 7):
+        for c in range(1, 5):
             ws.cell(row=row_idx, column=c).border = double_bottom_border
 
-        c_avg1 = ws.cell(row=row_idx, column=7, value=avg_ev1)
+        c_avg1 = ws.cell(row=row_idx, column=5, value=avg_ev1)
         c_avg1.font = bold_font
         c_avg1.number_format = '#,##0.00'
         c_avg1.alignment = Alignment(horizontal='right', vertical='center')
         c_avg1.border = double_bottom_border
 
-        c_avg2 = ws.cell(row=row_idx, column=8, value=avg_ev2)
+        c_avg2 = ws.cell(row=row_idx, column=6, value=avg_ev2)
         c_avg2.font = bold_font
         c_avg2.number_format = '#,##0.00'
         c_avg2.alignment = Alignment(horizontal='right', vertical='center')
         c_avg2.border = double_bottom_border
 
-        c_avgk = ws.cell(row=row_idx, column=9, value=avg_k)
+        c_avgk = ws.cell(row=row_idx, column=7, value=avg_k)
         c_avgk.font = bold_font
         c_avgk.number_format = '#,##0.00'
         c_avgk.alignment = Alignment(horizontal='right', vertical='center')
         c_avgk.border = double_bottom_border
 
         row_idx += 2
+
         ws.cell(row=row_idx, column=1, value="RÉSUMÉ STATISTIQUE QUALITÉ").font = bold_font
         row_idx += 1
 
-        for col_num, header_title in [(1, "Indicateur"), (7, "EV1 (MPa)"), (8, "EV2 (MPa)"), (9, "Ratio K (EV2/EV1)")]:
+        stat_headers = ["Indicateur", "EV1 (MPa)", "EV2 (MPa)", "Ratio K (EV2/EV1)"]
+        for col_num, sh in enumerate(stat_headers, 1):
             cell = ws.cell(row=row_idx, column=col_num)
-            cell.value = header_title
+            cell.value = sh
             cell.font = header_font
             cell.fill = header_fill
             cell.alignment = Alignment(horizontal='center', vertical='center')
@@ -452,9 +557,8 @@ def generer_excel_synthese(df, mois_str, empl_str, couche_str, nom_projet):
         for label, v1, v2, vk in stats_data:
             ws.cell(row=row_idx, column=1, value=label).font = bold_font
             ws.cell(row=row_idx, column=1).border = thin_border
-            for c_skip in range(2, 7):
-                ws.cell(row=row_idx, column=c_skip).border = thin_border
-            for col_idx, val in zip([7, 8, 9], [v1, v2, vk]):
+            
+            for col_idx, val in enumerate([v1, v2, vk], 2):
                 c = ws.cell(row=row_idx, column=col_idx, value=val)
                 c.font = normal_font
                 c.number_format = '#,##0.00' if label != "Nombre d\'essais" else '#,##0'
@@ -464,9 +568,17 @@ def generer_excel_synthese(df, mois_str, empl_str, couche_str, nom_projet):
 
         row_idx += 3
         ws.cell(row=row_idx, column=1, value="O.IKKEN").font = bold_font
-        ws.cell(row=row_idx, column=8, value="Chef du Laboratoire").font = bold_font
+        ws.cell(row=row_idx, column=6, value="Chef du Laboratoire").font = bold_font
 
-    col_dimensions = {'A': 13, 'B': 18, 'C': 18, 'D': 24, 'E': 16, 'F': 14, 'G': 12, 'H': 12, 'I': 15}
+    col_dimensions = {
+        'A': 13,
+        'B': 24,
+        'C': 16,
+        'D': 14,
+        'E': 12,
+        'F': 12,
+        'G': 15
+    }
     for col_letter, width in col_dimensions.items():
         ws.column_dimensions[col_letter].width = width
 
@@ -503,7 +615,7 @@ def show(supabase_client):
     if not projet_id_actif:
         st.error("⚠️ Aucun projet ne vous est autorisé. Contactez un administrateur.")
         return
-    st.caption(f"📁 Projet actif : **{projets_config.nom_projet(projet_id_actif)}** (ID filtré: `{projet_id_actif}`)")
+    st.caption(f"📁 Projet actif : **{projets_config.nom_projet(projet_id_actif)}**")
 
     tab_saisie, tab_hist_admin, tab_synthese = st.tabs(["➕ Saisie un PV", "Historique, Consultation & Administration", "Synthèse"])
 
@@ -512,8 +624,8 @@ def show(supabase_client):
 
         if editing_item:
             st.info(f"✏️ **Mode Modification** - Essai ID #{editing_item['id']}")
+            
             default_ref = editing_item.get("reference") or editing_item.get("ref_essai") or editing_item.get("ref") or "260/26/PLQ/01"
-            default_proj = editing_item.get("projet", "LGV CASA SUD")
             default_date = datetime.strptime(str(editing_item["date_essai"]), "%Y-%m-%d").date() if isinstance(editing_item.get("date_essai"), str) else date.today()
             default_client = editing_item.get("client", "TGCC")
             default_empl = editing_item.get("emplacement", "")
@@ -522,6 +634,7 @@ def show(supabase_client):
             default_mat = editing_item.get("nature_materiau", "")
             default_tech = "O.IKKEN" if str(editing_item.get("technicien", "")).strip() in ["", "O.IKKEN", "BAALLAL"] else editing_item.get("technicien", "")
             default_obs = editing_item.get("observations", "")
+            
             saved_points = editing_item.get("points_mesure")
             if not saved_points or not isinstance(saved_points, list):
                 default_points = [{"z1": float(editing_item.get("z1", 0.53)), "z2": float(editing_item.get("z2", 0.52)), "pk_point": default_pk}]
@@ -529,12 +642,11 @@ def show(supabase_client):
                 default_points = saved_points
         else:
             default_ref = "260/26/PLQ/01"
-            default_proj = "LGV CASA SUD"
             default_date = date.today()
             default_client = "TGCC"
             default_empl = "Voie B"
             default_pk = "PK 1+200"
-            default_couche = "Sous-couche et Couche de forme"
+            default_couche = "Sous-couche et Couche de forme ferroviaire (LGV)"
             default_mat = "GNT 0/31.5 Classée B2"
             default_tech = "O.IKKEN"
             default_obs = ""
@@ -543,9 +655,9 @@ def show(supabase_client):
         st.subheader("📝 " + ("Modifier l'essai" if editing_item else "Saisie d'un nouvel essai"))
 
         col0, col1, col2 = st.columns(3)
+
         with col0:
             reference = st.text_input("Référence de l'essai", value=default_ref, key="plaque_reference")
-            projet_saisie = st.text_input("Projet / Chantier", value=default_proj, key="plaque_projet_saisie")
         with col1:
             date_essai = st.date_input("Date de l'essai", value=default_date, key="plaque_date")
             client = st.text_input("Client / Organisme", value=default_client, key="plaque_client")
@@ -601,6 +713,7 @@ def show(supabase_client):
         for i in range(st.session_state["plaque_points_count"]):
             st.markdown(f"**Point de mesure N° {i+1}**")
             p_col0, p_col1, p_col2 = st.columns(3)
+            
             default_pk_point = default_points[i].get("pk_point", default_pk) if i < len(default_points) else default_pk
             default_z1_val = default_points[i]["z1"] if i < len(default_points) else 0.53
             default_z2_val = default_points[i]["z2"] if i < len(default_points) else 0.52
@@ -618,12 +731,17 @@ def show(supabase_client):
         st.subheader("📈 Résultats Calculés Automatiquement")
 
         points_results = []
+        commentaires_points = []
+        
         for i, p in enumerate(points_data):
             z1_val = p["z1"]
             z2_val = p["z2"]
             ev1_i = round(112.5 / (z1_val * 2), 2) if z1_val > 0 else 0.0
             ev2_i = round(90.0 / (z2_val * 2), 2) if z2_val > 0 else 0.0
             k_ratio_i = round(ev2_i / ev1_i, 2) if ev1_i > 0 else 0.0
+
+            comm_pt = f"Point {p['pk_point']} : EV2 = {ev2_i} MPa, K = {k_ratio_i}."
+            commentaires_points.append(comm_pt)
             points_results.append({"ev1": ev1_i, "ev2": ev2_i, "k_ratio": k_ratio_i})
 
             res_col1, res_col2, res_col3 = st.columns(3)
@@ -643,6 +761,7 @@ def show(supabase_client):
         with btn_col1:
             button_label = "🔄 Mettre à jour l'essai" if editing_item else "💾 Enregistrer l'essai"
             if st.button(button_label, key="btn_enregistrer_plaque", type="primary", use_container_width=True):
+                
                 try:
                     query_doublon = supabase.table("essai_plaque").select("id").eq("projet_id", projet_id_actif).eq("reference", reference)
                     if editing_item:
@@ -658,7 +777,6 @@ def show(supabase_client):
                     "reference": reference,
                     "date_essai": str(date_essai),
                     "client": client,
-                    "projet": projet_saisie,
                     "emplacement": emplacement,
                     "pk_profil": pk_profil,
                     "couche": couche,
@@ -702,7 +820,7 @@ def show(supabase_client):
 
                         if editing_item:
                             anciennes_valeurs_plaque = {k: editing_item.get(k) for k in safe_payload}
-                            _executer_avec_reprise(lambda: supabase.table("essai_plaque").update(safe_payload).eq("id", editing_item["id"]).execute())
+                            _executer_avec_reprise(lambda: supabase.table("essai_plaque").update(safe_payload).eq("id", editing_item["id"]).eq("projet_id", projet_id_actif).select("id").execute())
                             enregistrer_modification(supabase, "essai_plaque", editing_item["id"], "MODIFICATION", anciennes_valeurs_plaque, safe_payload)
                             st.success(f"✅ Essai #{editing_item['id']} mis à jour avec succès !")
                             st.session_state["edit_plaque_item"] = None
@@ -717,17 +835,23 @@ def show(supabase_client):
                     st.rerun()
                 except Exception as e:
                     if _est_erreur_timeout(e):
-                        st.warning("⚠️ Connexion lente à Supabase (Timeout). Sauvegarde en mode local...")
+                        st.warning("⚠️ Connexion lente à Supabase (Timeout). Nouvelles tentatives déjà effectuées sans succès — sauvegarde en mode local...")
                         if OFFLINE_SUPPORT:
                             try:
                                 insert_safe("essai_plaque", safe_payload)
-                                st.success("💾 Essai sauvegardé localement sur cet appareil.")
+                                st.success(
+                                    "💾 Essai sauvegardé localement sur cet appareil — il sera synchronisé "
+                                    "automatiquement avec Supabase dès que la connexion sera rétablie."
+                                )
                                 st.cache_data.clear()
                                 st.rerun()
                             except Exception as e2:
-                                st.error(f"❌ Échec sauvegarde locale : {e2}")
+                                st.error(f"❌ Échec de la sauvegarde locale également : {e2}")
                         else:
-                            st.error("❌ Module offline_manager indisponible.")
+                            st.error(
+                                "❌ Le module offline_manager n'est pas disponible : impossible de sauvegarder "
+                                "cet essai pour le moment. Réessayez lorsque la connexion sera meilleure."
+                            )
                     else:
                         st.error(f"Erreur lors de l'enregistrement : {e}")
 
@@ -749,7 +873,6 @@ def show(supabase_client):
                         "Référence": ref_val,
                         "Date": row.get("date_essai"),
                         "Client": row.get("client"),
-                        "Projet": row.get("projet", "LGV CASA SUD"),
                         "Emplacement": row.get("emplacement"),
                         "Couche": row.get("couche"),
                         "EV2 (MPa)": row.get("ev2"),
@@ -782,7 +905,7 @@ def show(supabase_client):
                         with st.popover("🗑️ Supprimer cet essai", use_container_width=True):
                             st.warning(
                                 f"⚠️ Suppression définitive de l'essai **#{essai_hist_selectionne['id']}** "
-                                f"(Réf: {essai_hist_selectionne.get('reference', '-')}). Action irréversible."
+                                f"(Réf: {essai_hist_selectionne.get('reference', '-')}). Cette action est irréversible."
                             )
                             confirm_del_plaque = st.checkbox(
                                 "Je confirme vouloir supprimer définitivement cet essai",
@@ -796,13 +919,13 @@ def show(supabase_client):
                                 key=f"btn_confirm_del_plaque_{essai_hist_selectionne['id']}"
                             ):
                                 try:
-                                    _executer_avec_reprise(lambda: supabase.table("essai_plaque").delete().eq("id", essai_hist_selectionne["id"]).execute())
+                                    _executer_avec_reprise(lambda: supabase.table("essai_plaque").delete().eq("id", essai_hist_selectionne["id"]).eq("projet_id", projet_id_actif).execute())
                                     enregistrer_modification(
                                         supabase, "essai_plaque", essai_hist_selectionne["id"], "SUPPRESSION",
                                         anciennes_valeurs={k: essai_hist_selectionne.get(k) for k in ("reference", "couche", "ev2")},
                                         commentaire=f"Supprimé par {current_user}"
                                     )
-                                    st.success(f"✅ Essai #{essai_hist_selectionne['id']} supprimé.")
+                                    st.success(f"✅ Essai #{essai_hist_selectionne['id']} supprimé avec succès.")
                                     if st.session_state.get("edit_plaque_item", {}).get("id") == essai_hist_selectionne["id"]:
                                         st.session_state["edit_plaque_item"] = None
                                     st.cache_data.clear()
@@ -810,7 +933,7 @@ def show(supabase_client):
                                 except Exception as e:
                                     st.error(f"❌ Échec de la suppression : {e}")
             else:
-                st.info(f"Aucun essai trouvé pour le filtre actuel (`projet_id` = {projet_id_actif}). Vérifiez que la table `essai_plaque` contient des enregistrements pour ce projet ou que les RLS Supabase autorisent la lecture.")
+                st.info("Aucun essai enregistré.")
         except Exception as e:
             st.warning(f"Erreur historique : {e}")
 
@@ -830,7 +953,7 @@ def show(supabase_client):
                     st.write(f"**Référence :** {essai_selectionne.get('reference', '-')}")
                     st.write(f"**Date :** {essai_selectionne.get('date_essai', '-')}")
                     st.write(f"**Client :** {essai_selectionne.get('client', '-')}")
-                    st.write(f"**Projet :** {essai_selectionne.get('projet', 'LGV CASA SUD')}")
+                    st.write(f"**Projet :** {projets_config.nom_projet(projet_id_actif)}")
                 with col_p2:
                     st.write(f"**Emplacement :** {essai_selectionne.get('emplacement', '-')}")
                     st.write(f"**Couche :** {essai_selectionne.get('couche', '-')}")
@@ -859,8 +982,6 @@ def show(supabase_client):
             data_plaque = charger_essais_plaque(projet_id_actif)
             if data_plaque and len(data_plaque) > 0:
                 df_synth = pd.DataFrame(data_plaque)
-                if 'projet' not in df_synth.columns:
-                    df_synth['projet'] = 'LGV CASA SUD'
                 df_synth['date_datetime'] = pd.to_datetime(df_synth['date_essai'], errors='coerce')
                 df_synth['mois'] = df_synth['date_datetime'].dt.strftime('%Y-%m')
 
@@ -880,7 +1001,7 @@ def show(supabase_client):
                             return f"{_NOMS_MOIS_FR.get(mois_num, mois_num)} {annee}"
                         except Exception:
                             return m
-                    choix_mois = st.selectbox("Période (Mois)", mois_options, key="filtre_mois", format_func=_formatter_mois)
+                    choix_mois = st.cat_sel = st.selectbox("Période (Mois)", mois_options, key="filtre_mois", format_func=_formatter_mois) if hasattr(st, 'selectbox') else None
                 with f_col2:
                     empl_options = ["Tous"] + sorted([str(e) for e in df_synth['emplacement'].dropna().unique().tolist()])
                     choix_empl = st.selectbox("Emplacement", empl_options, key="filtre_emplacement")
@@ -922,7 +1043,6 @@ def show(supabase_client):
                             "Référence": ref_val,
                             "Date": row.get("date_essai"),
                             "Client": row.get("client"),
-                            "Projet": row.get("projet", "LGV CASA SUD"),
                             "Emplacement": row.get("emplacement"),
                             "Couche": row.get("couche"),
                             "EV2 (MPa)": row.get("ev2"),
