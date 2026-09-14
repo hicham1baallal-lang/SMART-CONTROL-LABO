@@ -273,33 +273,32 @@ def generate_excel_synthese_lpee(df_filtered):
     ws["C1"] = "LABORATOIRE PUBLIC D'ESSAIS ET D'ETUDES - LPEE"
     ws["C1"].font = font_header_title
     ws["C1"].alignment = align_center
-    ws.merge_cells("C1:I1")
+    ws.merge_cells("C1:H1")
 
     ws["C2"] = "CENTRE TECHNIQUE REGIONAL DE CASABLANCA-SETTAT-BENI MELLAL (CTR-CSB)"
     ws["C2"].font = Font(name="Arial", size=9, bold=True)
     ws["C2"].alignment = align_center
-    ws.merge_cells("C2:I2")
+    ws.merge_cells("C2:H2")
 
     ws["C3"] = "Laboratoire de Contrôle Externe - Projet LGV CASA SUD"
     ws["C3"].font = font_sub_title
     ws["C3"].alignment = align_center
-    ws.merge_cells("C3:I3")
+    ws.merge_cells("C3:H3")
 
     # Titre principal
     ws["A5"] = "SYNTHÈSE ET STATISTIQUES DES ESSAIS DE COMPACITÉ (NF P 94-093 / NF P 94-061-2)"
     ws["A5"].font = Font(name="Arial", size=11, bold=True, color="FFFFFF")
     ws["A5"].alignment = align_center
     
-    for col in range(1, 14):
+    for col in range(1, 9):
         ws.cell(row=5, column=col).fill = fill_navy
-    ws.merge_cells("A5:M5")
+    ws.merge_cells("A5:H5")
     ws.row_dimensions[5].height = 24
 
-    # En-têtes du tableau principal
+    # En-têtes du tableau principal (Colonnes demandées retirées)
     headers = [
-        "N° Rapport", "Date Prél.", "Mois / Période", "Lieu / Zone", 
-        "Matériau", "Réf", "Niveau", "D. Sèche", "D. Réf", "w (%)", 
-        "% > 20mm", "IC (%)", "Observation"
+        "N° Rapport", "Date Prél.", "Lieu / Zone", 
+        "Matériau", "Réf", "Niveau", "IC (%)", "Observation"
     ]
     
     start_row = 7
@@ -320,15 +319,10 @@ def generate_excel_synthese_lpee(df_filtered):
         values = [
             row.get("num_rapport", ""),
             str(row.get("date_prelevement", "")),
-            str(row.get("Période_Mois", "")),
             str(row.get("lieu_prelevement", "")),
             str(row.get("type_materiau", "")),
             row.get("ref_num", ""),
             str(row.get("type_mesure", "")).lower(),
-            float(row.get("densite_seche", 0.0)),
-            float(row.get("densite_ref", 0.0)),
-            float(row.get("w_mesure", 0.0)),
-            float(row.get("refus_20mm", 0.0)),
             float(row.get("ic", 0.0)),
             str(row.get("observation", ""))
         ]
@@ -340,17 +334,14 @@ def generate_excel_synthese_lpee(df_filtered):
             if fill_to_use:
                 cell.fill = fill_to_use
 
-            if col_idx in [1, 2, 3, 6, 7]:
+            if col_idx in [1, 2, 5, 6]:
                 cell.alignment = align_center
-            elif col_idx in [4, 5]:
+            elif col_idx in [3, 4]:
                 cell.alignment = align_left
-            elif col_idx in [8, 9]:
-                cell.alignment = align_right
-                cell.number_format = "0.000"
-            elif col_idx in [10, 11, 12]:
+            elif col_idx == 7:
                 cell.alignment = align_right
                 cell.number_format = "0.0"
-            elif col_idx == 13:
+            elif col_idx == 8:
                 cell.alignment = align_center
                 if val == "Conforme":
                     cell.font = Font(name="Arial", size=9, bold=True, color="008000")
@@ -362,14 +353,14 @@ def generate_excel_synthese_lpee(df_filtered):
     # --- BLOC STATISTIQUE GLOBAL ---
     current_row += 1
     
-    for c_idx in range(1, 14):
+    for c_idx in range(1, 9):
         c = ws.cell(row=current_row, column=c_idx)
         c.fill = fill_navy
         c.border = thin_border
     
     ws.cell(row=current_row, column=1, value="📊 STATISTIQUES GLOBALES DES ESSAIS").font = font_section
     ws.cell(row=current_row, column=1).alignment = align_left
-    ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=13)
+    ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=8)
     ws.row_dimensions[current_row].height = 20
 
     # Résumé Effectifs & Conformité
@@ -381,74 +372,58 @@ def generate_excel_synthese_lpee(df_filtered):
 
     c_tot = ws.cell(row=current_row, column=1, value=f"Nombre total d'essais : {total_pts}")
     c_tot.font = font_bold
-    ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=4)
+    ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=3)
 
-    c_conf = ws.cell(row=current_row, column=5, value=f"Conformes : {conf_pts} ({taux_conf:.1f}%) | Non Conformes : {non_conf_pts}")
+    c_conf = ws.cell(row=current_row, column=4, value=f"Conformes : {conf_pts} ({taux_conf:.1f}%) | Non Conformes : {non_conf_pts}")
     c_conf.font = font_bold
-    ws.merge_cells(start_row=current_row, start_column=5, end_row=current_row, end_column=8)
+    ws.merge_cells(start_row=current_row, start_column=4, end_row=current_row, end_column=8)
 
     # Entêtes du Tableau Statistique
     current_row += 2
     ws.row_dimensions[current_row].height = 20
     
-    stat_headers = ["Indicateur Statistique", "Densité Sèche (t/m³)", "Teneur en eau w (%)", "Refus > 20mm (%)", "Indice Compacité IC (%)"]
+    stat_headers = ["Indicateur Statistique", "Indice de Compacité IC (%)"]
     
-    for idx, sh in enumerate(stat_headers, 1):
-        col_start = 1 if idx == 1 else (idx * 2) + 2
-        col_end = 3 if idx == 1 else col_start + 1
+    for c in range(1, 9):
+        cell = ws.cell(row=current_row, column=c)
+        cell.fill = fill_stat_hdr
+        cell.border = thin_border
         
-        for c in range(col_start, col_end + 1):
-            cell = ws.cell(row=current_row, column=c)
-            cell.fill = fill_stat_hdr
-            cell.border = thin_border
-            
-        first_cell = ws.cell(row=current_row, column=col_start, value=sh)
-        first_cell.font = font_bold
-        first_cell.alignment = align_center
-        
-        ws.merge_cells(start_row=current_row, start_column=col_start, end_row=current_row, end_column=col_end)
+    ws.cell(row=current_row, column=1, value=stat_headers[0]).font = font_bold
+    ws.cell(row=current_row, column=1).alignment = align_center
+    ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=4)
 
-    # Calculs et Lignes de valeurs
-    ds_vals = df_filtered["densite_seche"].astype(float)
-    w_vals = df_filtered["w_mesure"].astype(float)
-    ref_vals = df_filtered["refus_20mm"].astype(float)
+    ws.cell(row=current_row, column=5, value=stat_headers[1]).font = font_bold
+    ws.cell(row=current_row, column=5).alignment = align_center
+    ws.merge_cells(start_row=current_row, start_column=5, end_row=current_row, end_column=8)
+
     ic_vals = df_filtered["ic"].astype(float)
 
     stats_rows = [
-        ("Valeur Minimum (Min)", ds_vals.min(), w_vals.min(), ref_vals.min(), ic_vals.min()),
-        ("Valeur Moyenne (Moy)", ds_vals.mean(), w_vals.mean(), ref_vals.mean(), ic_vals.mean()),
-        ("Valeur Maximum (Max)", ds_vals.max(), w_vals.max(), ref_vals.max(), ic_vals.max())
+        ("Valeur Minimum (Min)", ic_vals.min()),
+        ("Valeur Moyenne (Moy)", ic_vals.mean()),
+        ("Valeur Maximum (Max)", ic_vals.max())
     ]
 
-    for label, ds_v, w_v, ref_v, ic_v in stats_rows:
+    for label, ic_v in stats_rows:
         current_row += 1
         ws.row_dimensions[current_row].height = 18
 
-        for c in range(1, 4):
+        for c in range(1, 9):
             ws.cell(row=current_row, column=c).border = thin_border
 
         lbl_cell = ws.cell(row=current_row, column=1, value=label)
         lbl_cell.font = font_data
         lbl_cell.alignment = align_left
-        ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=3)
+        ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=4)
 
-        vals = [ds_v, w_v, ref_v, ic_v]
-        for idx, val in enumerate(vals, 1):
-            col_start = (idx * 2) + 2
-            col_end = col_start + 1
-            val_fmt = round(val, 3) if idx == 1 else round(val, 1)
-
-            for c in range(col_start, col_end + 1):
-                ws.cell(row=current_row, column=c).border = thin_border
-
-            val_cell = ws.cell(row=current_row, column=col_start, value=val_fmt)
-            val_cell.font = font_bold
-            val_cell.alignment = align_center
-            
-            ws.merge_cells(start_row=current_row, start_column=col_start, end_row=current_row, end_column=col_end)
+        val_cell = ws.cell(row=current_row, column=5, value=round(ic_v, 1))
+        val_cell.font = font_bold
+        val_cell.alignment = align_center
+        ws.merge_cells(start_row=current_row, start_column=5, end_row=current_row, end_column=8)
 
     # Ajustement des largeurs de colonnes
-    col_widths = {1: 18, 2: 12, 3: 15, 4: 28, 5: 24, 6: 8, 7: 10, 8: 12, 9: 12, 10: 10, 11: 12, 12: 10, 13: 15}
+    col_widths = {1: 18, 2: 12, 3: 28, 4: 24, 5: 8, 6: 10, 7: 10, 8: 15}
     for col_i, w in col_widths.items():
         col_letter = openpyxl.utils.get_column_letter(col_i)
         ws.column_dimensions[col_letter].width = w
@@ -904,9 +879,9 @@ def show(supabase_client, can_edit=False, is_admin=False):
                         st.markdown("#### 📄 Résultats de la Synthèse")
                         
                         cols_to_display = [
-                            "num_rapport", "date_prelevement", "Période_Mois", "lieu_prelevement", 
+                            "num_rapport", "date_prelevement", "lieu_prelevement", 
                             "type_materiau", "ref_num", "designation", "type_mesure", 
-                            "densite_seche", "densite_ref", "w_mesure", "refus_20mm", "ic", "observation"
+                            "ic", "observation"
                         ]
                         
                         cols_existing = [c for c in cols_to_display if c in filtered_df.columns]
