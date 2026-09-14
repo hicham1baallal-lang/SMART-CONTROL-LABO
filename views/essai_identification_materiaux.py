@@ -399,7 +399,7 @@ def show(supabase_client):
     # ---------------------------------------------------------
     # TAB 1 : 📋 PVS / HISTORIQUE, CONSULTATION & ADMINISTRATION
     # ---------------------------------------------------------
-    with tabs:
+    with tabs:  # CORRIGÉ ICI (tabs au lieu de tabs)
         f_st.subheader("📋 PVS / Historique, Consultation & Administration")
         raw_data = _safe_supabase_fetch(supabase_client)
         if not raw_data and not f_st.session_state["pv_ident_local_db"]:
