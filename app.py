@@ -119,10 +119,6 @@ def load_users():
     users = DEFAULT_USERS.copy()
     if supabase:
         try:
-            # NOTE : la table réelle s'appelle "users" (pas "app_users") —
-            # voir diagnostic PGRST205. Le mot de passe peut être stocké
-            # sous "password" ou "password_hash" selon le schéma exact ;
-            # les deux sont pris en charge par prudence.
             res = supabase.table("users").select("*").execute()
             if res.data:
                 for row in res.data:
@@ -254,7 +250,6 @@ with st.sidebar:
     st.caption(f"👤 Connecté : **{current_username}**")
     st.markdown("---")
 
-    # Dictionnaire des modules conservés (sans suivi bétonnage, contrôle béton, ni synthèse plaque)
     menu_options = {
         "🚜 Essai à la Plaque": essai_Plaque,
         "💧 Teneur en Eau": essai_teneur_eau,
@@ -282,9 +277,26 @@ with st.sidebar:
     )
     st.session_state["selected_page"] = selected_page_label
 
-    # Indicateur + synchronisation manuelle du mode hors-ligne (données
-    # sauvegardées localement suite à un timeout Supabase, en attente
-    # d'envoi). N'affiche rien s'il n'y a rien en attente.
+    # --- NOUVEAU : SOUS-TITRES POUR IDENTIFICATION MATÉRIAU ---
+    if selected_page_label == "🔬 Identification Matériau":
+        sub_options = [
+            "Remblai ordinaire",
+            "GNF 0/40",
+            "GNA 0/31.5",
+            "Couche de forme",
+            "Sous couche 0/31.5",
+            "GNT bloc technique PRA",
+            "GNT 0/60",
+            "Remblai contigu type 2"
+        ]
+        selected_sub = st.radio(
+            "📂 Type de matériau spécifié :",
+            options=sub_options,
+            key="sub_menu_ident_mat"
+        )
+        st.session_state["sub_page_identification"] = selected_sub
+    # -----------------------------------------------------------
+
     if OFFLINE_SUPPORT:
         try:
             _pending_count = get_pending_count()
