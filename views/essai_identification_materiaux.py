@@ -137,7 +137,7 @@ def show(supabase_client):
     if not user_can_edit:
         f_st.warning("🔒 Mode lecture seule. Droits de modification restreints.")
 
-    tabs = f_st.tabs([
+    tab_saisir, tab_hist, tab_synth = f_st.tabs([
         "➕ Saisir un PV & Granulo (Sol)",
         "📋 PVS / Historique, Consultation & Administration",
         "📊 Synthèse"
@@ -146,7 +146,7 @@ def show(supabase_client):
     # ---------------------------------------------------------
     # TAB 0 : ➕ SAISIR UN PV & GRANULOMETRIE TYPE LPEE (SOL)
     # ---------------------------------------------------------
-    with tabs[0]:
+    with tab_saisir:
         f_st.subheader("➕ Saisie PV & Feuille d'Essai Granulométrique (Norme LPEE)")
         c1, c2, c3 = f_st.columns(3)
         with c1:
@@ -399,7 +399,7 @@ def show(supabase_client):
     # ---------------------------------------------------------
     # TAB 1 : 📋 PVS / HISTORIQUE, CONSULTATION & ADMINISTRATION
     # ---------------------------------------------------------
-    with tabs:  # CORRIGÉ ICI (tabs au lieu de tabs)
+    with tab_hist:
         f_st.subheader("📋 PVS / Historique, Consultation & Administration")
         raw_data = _safe_supabase_fetch(supabase_client)
         if not raw_data and not f_st.session_state["pv_ident_local_db"]:
@@ -428,7 +428,7 @@ def show(supabase_client):
     # ---------------------------------------------------------
     # TAB 2 : 📊 SYNTHÈSE
     # ---------------------------------------------------------
-    with tabs[2]:
+    with tab_synth:
         f_st.subheader("📊 Synthèse Identification Matériaux")
         raw_data = _safe_supabase_fetch(supabase_client)
         data_to_use = raw_data if raw_data else f_st.session_state["pv_ident_local_db"]
