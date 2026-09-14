@@ -14,7 +14,7 @@ def clean_text(text):
     if text is None:
         return ""
     text_str = str(text)
-    text_str = text_str.replace("–", "-").replace("—", "-").replace("’", "'").replace("³", "3")
+    text_str = text_str.replace("–", "-").replace("—", "-").replace("’", "'").replace("³", "3").replace("≥", ">=").replace("≤", "<=")
     return text_str.encode("latin-1", "replace").decode("latin-1")
 
 
@@ -22,14 +22,51 @@ def clean_text(text):
 # TABLEAU DE RÉFÉRENCE MATÉRIAUX & EXIGENCES CCTP
 # ==========================================
 REFERENTIEL_MATERIAUX = {
-    "Remblai ordinaire": {"exigence_str": "q4 : pdmc >= 95 % OPN ; pdfc >= 92 % OPN", "exigence_mc": 95.0, "exigence_fc": 92.0},
-    "GNT pour PST": {"exigence_str": "q4 : pdmc >= 95 % ; pdfc >= 92 % OPN", "exigence_mc": 95.0, "exigence_fc": 92.0},
-    "Remblai contigu": {"exigence_str": "<1.50m de mur : q4 : pdmc >= 95 % ; pdfc >= 92 % OPN / > a 1.50 m de mur : q3 : pdmc >= 98.5 % ; pdfc >= 96 % OPN", "exigence_mc": 98.5, "exigence_fc": 96.0},
-    "Remblai renforcé": {"exigence_str": "95 % OPM", "exigence_mc": 95.0, "exigence_fc": 95.0},
-    "Remblai de fouille": {"exigence_str": "95 % OPM", "exigence_mc": 95.0, "exigence_fc": 95.0},
-    "GNF 1": {"exigence_str": "98 % OPM", "exigence_mc": 98.0, "exigence_fc": 98.0},
-    "couche de forme 0/60": {"exigence_str": "q3 : pdmc >= 98,5 % OPN ; pdfc >= 96 % OPN", "exigence_mc": 98.5, "exigence_fc": 96.0},
-    "Sous-couche GNT 0/31,5": {"exigence_str": "q1 : pdmc >= 100 % ; pdfc >= 98 % OPN", "exigence_mc": 100.0, "exigence_fc": 98.0}
+    "Remblai ordinaire": {
+        "exigence_str": "q4 : pdmc >= 95 % OPN ; pdfc >= 92 % OPN", 
+        "exigence_mc": 95.0, 
+        "exigence_fc": 92.0
+    },
+    "GNT pour PST": {
+        "exigence_str": "q4 : pdmc >= 95 % ; pdfc >= 92 % OPN", 
+        "exigence_mc": 95.0, 
+        "exigence_fc": 92.0
+    },
+    "Remblai contigu (< 1.50m de mur)": {
+        "exigence_str": "q4 : pdmc >= 95 % OPN ; pdfc >= 92 % OPN", 
+        "exigence_mc": 95.0, 
+        "exigence_fc": 92.0
+    },
+    "Remblai contigu (> 1.50m de mur)": {
+        "exigence_str": "q3 : pdmc >= 98.5 % OPN ; pdfc >= 96 % OPN", 
+        "exigence_mc": 98.5, 
+        "exigence_fc": 96.0
+    },
+    "Remblai renforcé": {
+        "exigence_str": "95 % OPM", 
+        "exigence_mc": 95.0, 
+        "exigence_fc": 95.0
+    },
+    "Remblai de fouille": {
+        "exigence_str": "95 % OPM", 
+        "exigence_mc": 95.0, 
+        "exigence_fc": 95.0
+    },
+    "GNF 1": {
+        "exigence_str": "98 % OPM", 
+        "exigence_mc": 98.0, 
+        "exigence_fc": 98.0
+    },
+    "couche de forme 0/60": {
+        "exigence_str": "q3 : pdmc >= 98,5 % OPN ; pdfc >= 96 % OPN", 
+        "exigence_mc": 98.5, 
+        "exigence_fc": 96.0
+    },
+    "Sous-couche GNT 0/31,5": {
+        "exigence_str": "q1 : pdmc >= 100 % ; pdfc >= 98 % OPN", 
+        "exigence_mc": 100.0, 
+        "exigence_fc": 98.0
+    }
 }
 
 
@@ -196,10 +233,10 @@ def show(supabase_client, can_edit=False, is_admin=False):
 
         default_seq = st.session_state.get("edit_comp_num_seq", 1264)
         default_dossier = st.session_state.get("edit_comp_dossier", "2025-260-05985-2025 0247")
-        default_lieu = st.session_state.get("edit_comp_lieu", "OA-SOUS-RN11/12éme couche de remblai contigu du plot 2 gauche (Inferieur 1,50m)")
+        default_lieu = st.session_state.get("edit_comp_lieu", "OA-SOUS-RN11/12éme couche de remblai contigu du plot 2 gauche")
         default_d_opn = float(st.session_state.get("edit_comp_d_opn", 2.09))
         default_w_opn = float(st.session_state.get("edit_comp_w_opn", 6.3))
-        default_mat = st.session_state.get("edit_comp_mat", "Remblai contigu")
+        default_mat = st.session_state.get("edit_comp_mat", "Remblai contigu (< 1.50m de mur)")
 
         mat_keys = list(REFERENTIEL_MATERIAUX.keys())
         if default_mat not in mat_keys:
