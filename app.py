@@ -172,9 +172,9 @@ if st.session_state["user"] is None:
         except Exception:
             pass
 
-# Formulaire de Connexion avec image d'accueil
+# Formulaire de Connexion avec image d'accueil (CORRECTION : st.columns(2))
 if st.session_state["user"] is None:
-    col_img, col_form = st.columns()
+    col_img, col_form = st.columns(2)
     with col_img:
         if os.path.exists("image.page d'accueil.png"):
             st.image("image.page d'accueil.png", use_container_width=True)
