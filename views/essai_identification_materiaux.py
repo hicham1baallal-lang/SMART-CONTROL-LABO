@@ -54,7 +54,7 @@ def classer_gtr(dmax, pass_80um, ip, vbs=0.5, pass_2mm=70.0, is_roche=False, roc
 
 class IdentificationPDF(FPDF):
     def header(self):
-        # En-tête officiel conforme au Modèle LPEE
+        # En-tête officiel conforme au Modèle LPEE (Sans caractères Unicode non supportés)
         logo_path = "logo.png.jpg"
         if not os.path.exists(logo_path):
             logo_path = "logo.png"
@@ -67,15 +67,15 @@ class IdentificationPDF(FPDF):
         self.set_font("Helvetica", "B", 10)
         self.cell(100, 5, "L.P.E.E", 0, 0, "L")
         self.set_font("Helvetica", "B", 9)
-        self.cell(90, 5, "المختبر العمومي للتجارب والدراسات", 0, 1, "R")
+        self.cell(90, 5, "L.P.E.E - CTR CASA-SETTAT", 0, 1, "R")
         
         self.set_font("Helvetica", "B", 8)
         self.cell(100, 4, "LABORATOIRE PUBLIC DES ESSAIS ET D'ETUDES", 0, 0, "L")
         self.set_font("Helvetica", "I", 8)
-        self.cell(90, 4, "Laboratoire du contrôle externe", 0, 1, "R")
+        self.cell(90, 4, "Laboratoire du controle externe", 0, 1, "R")
         
         self.set_font("Helvetica", "", 8)
-        self.cell(100, 4, "Centre Technique Régional CASA-SETTAT-BENI MELLAL", 0, 1, "L")
+        self.cell(100, 4, "Centre Technique Regional CASA-SETTAT-BENI MELLAL", 0, 1, "L")
         self.ln(2)
         self.line(10, 24, 200, 24)
         self.ln(4)
@@ -115,19 +115,19 @@ def generate_pdf(header_info, data_dict, type_mat, graph_img_bytes=None):
     pdf.cell(150, 5, f": {client_val}", 1, 1, "L")
     pdf.cell(40, 5, "Dossier", 1, 0, "L")
     pdf.cell(150, 5, f": {dossier_val}", 1, 1, "L")
-    pdf.cell(40, 5, "Date du prélèvement", 1, 0, "L")
+    pdf.cell(40, 5, "Date du prelevement", 1, 0, "L")
     pdf.cell(150, 5, f": {date_prelev}", 1, 1, "L")
-    pdf.cell(40, 5, "Lieux de prélèvement", 1, 0, "L")
+    pdf.cell(40, 5, "Lieux de prelevement", 1, 0, "L")
     pdf.cell(150, 5, f": {lieu_val}", 1, 1, "L")
-    pdf.cell(40, 5, "Numéro de prélèvement", 1, 0, "L")
+    pdf.cell(40, 5, "Numero de prelevement", 1, 0, "L")
     pdf.cell(150, 5, f": {num_prelev}", 1, 1, "L")
-    pdf.cell(40, 5, "Matériau", 1, 0, "L")
+    pdf.cell(40, 5, "Materiau", 1, 0, "L")
     pdf.cell(150, 5, f": {type_mat}", 1, 1, "L")
     pdf.ln(3)
 
     # Objet & Référence de normes
     pdf.set_font("Helvetica", "B", 8)
-    pdf.cell(190, 5, f"OBJET : IDENTIFICATION DU MATÉRIAU DE {str(type_mat).upper()}", 1, 1, "L")
+    pdf.cell(190, 5, f"OBJET : IDENTIFICATION DU MATERIAU DE {str(type_mat).upper()}", 1, 1, "L")
     
     pdf.set_font("Helvetica", "", 7)
     normes_text = "[X] A.G: NM 00.8.082  |  [ ] IP: NF P94-051  |  [X] LOS ANGELES: NM EN 1097-2  |  [X] MDE: NM EN 1097-1  |  [X] PROCTOR: NM 13.1.023  |  [X] VBS: NM 13.1.178"
@@ -136,7 +136,7 @@ def generate_pdf(header_info, data_dict, type_mat, graph_img_bytes=None):
 
     # Table Résultats d'essais
     pdf.set_font("Helvetica", "B", 8)
-    pdf.cell(190, 5, "Résultats d'essais", 1, 1, "C", fill=False)
+    pdf.cell(190, 5, "Resultats d'essais", 1, 1, "C", fill=False)
     
     pdf.set_font("Helvetica", "B", 7)
     pdf.cell(30, 5, "% < 80 µm", 1, 0, "C")
@@ -144,7 +144,7 @@ def generate_pdf(header_info, data_dict, type_mat, graph_img_bytes=None):
     pdf.cell(30, 5, "D MAX (mm)", 1, 0, "C")
     pdf.cell(25, 5, "VBS", 1, 0, "C")
     pdf.cell(25, 5, "Wopt (%)", 1, 0, "C")
-    pdf.cell(25, 5, "Densité OPN", 1, 0, "C")
+    pdf.cell(25, 5, "Densite OPN", 1, 0, "C")
     pdf.cell(25, 5, "GTR", 1, 1, "C")
 
     pdf.set_font("Helvetica", "", 8)
@@ -161,8 +161,8 @@ def generate_pdf(header_info, data_dict, type_mat, graph_img_bytes=None):
     pdf.set_font("Helvetica", "B", 8)
     pdf.cell(190, 5, "Commentaires & Conditions d'utilisation :", 1, 1, "L")
     pdf.set_font("Helvetica", "", 8)
-    obs_txt = data_dict.get("Observation", "Le matériau peut être utilisé pour un remblai.")
-    cond_txt = f"• Conditions d'utilisation : {data_dict.get('Classe GTR (Auto)', 'B5')} m = ni pluie, ni évaporation importante | C: compactage moyen"
+    obs_txt = data_dict.get("Observation", "Le materiau peut etre utilise pour un remblai.")
+    cond_txt = f"• Conditions d'utilisation : {data_dict.get('Classe GTR (Auto)', 'B5')} m = ni pluie, ni evaporation importante | C: compactage moyen"
     pdf.multi_cell(190, 4, f"{obs_txt}\n{cond_txt}", border=1)
     pdf.ln(3)
 
@@ -178,7 +178,7 @@ def generate_pdf(header_info, data_dict, type_mat, graph_img_bytes=None):
     # Bloc Signatures (3 Signatures)
     pdf.ln(5)
     pdf.set_font("Helvetica", "B", 8)
-    pdf.cell(63, 5, "REÇU PAR LE CLIENT", 1, 0, "C")
+    pdf.cell(63, 5, "RECU PAR LE CLIENT", 1, 0, "C")
     pdf.cell(63, 5, "LE COORDINATEUR DES ESSAIS", 1, 0, "C")
     pdf.cell(64, 5, "LE CHEF DU LABORATOIRE", 1, 1, "C")
 
@@ -426,7 +426,7 @@ def show(supabase_client):
                 f_st.warning(f"⚠️ Stocké en session locale. Rendez-vous à la fenêtre 2 pour télécharger le PV PDF.")
 
     # ---------------------------------------------------------
-    # TAB 1 : 📋 PVs / HISTORIQUE & ADMINISTRATION (AVEC TÉLÉCHARGEMENT PDF MODÈLE LPEE)
+    # TAB 1 : 📋 PVs / HISTORIQUE & ADMINISTRATION
     # ---------------------------------------------------------
     with tab_hist:
         f_st.subheader("📋 PVs / Historique, Consultation & Téléchargement PDF")
@@ -458,7 +458,6 @@ def show(supabase_client):
                         f_st.write(f"**Observation :** {row.get('observation')}")
                         f_st.write(f"**Date essai :** {row.get('date_essai')}")
                     
-                    # Reconstruction du graphique si données sieve présent
                     sieve_rec = row.get("sieve_data")
                     graph_bytes_row = None
                     if sieve_rec and isinstance(sieve_rec, list):
@@ -468,7 +467,6 @@ def show(supabase_client):
                         except Exception:
                             graph_bytes_row = None
 
-                    # En-tête mis à jour pour le modèle LPEE complet
                     header_info = {
                         "num_rapport": row.get("num_rapport"),
                         "client": row.get("client", "TGCC"),
