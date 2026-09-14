@@ -83,7 +83,7 @@ def generate_pdf(header_info, data_dict, type_mat):
     pdf.alias_nb_pages()
     pdf.add_page()
     pdf.set_font("Helvetica", "B", 13)
-    pdf.cell(0, 8, f"PROCES VERBAL - IDENTIFICATION & GRANULO ({type_mat.upper()})", 0, 1, "C")
+    pdf.cell(0, 8, f"PROCES VERBAL - IDENTIFICATION & GRANULO ({str(type_mat).upper()})", 0, 1, "C")
     pdf.ln(4)
     pdf.set_font("Helvetica", "B", 10)
     pdf.cell(0, 6, f"Rapport d'Essai n° : {header_info.get('num_rapport') or 'N/A'}", 0, 1, "R")
@@ -101,9 +101,13 @@ def generate_pdf(header_info, data_dict, type_mat):
     pdf.set_font("Helvetica", "B", 10)
     pdf.cell(190, 8, " II - Synthèse Granulométrique & GTR (NM 00.8.082 / LPEE)", 1, 1, "L", fill=True)
     pdf.set_font("Helvetica", "", 9)
-    for k, v in data_dict.items():
-        pdf.cell(95, 7, f"   {str(k)[:40]}", 1, 0, "L")
-        pdf.cell(95, 7, f"   {str(v)[:40]}", 1, 1, "L")
+    
+    if isinstance(data_dict, dict):
+        for k, v in data_dict.items():
+            pdf.cell(95, 7, f"   {str(k)[:40]}", 1, 0, "L")
+            pdf.cell(95, 7, f"   {str(v)[:40]}", 1, 1, "L")
+    else:
+        pdf.cell(190, 7, f"   {str(data_dict)}", 1, 1, "L")
     
     pdf.ln(10)
     pdf.set_font("Helvetica", "B", 9)
@@ -133,7 +137,6 @@ def show(supabase_client):
     if "pv_ident_local_db" not in f_st.session_state:
         f_st.session_state["pv_ident_local_db"] = []
 
-    # Récupération du sous-titre choisi dans la sidebar
     selected_mat_sub = f_st.session_state.get("sub_page_identification", "Remblai ordinaire")
 
     f_st.title("🔬 Identification & Granulométrie des Matériaux")
@@ -150,7 +153,7 @@ def show(supabase_client):
     ])
 
     # ---------------------------------------------------------
-    # TAB 0 : ➕ SAISIE D'UN PV SELON LE SOUS-TYPE DE MATÉRIAU
+    # TAB 0 : ➕ SAISIE D'UN PV
     # ---------------------------------------------------------
     with tab_saisir:
         f_st.subheader(f"➕ Saisie PV d'identification — {selected_mat_sub}")
@@ -295,7 +298,6 @@ def show(supabase_client):
         classe_gtr_auto = classer_gtr(dmax_detected, pass_80um_val, ip, vbs_val, pass_2mm_val)
         f_st.metric("Classe GTR (Auto - Tableau IV)", classe_gtr_auto)
 
-        # Contrôle de conformité simple selon le matériau choisi
         if "GNF" in selected_mat_sub or "GNA" in selected_mat_sub:
             is_conf = pass_80um_val <= 12.0 and la_val <= 30 and mde_val <= 25
         elif "Couche de forme" in selected_mat_sub:
@@ -319,63 +321,86 @@ def show(supabase_client):
             "Observation": obs
         }
 
-        header_info = {"num_rapport": num_rapport, "lieu": lieu, "pk": pk, "date_essai": str(date_essai)}
-        pdf_bytes = generate_pdf(header_info, data_dict, selected_mat_sub)
-        
-        col_d1, col_d2 = f_st.columns(2)
-        with col_d1:
-            f_st.download_button(
-                "📄 Télécharger PV (PDF)",
-                data=pdf_bytes,
-                file_name=f"PV_Ident_{selected_mat_sub.replace(' ', '_')}_{num_rapport.replace('/','_')}.pdf",
-                mime="application/pdf",
-                use_container_width=True
-            )
-        with col_d2:
-            if f_st.button("💾 Enregistrer dans Supabase", type="primary", use_container_width=True, disabled=not user_can_edit):
-                payload_record = {
-                    "num_rapport": num_rapport,
-                    "type_materiau": selected_mat_sub,
-                    "lieu": lieu,
-                    "pk": pk,
-                    "date_essai": str(date_essai),
-                    "details": data_dict,
-                    "observation": obs
-                }
-                saved_to_db = False
-                db_error_msg = ""
-                if supabase_client:
-                    try:
-                        res = supabase_client.table("pv_identification_materiaux").upsert(payload_record, on_conflict="num_rapport").execute()
-                        saved_to_db = True
-                    except Exception as e:
-                        saved_to_db = False
-                        db_error_msg = str(e)
-                
-                f_st.session_state["pv_ident_local_db"] = [
-                    r for r in f_st.session_state["pv_ident_local_db"] if r.get("num_rapport") != num_rapport
-                ]
-                f_st.session_state["pv_ident_local_db"].insert(0, payload_record)
-                
-                if saved_to_db:
-                    f_st.success("✅ PV enregistré avec succès dans Supabase !")
-                else:
-                    f_st.warning(f"⚠️ Stocké en session locale uniquement (Erreur Supabase : `{db_error_msg[:100]}`).")
+        # Bouton d'enregistrement uniquement dans cet onglet (Téléchargement transféré à la fenêtre 2)
+        if f_st.button("💾 Enregistrer le PV dans l'Historique", type="primary", use_container_width=True, disabled=not user_can_edit):
+            payload_record = {
+                "num_rapport": num_rapport,
+                "type_materiau": selected_mat_sub,
+                "lieu": lieu,
+                "pk": pk,
+                "date_essai": str(date_essai),
+                "details": data_dict,
+                "observation": obs
+            }
+            saved_to_db = False
+            db_error_msg = ""
+            if supabase_client:
+                try:
+                    res = supabase_client.table("pv_identification_materiaux").upsert(payload_record, on_conflict="num_rapport").execute()
+                    saved_to_db = True
+                except Exception as e:
+                    saved_to_db = False
+                    db_error_msg = str(e)
+            
+            f_st.session_state["pv_ident_local_db"] = [
+                r for r in f_st.session_state["pv_ident_local_db"] if r.get("num_rapport") != num_rapport
+            ]
+            f_st.session_state["pv_ident_local_db"].insert(0, payload_record)
+            
+            if saved_to_db:
+                f_st.success("✅ PV enregistré avec succès dans Supabase ! Vous pouvez le télécharger dans la fenêtre '📋 PVs / Historique & Administration'.")
+            else:
+                f_st.warning(f"⚠️ Stocké en session locale. (Erreur Supabase : `{db_error_msg[:100]}`). Rendez-vous à la fenêtre 2 pour le télécharger.")
 
     # ---------------------------------------------------------
-    # TAB 1 : 📋 HISTORIQUE & CONSULTATION
+    # TAB 1 : 📋 PVs / HISTORIQUE, CONSULTATION & TÉLÉCHARGEMENT PDF
     # ---------------------------------------------------------
     with tab_hist:
-        f_st.subheader("📋 PVS / Historique & Administration")
+        f_st.subheader("📋 PVs / Historique, Consultation & Téléchargement PDF")
         raw_data = _safe_supabase_fetch(supabase_client)
+        
         if not raw_data and not f_st.session_state["pv_ident_local_db"]:
             f_st.info("💡 Aucun PV d'identification enregistré.")
         else:
             combined_records = raw_data if raw_data else f_st.session_state["pv_ident_local_db"]
             df_hist = pd.DataFrame(combined_records)
+            
             search_q = f_st.text_input("Filtrer par N° Rapport, Lieu ou Type :", key="search_hist_input").lower()
             if search_q:
                 df_hist = df_hist[df_hist.apply(lambda r: search_q in str(r.values).lower(), axis=1)]
+            
+            f_st.markdown("#### Liste des PVs enregistrés")
+            
+            # Affichage ligne par ligne avec option de téléchargement du PDF
+            for idx, row in df_hist.iterrows():
+                with f_st.expander(f"📄 N° Rapport : {row.get('num_rapport')} | Type : {row.get('type_materiau')} | Date : {row.get('date_essai')}"):
+                    c_info1, c_info2 = f_st.columns(2)
+                    with c_info1:
+                        f_st.write(f"**Lieu / Zone :** {row.get('lieu')}")
+                        f_st.write(f"**PK / Section :** {row.get('pk')}")
+                    with c_info2:
+                        f_st.write(f"**Observation :** {row.get('observation')}")
+                        f_st.write(f"**Date d'essai :** {row.get('date_essai')}")
+                    
+                    # Régénération du PDF pour téléchargement
+                    header_info = {
+                        "num_rapport": row.get("num_rapport"),
+                        "lieu": row.get("lieu"),
+                        "pk": row.get("pk"),
+                        "date_essai": str(row.get("date_essai"))
+                    }
+                    pdf_bytes = generate_pdf(header_info, row.get("details", {}), str(row.get("type_materiau")))
+                    
+                    f_st.download_button(
+                        label=f"📄 Télécharger PV PDF ({row.get('num_rapport')})",
+                        data=pdf_bytes,
+                        file_name=f"PV_{str(row.get('num_rapport')).replace('/', '_')}.pdf",
+                        mime="application/pdf",
+                        key=f"dl_pdf_btn_{idx}_{row.get('num_rapport')}",
+                        use_container_width=True
+                    )
+
+            f_st.markdown("---")
             f_st.dataframe(df_hist, use_container_width=True)
 
             selected_del = f_st.selectbox("Sélectionner un PV à supprimer (Admin/Labo)", options=[""] + df_hist["num_rapport"].tolist() if "num_rapport" in df_hist else [], key="del_pv_select")
