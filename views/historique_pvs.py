@@ -168,7 +168,7 @@ def afficher_vue(supabase_client=None):
         }),
     }
 
-  # --- Sélecteur d'année et de mois ---
+  # --- 1. Sélection de la Période ---
   st.markdown("### 🔍 1. Sélection de la Période")
   col1, col2 = st.columns(2)
 
@@ -217,28 +217,29 @@ def afficher_vue(supabase_client=None):
 
   mois_annee_str = f"{mois_noms[selected_month_num]} {selected_year}"
 
-  # --- Rubrique de filtrage des types d'essais à inclure ---
+  # --- 2. Rubrique pour filtrer/cocher les types d'essais à ajouter à la synthèse ---
   st.markdown("---")
   st.markdown(
-      "### 🎛️ 2. Filtrer les types d'essais à inclure dans la synthèse globale"
+      "### 🎛️ 2. Sélection des types d'essais à inclure dans la synthèse"
   )
   st.write(
-      "Cochez les types d'essais que vous désirez intégrer dans l'affichage et"
-      " dans le document Word :"
+      "Cochez ci-dessous les essais que vous souhaitez voir apparaître dans le"
+      " rapport global :"
   )
 
   types_disponibles = list(dict_dfs_bruts.keys())
   selected_types = {}
 
-  # Organisation des cases à cocher en colonnes (jusqu'à 3 par ligne)
+  # Disposition en colonnes dynamiques pour les cases à cocher
   cols_checkboxes = st.columns(min(len(types_disponibles), 3))
   for idx, nom_type in enumerate(types_disponibles):
     col_target = cols_checkboxes[idx % len(cols_checkboxes)]
     with col_target:
       selected_types[nom_type] = st.checkbox(
-          f"Inclure : {nom_type}", value=True, key=f"chk_{nom_type}"
+          f"Inclure : {nom_type}", value=True, key=f"chk_type_{nom_type}"
       )
 
+  # --- 3. Aperçu et filtrage par période & sélections ---
   st.markdown("---")
   st.markdown(
       f"### 📊 3. Aperçu des tableaux filtrés pour : **{mois_annee_str}**"
@@ -248,7 +249,7 @@ def afficher_vue(supabase_client=None):
   total_essais_mois = 0
 
   for nom_type, df in dict_dfs_bruts.items():
-    # Si l'utilisateur a décoché ce type d'essai, on l'ignore
+    # Si le type d'essai n'est pas coché par l'utilisateur, on l'exclut
     if not selected_types.get(nom_type, True):
       continue
 
@@ -292,8 +293,8 @@ def afficher_vue(supabase_client=None):
   # --- Section Export Word ---
   st.markdown("### 📥 Exporter le Rapport de Synthèse Mensuelle")
   st.write(
-      f"Téléchargez le rapport Word (.docx) contenant uniquement les types"
-      f" d'essais sélectionnés pour **{mois_annee_str}**."
+      f"Téléchargez le rapport Word (.docx) contenant les sections cochées"
+      f" pour **{mois_annee_str}**."
   )
 
   if total_essais_mois > 0:
