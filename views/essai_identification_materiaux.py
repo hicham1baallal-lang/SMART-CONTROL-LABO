@@ -102,6 +102,24 @@ def get_material_config(selected_label):
     return code, MATERIAL_TYPES[code]
 
 
+# =====================================================================
+# FUSEAUX GRANULOMÉTRIQUES DE SPÉCIFICATION (par code matériau)
+# Chaque entrée : (Tamis mm, VSI = Valeur Seuil Inférieure %, VSS = Valeur Seuil Supérieure %)
+# Ajouter une entrée par code pour afficher son fuseau sur la courbe.
+# =====================================================================
+FUSEAUX_GRANULO = {
+    "GNF-040": [
+        (0.08, 2, 14),
+        (2, 20, 48),
+        (6.3, 33, 64),
+        (10, 40, 70),
+        (20, 60, 90),
+        (31.5, 80, 100),
+        (40, 85, 100),
+    ],
+}
+
+
 def classer_grave(la, mde, coeff_apl, es, pass_80um):
     """
     Classification indicative des graves non traitées (GNF/GNA/GNT/Couche de forme)
@@ -569,6 +587,22 @@ def show(supabase_client):
                 x_indices, plot_curve_df["% Passant"],
                 marker='o', markersize=4, linestyle='-', color='#004080', linewidth=1.8, label=ref_ech
             )
+
+            # --- Fuseau de spécification (si défini pour ce code matériau) ---
+            fuseau_def = FUSEAUX_GRANULO.get(mat_code)
+            if fuseau_def:
+                fuseau_x, fuseau_vsi, fuseau_vss = [], [], []
+                for tamis_f, vsi_f, vss_f in fuseau_def:
+                    row_f = plot_curve_df[np.isclose(plot_curve_df["Tamis (mm)"].astype(float), tamis_f, atol=1e-3)]
+                    if not row_f.empty:
+                        fuseau_x.append(int(row_f.index[0]))
+                        fuseau_vsi.append(vsi_f)
+                        fuseau_vss.append(vss_f)
+                if len(fuseau_x) >= 2:
+                    ax.plot(fuseau_x, fuseau_vss, linestyle='--', color='#b30000', linewidth=1.3, label='Fuseau VSS (sup.)')
+                    ax.plot(fuseau_x, fuseau_vsi, linestyle='--', color='#1a7a1a', linewidth=1.3, label='Fuseau VSI (inf.)')
+                    ax.fill_between(fuseau_x, fuseau_vsi, fuseau_vss, color='#ffcc00', alpha=0.15)
+
             ax.set_xticks(ticks_positions)
             ax.set_xticklabels(ticks_labels, rotation=70, ha='right', fontsize=7)
             ax.set_xlabel("Ouverture des tamis (mm)")
@@ -671,8 +705,22 @@ def show(supabase_client):
                         res = supabase_client.table("pv_identification_materiaux").insert(payload_record).execute()
                         saved_to_db = True
                     except Exception as e:
-                        saved_to_db = False
                         save_error = str(e)
+                        # Repli : la table Supabase n'a peut-être pas encore les colonnes
+                        # code_materiau / famille_materiau (schéma pas encore migré).
+                        # On retire ces colonnes en trop et on retente l'insertion, pour ne
+                        # jamais bloquer l'enregistrement d'un PV à cause de ça.
+                        if "schema cache" in save_error or "PGRST204" in save_error or "code_materiau" in save_error or "famille_materiau" in save_error:
+                            try:
+                                fallback_payload = {
+                                    k: v for k, v in payload_record.items()
+                                    if k not in ("code_materiau", "famille_materiau")
+                                }
+                                supabase_client.table("pv_identification_materiaux").insert(fallback_payload).execute()
+                                saved_to_db = True
+                                save_error = None
+                            except Exception as e2:
+                                save_error = str(e2)
                 
                 f_st.session_state["pv_ident_local_db"] = [
                     r for r in f_st.session_state["pv_ident_local_db"] if r.get("num_rapport") != num_rapport
