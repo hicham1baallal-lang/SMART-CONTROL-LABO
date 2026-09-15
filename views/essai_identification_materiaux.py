@@ -479,7 +479,11 @@ def show(supabase_client):
                 m2_val = f_st.number_input("Masse sèche après lavage 0,063mm M2 (g)", value=4850.0, step=0.1, disabled=not user_can_edit, key=f"m2g_{mat_code}")
 
             f_st.markdown("#### Tableau de Tamisage à sec — Refus partiels")
-            TAMIS_GRAVE_MM = [63, 50, 40, 31.5, 20, 10, 6.3, 4, 2, 1, 0.5, 0.25, 0.125, 0.063]
+            TAMIS_GRAVE_MM = [
+                80, 63, 50, 40, 31.5, 25, 20, 16, 14, 12.5, 10, 8, 6.3, 5, 4, 3.15,
+                2.5, 2, 1.6, 1.25, 1, 0.8, 0.63, 0.5, 0.4, 0.315, 0.25, 0.2, 0.16,
+                0.125, 0.1, 0.08, 0.063
+            ]
             df_template_grave = pd.DataFrame({
                 "Tamis (mm)": TAMIS_GRAVE_MM,
                 "Refus partiel Ri (g)": [0.0] * len(TAMIS_GRAVE_MM)
@@ -661,12 +665,14 @@ def show(supabase_client):
                     "observation": obs
                 }
                 saved_to_db = False
+                save_error = None
                 if supabase_client:
                     try:
                         res = supabase_client.table("pv_identification_materiaux").insert(payload_record).execute()
                         saved_to_db = True
-                    except Exception:
+                    except Exception as e:
                         saved_to_db = False
+                        save_error = str(e)
                 
                 f_st.session_state["pv_ident_local_db"] = [
                     r for r in f_st.session_state["pv_ident_local_db"] if r.get("num_rapport") != num_rapport
@@ -675,8 +681,10 @@ def show(supabase_client):
                 
                 if saved_to_db:
                     f_st.success("✅ PV enregistré avec succès dans Supabase !")
+                elif supabase_client is None:
+                    f_st.warning("⚠️ Stocké en session locale (aucune connexion Supabase fournie à cette page).")
                 else:
-                    f_st.warning("⚠️ Stocké en session locale.")
+                    f_st.warning(f"⚠️ Stocké en session locale. Échec de l'enregistrement Supabase : {save_error}")
 
     # ---------------------------------------------------------
     # TAB 1 : 📋 PVs / HISTORIQUE & TÉLÉCHARGEMENT PDF
