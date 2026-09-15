@@ -80,7 +80,10 @@ class IdentificationPDF(FPDF):
         self.cell(0, 5, "RAPPORT D'ESSAI D'IDENTIFICATION DES MATÉRIAUX", 0, 1, "C")
         self.set_text_color(0, 0, 0)
         self.line(10, 24, 200, 24)
-        self.set_xy(10, 25)
+        
+        # SÉPARATION NETTE APRÈS L'ENTÊTE (ligne de découpe visuelle)
+        self.ln(4)
+        self.set_xy(10, 29)
 
     def footer(self):
         self.set_y(-12)
@@ -108,7 +111,7 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
             "Observation": "Le matériau peut être utilisé pour un remblai."
         }
     
-    # Intitulé Projet LGV Casa Sud
+    # Intitulé Projet LGV Casa Sud (placé juste après la séparation de l'entête)
     pdf.set_font("Helvetica", "B", 7)
     pdf.multi_cell(190, 3.5, "TRAVAUX D'EXECUTION DE TERRASSEMENT, OUVRAGES D'ART ET RETABLISSEMENTS DE COMMUNICATION ENTRE PK 5+450 et PK 10+000 - GARE CASA SUD", 0, "C")
     pdf.ln(2)
@@ -129,7 +132,7 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
     pdf.cell(190, 4.5, " Normes : A.G: NM 00.8.082 | IP: NF P94-051 | VBS: NM 13.1.178 | LOS ANGELES: NM EN 1097-2 | MDE: NM EN 1097-1", 1, 1, "L")
     pdf.ln(2)
 
-    # --- TABLEAU DES RÉSULTATS D'ESSAIS (Conforme à l'image fournie) ---
+    # --- TABLEAU DES RÉSULTATS D'ESSAIS ---
     pdf.set_font("Helvetica", "B", 8)
     pdf.set_fill_color(220, 230, 242)
     pdf.cell(190, 5.5, " Résultats d'essais", 1, 1, "C", fill=True)
@@ -172,7 +175,7 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
     pdf.cell(60, 5, " VBS", 1, 0, "L")
     pdf.cell(130, 5, val_vbs, 1, 1, "C")
 
-    # Ligne Proctor (divisée en sous-cellules Wopt et Densité OPN comme dans l'image)
+    # Ligne Proctor
     pdf.cell(60, 5, " Proctor", 1, 0, "L")
     pdf.set_font("Helvetica", "B", 7)
     pdf.cell(26, 5, " Wopt", 1, 0, "C", fill=True)
