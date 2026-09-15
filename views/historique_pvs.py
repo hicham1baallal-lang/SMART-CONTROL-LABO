@@ -200,11 +200,15 @@ def afficher_vue(supabase_client=None):
         ]
         if col_date_cands:
             parsed = pd.to_datetime(df[col_date_cands[0]], errors="coerce")
+            # Normalisation pour éviter le mélange tz-aware / tz-naive lors de l'extension
+            if getattr(parsed.dt, "tz", None) is not None:
+                parsed = parsed.dt.tz_convert(None)
             toutes_les_dates.extend(parsed.dropna().tolist())
 
     if toutes_les_dates:
-        # Conversion explicite en DatetimeIndex / Series typée pour éviter l'erreur .dt
         s_dates = pd.to_datetime(pd.Series(toutes_les_dates))
+        if getattr(s_dates.dt, "tz", None) is not None:
+            s_dates = s_dates.dt.tz_convert(None)
         annees_dispo = sorted(s_dates.dt.year.unique().tolist(), reverse=True)
     else:
         annees_dispo = [datetime.date.today().year]
@@ -285,6 +289,9 @@ def afficher_vue(supabase_client=None):
             c_date = col_date_cands[0]
             df_copy = df.copy()
             df_copy[c_date] = pd.to_datetime(df_copy[c_date], errors="coerce")
+            if getattr(df_copy[c_date].dt, "tz", None) is not None:
+                df_copy[c_date] = df_copy[c_date].dt.tz_convert(None)
+
             df_f = df_copy[
                 (df_copy[c_date].dt.year == selected_year)
                 & (df_copy[c_date].dt.month == selected_month_num)
