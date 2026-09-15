@@ -2,15 +2,24 @@ import io
 import datetime
 import pandas as pd
 from docx import Document
+from docx.shared import Inches
 import streamlit as st
 
 
 def generer_document_synthese(dict_dfs_filtres, mois_annee_str):
   """Génère un fichier Word en mémoire contenant un rapport structuré
 
-  avec des tableaux propres et bien mis en page pour chaque type d'essai.
+  avec un nombre restreint de colonnes essentielles pour éviter l'effet
+  'écrasé'.
   """
   doc = Document()
+
+  # Définition des marges de la page pour une meilleure mise en page
+  for section in doc.sections:
+    section.top_margin = Inches(1)
+    section.bottom_margin = Inches(1)
+    section.left_margin = Inches(0.8)
+    section.right_margin = Inches(0.8)
 
   # En-tête du document
   doc.add_heading("Rapport de Synthèse Mensuelle - Smart Control Béton", level=1)
@@ -24,38 +33,71 @@ def generer_document_synthese(dict_dfs_filtres, mois_annee_str):
 
   donnees_presentes = False
 
+  # Sélection stricte des colonnes essentielles par type d'essai pour éviter l'explosion des colonnes
+  colonnes_essentielles = {
+      "Essai à la Plaque": [
+          "Date",
+          "Ouvrage",
+          "Module_K",
+          "Deflection",
+          "Statut",
+      ],
+      "Compacité": ["Date", "Ouvrage", "Densite_Seche", "Teneur_Eau", "Statut"],
+      "Teneur en Eau": ["Date", "Ouvrage", "Teneur_Eau_pct", "Statut"],
+      "Granulats pour Béton": [
+          "Date",
+          "Ouvrage",
+          "Type_Granulat",
+          "Observation",
+          "Statut",
+      ],
+      "Identification Matériau": [
+          "Date",
+          "Ouvrage",
+          "Type_Materiau",
+          "Statut",
+      ],
+  }
+
   for nom_type, df in dict_dfs_filtres.items():
     if not df.empty:
       donnees_presentes = True
       doc.add_heading(f"Type d'essai : {nom_type}", level=2)
       doc.add_paragraph(f"Nombre d'enregistrements : {len(df)}")
 
-      # Nettoyage des colonnes pour ne garder que les informations pertinentes
-      colonnes_a_afficher = [
-          c
-          for c in df.columns
-          if not c.startswith("_") and c.lower() not in ["user_id"]
-      ]
+      # Filtrage pour ne garder que les colonnes utiles si elles existent
+      c_preferes = colonnes_essentielles.get(nom_type, [])
+      colonnes_a_afficher = [c for c in c_preferes if c in df.columns]
+
       if not colonnes_a_afficher:
-        colonnes_a_afficher = list(df.columns)
+        # Par défaut, on prend au maximum les 5 premières colonnes non techniques
+        cols_utiles = [
+            c
+            for c in df.columns
+            if not c.startswith("_") and c.lower() != "user_id"
+        ]
+        colonnes_a_afficher = cols_utiles[:5] if len(cols_utiles) > 5 else cols_utiles
 
-      df_to_show = df[colonnes_a_afficher]
+      df_to_show = df[colonnes_a_afficher].copy()
 
-      # Création du tableau Word avec un style de grille propre
+      # Création du tableau Word avec une grille propre
       table = doc.add_table(rows=1, cols=len(df_to_show.columns))
       table.style = "Table Grid"
 
       hdr_cells = table.rows[0].cells
       for i, column_name in enumerate(df_to_show.columns):
         hdr_cells[i].text = str(column_name)
+        for p in hdr_cells[i].paragraphs:
+          for run in p.runs:
+            run.font.bold = True
 
-      # Remplissage des lignes avec protection contre les textes trop longs
+      # Remplissage des lignes avec une limite de longueur pour éviter l'étirement
       for _, row in df_to_show.iterrows():
         row_cells = table.add_row().cells
         for i, val in enumerate(row):
           val_str = "" if pd.isna(val) else str(val)
-          if len(val_str) > 40:
-            val_str = val_str[:37] + "..."
+          if len(val_str) > 35:
+            val_str = val_str[:32] + "..."
           row_cells[i].text = val_str
 
       doc.add_paragraph("")  # Espacement entre les tableaux
@@ -63,7 +105,6 @@ def generer_document_synthese(dict_dfs_filtres, mois_annee_str):
   if not donnees_presentes:
     doc.add_paragraph("Aucun essai disponible pour cette période.")
 
-  # Sauvegarde dans un buffer mémoire
   buffer = io.BytesIO()
   doc.save(buffer)
   buffer.seek(0)
@@ -77,7 +118,6 @@ def afficher_vue(supabase_client=None):
       " eau, Compacité, etc.) filtrées par mois."
   )
 
-  # Définition des tables à interroger dans Supabase
   tables_essais = [
       ("Essai à la Plaque", "essais_plaque"),
       ("Teneur en Eau", "essais_teneur_eau"),
@@ -97,7 +137,6 @@ def afficher_vue(supabase_client=None):
       except Exception:
         pass
 
-  # Données de démonstration si aucune connexion ou tables vides
   if not dict_dfs_bruts:
     dict_dfs_bruts = {
         "Essai à la Plaque": pd.DataFrame({
@@ -121,15 +160,26 @@ def afficher_vue(supabase_client=None):
             "Teneur_Eau_pct": [5.2],
             "Statut": ["Validé"],
         }),
+        "Granulats pour Béton": pd.DataFrame({
+            "ID": [1],
+            "Date": ["2026-09-12"],
+            "Ouvrage": ["PRO 0745"],
+            "Type_Granulat": ["GNT 0/60"],
+            "Observation": ["Conforme"],
+            "Statut": ["Validé"],
+        }),
     }
 
-  # --- Sélecteur d'année et de mois ---
   st.markdown("### 🔍 Sélection de la Période")
   col1, col2 = st.columns(2)
 
   toutes_les_dates = []
   for df in dict_dfs_bruts.values():
-    col_date_cands = [c for c in df.columns if "date" in c.lower() or "created" in c.lower()]
+    col_date_cands = [
+        c
+        for c in df.columns
+        if "date" in c.lower() or "created" in c.lower()
+    ]
     if col_date_cands:
       parsed = pd.to_datetime(df[col_date_cands[0]], errors="coerce")
       toutes_les_dates.extend(parsed.dropna().tolist())
@@ -144,9 +194,18 @@ def afficher_vue(supabase_client=None):
     selected_year = st.selectbox("Sélectionner l'Année", options=annees_dispo)
 
   mois_noms = {
-      1: "Janvier", 2: "Février", 3: "Mars", 4: "Avril",
-      5: "Mai", 6: "Juin", 7: "Juillet", 8: "Août",
-      9: "Septembre", 10: "Octobre", 11: "Novembre", 12: "Décembre"
+      1: "Janvier",
+      2: "Février",
+      3: "Mars",
+      4: "Avril",
+      5: "Mai",
+      6: "Juin",
+      7: "Juillet",
+      8: "Août",
+      9: "Septembre",
+      10: "Octobre",
+      11: "Novembre",
+      12: "Décembre",
   }
 
   with col2:
@@ -154,13 +213,15 @@ def afficher_vue(supabase_client=None):
         "Sélectionner le Mois",
         options=list(mois_noms.keys()),
         format_func=lambda x: mois_noms[x],
-        index=datetime.date.today().month - 1
+        index=datetime.date.today().month - 1,
     )
 
   mois_annee_str = f"{mois_noms[selected_month_num]} {selected_year}"
 
   st.markdown("---")
-  st.markdown(f"### 📊 Synthèse par Type d'Essai pour : **{mois_annee_str}**")
+  st.markdown(
+      f"### 📊 Synthèse par Type d'Essai pour : **{mois_annee_str}**"
+  )
 
   dict_dfs_filtres = {}
   total_essais_mois = 0
@@ -168,15 +229,19 @@ def afficher_vue(supabase_client=None):
   for nom_type, df in dict_dfs_bruts.items():
     if df.empty:
       continue
-    
-    col_date_cands = [c for c in df.columns if "date" in c.lower() or "created" in c.lower()]
+
+    col_date_cands = [
+        c
+        for c in df.columns
+        if "date" in c.lower() or "created" in c.lower()
+    ]
     if col_date_cands:
       c_date = col_date_cands[0]
       df_copy = df.copy()
       df_copy[c_date] = pd.to_datetime(df_copy[c_date], errors="coerce")
       df_f = df_copy[
-          (df_copy[c_date].dt.year == selected_year) &
-          (df_copy[c_date].dt.month == selected_month_num)
+          (df_copy[c_date].dt.year == selected_year)
+          & (df_copy[c_date].dt.month == selected_month_num)
       ].copy()
       df_f[c_date] = df_f[c_date].dt.strftime("%Y-%m-%d")
     else:
@@ -185,7 +250,9 @@ def afficher_vue(supabase_client=None):
     dict_dfs_filtres[nom_type] = df_f
     total_essais_mois += len(df_f)
 
-    with st.expander(f"📌 {nom_type} ({len(df_f)} essai(s))", expanded=len(df_f) > 0):
+    with st.expander(
+        f"📌 {nom_type} ({len(df_f)} essai(s))", expanded=len(df_f) > 0
+    ):
       if not df_f.empty:
         st.dataframe(df_f, use_container_width=True)
       else:
@@ -194,7 +261,6 @@ def afficher_vue(supabase_client=None):
   st.markdown("---")
   st.markdown(f"**Total général des essais pour le mois :** {total_essais_mois}")
 
-  # --- Section Export Word ---
   st.markdown("### 📥 Exporter le Rapport de Synthèse Mensuelle")
   st.write(
       f"Téléchargez le rapport Word (.docx) structuré contenant les extraits"
@@ -207,7 +273,9 @@ def afficher_vue(supabase_client=None):
     st.download_button(
         label=f"📄 Télécharger le Rapport Mensuel ({mois_annee_str})",
         data=word_buffer,
-        file_name=f"Rapport_Synthese_Mensuelle_{selected_month_num}_{selected_year}.docx",
+        file_name=(
+            f"Rapport_Synthese_Mensuelle_{selected_month_num}_{selected_year}.docx"
+        ),
         mime=(
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         ),
