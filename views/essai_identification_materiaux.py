@@ -93,6 +93,9 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
     pdf.alias_nb_pages()
     pdf.add_page()
     
+    # Sécurité dictionnaire
+    data_dict = data_dict or {}
+    
     # Intitulé Projet LGV Casa Sud
     pdf.set_font("Helvetica", "B", 7)
     pdf.multi_cell(190, 3.5, "TRAVAUX D'EXECUTION DE TERRASSEMENT, OUVRAGES D'ART ET RETABLISSEMENTS DE COMMUNICATION ENTRE PK 5+450 et PK 10+000 - GARE CASA SUD", 0, "C")
@@ -126,16 +129,24 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
         pdf.cell(w, 10, h, 1, 0, "C", fill=True)
     pdf.ln()
 
+    # Récupération robuste des valeurs avec gestion des clés (compatibilité 'um' et 'µm')
+    val_80um = str(data_dict.get('Passant 80um (%)', data_dict.get('Passant 80µm (%)', data_dict.get('Passant 80um', '-'))))
+    val_2mm = str(data_dict.get('Passant 2mm (%)', data_dict.get('Passant 2mm', '-')))
+    val_dmax = str(data_dict.get('Dmax (mm)', data_dict.get('DMAX', '-')))
+    val_vbs = str(data_dict.get('VBS', '-'))
+    val_wopt = str(data_dict.get('wL (%)', data_dict.get('Wopt', '-')))
+    val_gtr = str(data_dict.get('Classe GTR (Auto)', data_dict.get('GTR', '-')))
+
     pdf.set_font("Helvetica", "", 8)
     vals = [
-        str(data_dict.get('Passant 80µm (%)', '-')),
-        str(data_dict.get('Passant 2mm (%)', '-')),
-        str(data_dict.get('Dmax (mm)', '-')),
-        str(data_dict.get('Dmax (mm)', '-')),
-        str(data_dict.get('VBS', '-')),
-        str(data_dict.get('wL (%)', '-')),
+        val_80um,
+        val_2mm,
+        val_dmax,
+        val_dmax,
+        val_vbs,
+        val_wopt,
         "1.73",
-        str(data_dict.get('Classe GTR (Auto)', '-'))
+        val_gtr
     ]
     for v, w in zip(vals, widths):
         pdf.cell(w, 10, v, 1, 0, "C")
@@ -369,13 +380,13 @@ def show(supabase_client):
 
         is_conf = pass_80um_val <= 35.0
         obs = f"Le matériau peut être utilisé pour un remblai. ({selected_mat_sub})" if is_conf else f"Non Conforme / Hors fuseau ({selected_mat_sub})"
-        f_st.info(f"Observation automatique : **{obs}** | Dmax: **{dmax_detected} mm** | Passant 80µm: **{pass_80um_val:.1f}%** | VBS: **{vbs_val}**")
+        f_st.info(f"Observation automatique : **{obs}** | Dmax: **{dmax_detected} mm** | Passant 80um: **{pass_80um_val:.1f}%** | VBS: **{vbs_val}**")
 
         data_dict = {
             "Sous-Type Matériau": selected_mat_sub,
             "Ref Echantillon": ref_ech,
             "M1 (g)": f"{m1_val}", "M2 (g)": f"{m2_val}", "M3 (g)": f"{m3_val}", "M4 (g)": f"{m4_val}",
-            "Dmax (mm)": f"{dmax_detected}", "Passant 80µm (%)": f"{pass_80um_val:.1f}", "Passant 2mm (%)": f"{pass_2mm_val:.1f}",
+            "Dmax (mm)": f"{dmax_detected}", "Passant 80um (%)": f"{pass_80um_val:.1f}", "Passant 2mm (%)": f"{pass_2mm_val:.1f}",
             "wL (%)": f"{w_l}", "wP (%)": f"{w_p}", "IP (%)": f"{ip:.1f}", "VBS": f"{vbs_val}",
             "Los Angeles (LA)": f"{la_val}", "Micro-Deval (MDE)": f"{mde_val}",
             "Classe GTR (Auto)": classe_gtr_auto,
