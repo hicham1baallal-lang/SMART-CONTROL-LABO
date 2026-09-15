@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import openpyxl
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+from openpyxl.drawing.image import Image as OpenpyxlImage
 import streamlit as f_st
 from fpdf import FPDF
 
@@ -593,7 +594,7 @@ def show(supabase_client):
                     export_rows.append({
                         "N° Rapport": row.get("num_rapport"),
                         "Date de prélèvement": row.get("date_essai"),
-                        "Nombre d'essais": 1,  # Chaque ligne représente un essai/rapport unitaire
+                        "Nombre d'essais": 1,
                         "Lieu / Zone": row.get("lieu"),
                         "Provenance d'échantillon": row.get("pk"),
                         "Classification GTR": details.get("Classe GTR (Auto)", "N/A"),
@@ -623,7 +624,7 @@ def show(supabase_client):
                 font_tbl_header = Font(name="Helvetica", size=10, bold=True, color="FFFFFF")
                 font_data = Font(name="Helvetica", size=9, color="000000")
 
-                fill_tbl_header = PatternFill(start_color="003366", end_color="003366", fill_type="solid") # Bleu LPEE
+                fill_tbl_header = PatternFill(start_color="003366", end_color="003366", fill_type="solid")
                 fill_zebra = PatternFill(start_color="F2F5F9", end_color="F2F5F9", fill_type="solid")
                 fill_white = PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid")
 
@@ -633,6 +634,19 @@ def show(supabase_client):
                     top=Side(style='thin', color='CCCCCC'),
                     bottom=Side(style='thin', color='CCCCCC')
                 )
+
+                # Ajout du logo dans le fichier Excel s'il existe (logo.png.jpg ou logo.png)
+                logo_path_excel = "logo.png.jpg"
+                if not os.path.exists(logo_path_excel):
+                    logo_path_excel = "logo.png"
+                if os.path.exists(logo_path_excel):
+                    try:
+                        img_ex = OpenpyxlImage(logo_path_excel)
+                        img_ex.width = 45
+                        img_ex.height = 25
+                        ws.add_image(img_ex, 'A1')
+                    except Exception:
+                        pass
 
                 # Ligne 1 : En-tête LPEE institutionnel
                 ws.merge_cells('A1:G1')
