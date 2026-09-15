@@ -54,23 +54,24 @@ def classer_gtr(dmax, pass_80um, ip, vbs=0.5, pass_2mm=70.0, is_roche=False, roc
 
 class IdentificationPDF(FPDF):
     def header(self):
-        # LOGO PLACÉ TOUT EN HAUT DE LA PAGE (Y=6)
+        # LOGO PLACÉ SUR LA MÊME LIGNE QUE L'ENTÊTE INSTITUTIONNEL
         logo_path = "logo.png.jpg"
         if not os.path.exists(logo_path):
             logo_path = "logo.png"
         if os.path.exists(logo_path):
             try:
-                self.image(logo_path, 10, 6, 22)
+                # x=10, y=6 avec une hauteur adaptée pour rester aligné avec le texte
+                self.image(logo_path, 10, 6, 18)
             except Exception:
                 pass
         
-        # ENTÊTE INSTITUTIONNEL DÉCALÉ VERS LA DROITE DU LOGO
+        # ENTÊTE INSTITUTIONNEL DÉCALÉ POUR ÊTRE SUR LA MÊME LIGNE QUE LE LOGO
         self.set_font("Helvetica", "B", 9)
-        self.set_xy(35, 6)
-        self.cell(90, 4, "L.P.E.E - LABORATOIRE PUBLIC DES ESSAIS ET D'ETUDES", 0, 1, "L")
+        self.set_xy(30, 6)
+        self.cell(95, 4, "L.P.E.E - LABORATOIRE PUBLIC DES ESSAIS ET D'ETUDES", 0, 1, "L")
         self.set_font("Helvetica", "", 7)
-        self.set_x(35)
-        self.cell(90, 3, "Centre Technique Régional CASA-SETTAT-BENI MELLAL", 0, 1, "L")
+        self.set_x(30)
+        self.cell(95, 3, "Centre Technique Régional CASA-SETTAT-BENI MELLAL", 0, 1, "L")
         
         self.set_font("Helvetica", "B", 8)
         self.set_xy(130, 6)
