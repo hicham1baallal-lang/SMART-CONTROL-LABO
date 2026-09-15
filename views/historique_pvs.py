@@ -42,9 +42,7 @@ def generer_document_synthese(df_essais):
 def afficher_vue():
   st.subheader("📜 Historique & Audit des Essais")
 
-  # --- Simulation ou Récupération des données (Remplacez ceci par votre requête Supabase) ---
-  # Exemple : df = conn.query("SELECT * FROM historique_essais;", ttl="10m")
-  # Pour l'exemple, on crée un DataFrame fictif :
+  # Simulation ou Récupération des données (À adapter selon vos requêtes Supabase)
   data = {
       "ID_Essai": [1, 2, 3],
       "Type_Essai": ["Compacité", "Teneur en Eau", "Essai à la Plaque"],
@@ -59,7 +57,7 @@ def afficher_vue():
 
   st.markdown("---")
 
-  # --- Section Export Word ---
+  # Section Export Word
   st.markdown("### 📥 Exporter la synthèse")
   st.write(
       "Cliquez sur le bouton ci-dessous pour télécharger un rapport Word (.docx)"
@@ -67,7 +65,6 @@ def afficher_vue():
   )
 
   if not df_essais.empty:
-    # Génération du buffer Word
     word_buffer = generer_document_synthese(df_essais)
 
     st.download_button(
@@ -82,6 +79,10 @@ def afficher_vue():
     st.warning("Aucune donnée à exporter.")
 
 
-# Point d'entrée si le fichier est exécuté directement ou importé
+# Alias pour assurer la compatibilité si votre app.py appelle show()
+def show():
+  afficher_vue()
+
+
 if __name__ == "__main__":
   afficher_vue()
