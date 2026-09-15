@@ -114,16 +114,16 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
     pdf.cell(190, 4.5, " Normes : A.G: NM 00.8.082 | IP: NF P94-051 | VBS: NM 13.1.178 | LOS ANGELES: NM EN 1097-2 | MDE: NM EN 1097-1", 1, 1, "L")
     pdf.ln(2)
 
-    # Tableau des résultats synthétiques d'essais
+    # Tableau des résultats synthétiques d'essais (Hauteur doublée : 10 au lieu de 5)
     pdf.set_font("Helvetica", "B", 8)
     pdf.set_fill_color(220, 230, 242)
-    pdf.cell(190, 5.5, " Résultats d'essais", 1, 1, "L", fill=True)
+    pdf.cell(190, 6, " Résultats d'essais", 1, 1, "L", fill=True)
     
     pdf.set_font("Helvetica", "B", 7)
     headers = ["%< 80um", "%< 2mm", "%< 50mm", "D MAX", "VBS", "Wopt", "Densité OPN", "GTR"]
     widths = [24, 23, 23, 23, 23, 24, 25, 25]
     for h, w in zip(headers, widths):
-        pdf.cell(w, 5, h, 1, 0, "C", fill=True)
+        pdf.cell(w, 10, h, 1, 0, "C", fill=True)
     pdf.ln()
 
     pdf.set_font("Helvetica", "", 8)
@@ -138,7 +138,7 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
         str(data_dict.get('Classe GTR (Auto)', '-'))
     ]
     for v, w in zip(vals, widths):
-        pdf.cell(w, 5, v, 1, 0, "C")
+        pdf.cell(w, 10, v, 1, 0, "C")
     pdf.ln(2)
 
     # Insertion de la Courbe Granulométrique
@@ -147,14 +147,14 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
     pdf.cell(190, 5, " COURBE GRANULOMÉTRIQUE", 1, 1, "L", fill=True)
     if curve_img_path and os.path.exists(curve_img_path):
         try:
-            pdf.image(curve_img_path, x=30, y=pdf.get_y() + 1, w=150, h=42)
+            pdf.image(curve_img_path, x=30, y=pdf.get_y() + 1, w=150, h=40)
         except Exception:
-            pdf.cell(190, 42, "[Erreur d'insertion de la courbe]", 1, 1, "C")
+            pdf.cell(190, 40, "[Erreur d'insertion de la courbe]", 1, 1, "C")
     else:
-        pdf.cell(190, 42, "[Courbe non disponible]", 1, 1, "C")
+        pdf.cell(190, 40, "[Courbe non disponible]", 1, 1, "C")
     
-    # Positionnement forcé plus bas sur la page pour les commentaires et les visas
-    pdf.set_y(205)
+    # Positionnement forcé en bas de page pour les commentaires et les visas
+    pdf.set_y(210)
 
     # Commentaires & Conditions d'utilisation
     pdf.set_font("Helvetica", "B", 8)
