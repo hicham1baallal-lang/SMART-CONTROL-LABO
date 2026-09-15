@@ -439,32 +439,42 @@ def show(supabase_client):
         }
 
         if f_st.button("💾 Enregistrer le PV dans l'Historique", type="primary", use_container_width=True, disabled=not user_can_edit):
-            payload_record = {
-                "num_rapport": num_rapport,
-                "type_materiau": selected_mat_sub,
-                "lieu": lieu,
-                "pk": pk,
-                "date_essai": str(date_essai),
-                "details": data_dict,
-                "observation": obs
-            }
-            saved_to_db = False
-            if supabase_client:
-                try:
-                    res = supabase_client.table("pv_identification_materiaux").upsert(payload_record, on_conflict="num_rapport").execute()
-                    saved_to_db = True
-                except Exception:
-                    saved_to_db = False
+            # --- VÉRIFICATION ANTI-DOUBLON DU N° DE RAPPORT ---
+            existing_records = _safe_supabase_fetch(supabase_client)
+            if not existing_records:
+                existing_records = f_st.session_state["pv_ident_local_db"]
             
-            f_st.session_state["pv_ident_local_db"] = [
-                r for r in f_st.session_state["pv_ident_local_db"] if r.get("num_rapport") != num_rapport
-            ]
-            f_st.session_state["pv_ident_local_db"].insert(0, payload_record)
+            is_duplicate = any(str(r.get("num_rapport")).strip().lower() == str(num_rapport).strip().lower() for r in existing_records)
             
-            if saved_to_db:
-                f_st.success("✅ PV enregistré avec succès dans Supabase !")
+            if is_duplicate:
+                f_st.error(f"❌ Erreur de blocage : Le numéro de rapport '{num_rapport}' existe déjà dans la base de données. Veuillez modifier le N° de rapport pour éviter les doublons.")
             else:
-                f_st.warning("⚠️ Stocké en session locale.")
+                payload_record = {
+                    "num_rapport": num_rapport,
+                    "type_materiau": selected_mat_sub,
+                    "lieu": lieu,
+                    "pk": pk,
+                    "date_essai": str(date_essai),
+                    "details": data_dict,
+                    "observation": obs
+                }
+                saved_to_db = False
+                if supabase_client:
+                    try:
+                        res = supabase_client.table("pv_identification_materiaux").insert(payload_record).execute()
+                        saved_to_db = True
+                    except Exception:
+                        saved_to_db = False
+                
+                f_st.session_state["pv_ident_local_db"] = [
+                    r for r in f_st.session_state["pv_ident_local_db"] if r.get("num_rapport") != num_rapport
+                ]
+                f_st.session_state["pv_ident_local_db"].insert(0, payload_record)
+                
+                if saved_to_db:
+                    f_st.success("✅ PV enregistré avec succès dans Supabase !")
+                else:
+                    f_st.warning("⚠️ Stocké en session locale.")
 
     # ---------------------------------------------------------
     # TAB 1 : 📋 PVs / HISTORIQUE & TÉLÉCHARGEMENT PDF
@@ -584,7 +594,6 @@ def show(supabase_client):
                 f_st.markdown("---")
                 f_st.markdown("#### Aperçu du tableau de synthèse")
                 
-                # --- PRÉPARATION DU TABLEAU DE SYNTHÈSE AVEC NOMBRE D'ESSAIS ---
                 export_rows = []
                 for _, row in df_filtered.iterrows():
                     details = row.get("details", {})
@@ -604,20 +613,17 @@ def show(supabase_client):
                 df_display_synth = pd.DataFrame(export_rows)
                 f_st.dataframe(df_display_synth, use_container_width=True)
 
-                # --- CONSTRUCTION DE L'EXCEL STYLÉ PROFESSIONNEL AVEC OPENPYXL ---
                 excel_buf = io.BytesIO()
                 wb = openpyxl.Workbook()
                 ws = wb.active
                 ws.title = "Synthèse Identification"
 
-                # Configuration impression Portrait A4
                 ws.page_setup.orientation = ws.ORIENTATION_PORTRAIT
                 ws.page_setup.paperSize = ws.PAPERSIZE_A4
                 ws.sheet_properties.pageSetUpPr.fitToPage = True
                 ws.page_setup.fitToWidth = 1
                 ws.page_setup.fitToHeight = 0
 
-                # Styles graphiques professionnels
                 font_main_title = Font(name="Helvetica", size=11, bold=True, color="003366")
                 font_sub_title = Font(name="Helvetica", size=9, italic=True, color="333333")
                 font_section = Font(name="Helvetica", size=10, bold=True, color="000000")
@@ -635,7 +641,6 @@ def show(supabase_client):
                     bottom=Side(style='thin', color='CCCCCC')
                 )
 
-                # Ajout du logo dans le fichier Excel s'il existe (logo.png.jpg ou logo.png)
                 logo_path_excel = "logo.png.jpg"
                 if not os.path.exists(logo_path_excel):
                     logo_path_excel = "logo.png"
@@ -648,31 +653,26 @@ def show(supabase_client):
                     except Exception:
                         pass
 
-                # Ligne 1 : En-tête LPEE institutionnel
                 ws.merge_cells('A1:G1')
                 ws['A1'] = "L.P.E.E - LABORATOIRE PUBLIC DES ESSAIS ET D'ETUDES"
                 ws['A1'].font = font_main_title
                 ws['A1'].alignment = Alignment(horizontal='center', vertical='center')
                 ws.row_dimensions[1].height = 20
 
-                # Ligne 2 : Centre technique
                 ws.merge_cells('A2:G2')
                 ws['A2'] = "Centre Technique Régional CASA-SETTAT-BENI MELLAL"
                 ws['A2'].font = font_sub_title
                 ws['A2'].alignment = Alignment(horizontal='center', vertical='center')
                 ws.row_dimensions[2].height = 16
 
-                # Ligne 3 : Titre du document / Synthèse
                 ws.merge_cells('A3:G3')
                 ws['A3'] = f"SYNTHÈSE DES ESSAIS D'IDENTIFICATION — {selected_mat_sub.upper()} (Période: {filtre_mois})"
                 ws['A3'].font = font_section
                 ws['A3'].alignment = Alignment(horizontal='center', vertical='center')
                 ws.row_dimensions[3].height = 22
 
-                # Ligne 4 : Ligne vide de séparation
                 ws.row_dimensions[4].height = 8
 
-                # Ligne 5 : En-têtes du tableau de données avec "Nombre d'essais"
                 start_row = 5
                 headers = [
                     "N° Rapport", 
@@ -692,7 +692,6 @@ def show(supabase_client):
                     cell.border = border_thin
                 ws.row_dimensions[start_row].height = 25
 
-                # Remplissage des données avec zébrage
                 current_row = start_row + 1
                 for r_idx, row_dict in enumerate(export_rows):
                     ws.cell(row=current_row, column=1, value=row_dict.get("N° Rapport")).alignment = Alignment(horizontal='center', vertical='center')
@@ -713,7 +712,6 @@ def show(supabase_client):
                     ws.row_dimensions[current_row].height = 20
                     current_row += 1
 
-                # Ligne de total en bas du tableau Excel
                 total_row_idx = current_row
                 ws.cell(row=total_row_idx, column=1, value="TOTAL GENERAL").font = Font(name="Helvetica", size=9, bold=True)
                 ws.cell(row=total_row_idx, column=1).alignment = Alignment(horizontal='center', vertical='center')
@@ -731,7 +729,6 @@ def show(supabase_client):
 
                 ws.row_dimensions[total_row_idx].height = 22
 
-                # Ajustement automatique des largeurs de colonnes
                 for col in ws.columns:
                     max_len = 0
                     col_letter = openpyxl.utils.get_column_letter(col[0].column)
