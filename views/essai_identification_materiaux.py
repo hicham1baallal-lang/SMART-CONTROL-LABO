@@ -93,15 +93,14 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
     pdf.alias_nb_pages()
     pdf.add_page()
     
-    # SÉCURITÉ TOTALE : Si le dictionnaire est vide, on l'initialise avec des valeurs par défaut
+    # SÉCURITÉ TOTALE : Si le dictionnaire est vide, initialisation par défaut
     if not data_dict or not isinstance(data_dict, dict):
         data_dict = {
-            "Passant 80um (%)": "22.3",
-            "Passant 2mm (%)": "66.0",
-            "Dmax (mm)": "50.0",
-            "VBS": "0.42",
-            "wL (%)": "30.0",
-            "Classe GTR (Auto)": "B2"
+            "M1 (g)": "14000.0", "M2 (g)": "13500.0", "M3 (g)": "11200.0", "M4 (g)": "2000.0",
+            "Dmax (mm)": "50.0", "Passant 80um (%)": "22.3", "Passant 2mm (%)": "66.0",
+            "wL (%)": "30.0", "wP (%)": "18.0", "IP (%)": "12.0", "VBS": "0.42",
+            "Los Angeles (LA)": "24.0", "Micro-Deval (MDE)": "18.0",
+            "Classe GTR (Auto)": "B2", "Observation": "Le matériau peut être utilisé pour un remblai."
         }
     
     # Intitulé Projet LGV Casa Sud
@@ -125,40 +124,39 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
     pdf.cell(190, 4.5, " Normes : A.G: NM 00.8.082 | IP: NF P94-051 | VBS: NM 13.1.178 | LOS ANGELES: NM EN 1097-2 | MDE: NM EN 1097-1", 1, 1, "L")
     pdf.ln(2)
 
-    # --- TABLEAU DES RÉSULTATS SYNTHÉTIQUES D'ESSAIS ---
+    # --- TABLEAU DES LIGNES DE RÉSULTATS D'ESSAIS (PARAMÈTRES ET VALEURS) ---
     pdf.set_font("Helvetica", "B", 8)
     pdf.set_fill_color(220, 230, 242)
-    pdf.cell(190, 6, " Résultats d'essais", 1, 1, "L", fill=True)
+    pdf.cell(190, 6, " Résultats d'essais & Caractéristiques physiques", 1, 1, "L", fill=True)
     
     pdf.set_font("Helvetica", "B", 7)
-    headers = ["%< 80um", "%< 2mm", "%< 50mm", "D MAX", "VBS", "Wopt", "Densité OPN", "GTR"]
-    widths = [24, 23, 23, 23, 23, 24, 25, 25]
-    for h, w in zip(headers, widths):
-        pdf.cell(w, 7, h, 1, 0, "C", fill=True)
-    pdf.ln()
+    pdf.cell(110, 5, "Caractéristique / Paramètre d'Essai", 1, 0, "L", fill=True)
+    pdf.cell(80, 5, "Valeur Obtenue", 1, 1, "C", fill=True)
 
-    # Extraction ultra-souple avec toutes les variantes possibles de clés
-    val_80um = str(data_dict.get('Passant 80um (%)', data_dict.get('Passant 80µm (%)', data_dict.get('Passant 80um', '22.3'))))
-    val_2mm = str(data_dict.get('Passant 2mm (%)', data_dict.get('Passant 2mm', '66.0')))
-    val_dmax = str(data_dict.get('Dmax (mm)', data_dict.get('DMAX', '50.0')))
-    val_vbs = str(data_dict.get('VBS', '0.42'))
-    val_wopt = str(data_dict.get('wL (%)', data_dict.get('Wopt', '30.0')))
-    val_gtr = str(data_dict.get('Classe GTR (Auto)', data_dict.get('GTR', 'B2')))
-
-    pdf.set_font("Helvetica", "", 8)
-    vals = [
-        val_80um,
-        val_2mm,
-        val_dmax,
-        val_dmax,
-        val_vbs,
-        val_wopt,
-        "1.73",
-        val_gtr
+    # Liste structurée des lignes du tableau avec récupération sécurisée depuis data_dict
+    rows_data = [
+        ("Masse totale M1 (g)", data_dict.get('M1 (g)', '14000.0')),
+        ("Masse sèche étuve M2 (g)", data_dict.get('M2 (g)', '13500.0')),
+        ("Masse après lavage M3 (g)", data_dict.get('M3 (g)', '11200.0')),
+        ("Prise tamisage M4 (g)", data_dict.get('M4 (g)', '2000.0')),
+        ("Diamètre Maximal Dmax (mm)", data_dict.get('Dmax (mm)', '50.0')),
+        ("Passant à 80 µm (%)", data_dict.get('Passant 80um (%)', data_dict.get('Passant 80µm (%)', '22.3'))),
+        ("Passant à 2 mm (%)", data_dict.get('Passant 2mm (%)', '66.0')),
+        ("Limite de Liquidité wL (%)", data_dict.get('wL (%)', '30.0')),
+        ("Limite de Plasticité wP (%)", data_dict.get('wP (%)', '18.0')),
+        ("Indice de Plasticité IP (%)", data_dict.get('IP (%)', '12.0')),
+        ("Valeur au Bleu de Méthylène (VBS)", data_dict.get('VBS', '0.42')),
+        ("Coefficient Los Angeles (LA)", data_dict.get('Los Angeles (LA)', '24.0')),
+        ("Coefficient Micro-Deval (MDE)", data_dict.get('Micro-Deval (MDE)', '18.0')),
+        ("Classe GTR (Classification Auto)", data_dict.get('Classe GTR (Auto)', 'B2'))
     ]
-    for v, w in zip(vals, widths):
-        pdf.cell(w, 8, v, 1, 0, "C")
-    pdf.ln(3)
+
+    pdf.set_font("Helvetica", "", 7.5)
+    for label, val in rows_data:
+        pdf.cell(110, 4.5, f" {label}", 1, 0, "L")
+        pdf.cell(80, 4.5, str(val), 1, 1, "C")
+
+    pdf.ln(2)
 
     # Insertion de la Courbe Granulométrique
     pdf.set_font("Helvetica", "B", 8)
@@ -166,14 +164,14 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
     pdf.cell(190, 5, " COURBE GRANULOMÉTRIQUE", 1, 1, "L", fill=True)
     if curve_img_path and os.path.exists(curve_img_path):
         try:
-            pdf.image(curve_img_path, x=30, y=pdf.get_y() + 1, w=150, h=40)
+            pdf.image(curve_img_path, x=35, y=pdf.get_y() + 1, w=140, h=35)
         except Exception:
-            pdf.cell(190, 40, "[Erreur d'insertion de la courbe]", 1, 1, "C")
+            pdf.cell(190, 35, "[Erreur d'insertion de la courbe]", 1, 1, "C")
     else:
-        pdf.cell(190, 40, "[Courbe non disponible]", 1, 1, "C")
+        pdf.cell(190, 35, "[Courbe non disponible]", 1, 1, "C")
     
     # Positionnement bas de page
-    pdf.set_y(210)
+    pdf.set_y(220)
 
     # Commentaires & Conditions d'utilisation
     pdf.set_font("Helvetica", "B", 8)
@@ -410,14 +408,12 @@ def show(supabase_client):
                 "observation": obs
             }
             saved_to_db = False
-            db_error_msg = ""
             if supabase_client:
                 try:
                     res = supabase_client.table("pv_identification_materiaux").upsert(payload_record, on_conflict="num_rapport").execute()
                     saved_to_db = True
-                except Exception as e:
+                except Exception:
                     saved_to_db = False
-                    db_error_msg = str(e)
             
             f_st.session_state["pv_ident_local_db"] = [
                 r for r in f_st.session_state["pv_ident_local_db"] if r.get("num_rapport") != num_rapport
@@ -427,7 +423,7 @@ def show(supabase_client):
             if saved_to_db:
                 f_st.success("✅ PV enregistré avec succès dans Supabase !")
             else:
-                f_st.warning(f"⚠️ Stocké en session locale.")
+                f_st.warning("⚠️ Stocké en session locale.")
 
     # ---------------------------------------------------------
     # TAB 1 : 📋 PVs / HISTORIQUE & TÉLÉCHARGEMENT PDF
