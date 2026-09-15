@@ -338,19 +338,29 @@ def show(supabase_client):
         me_val_calc = m3_val - re_val_calc
 
         with col_params_right:
-            f_st.markdown("##### ⚙️ Caractéristiques & Limites")
+            f_st.markdown("##### ⚙️ Caractéristiques, Limites & Paramètres Spécifiques")
             re_val = f_st.number_input("Refus R_e (10mm) (g)", value=re_val_calc, disabled=True, key="re_10mm_mat")
             me_val = f_st.number_input("Prise Me (g) [M3-Re]", value=me_val_calc, disabled=True, key="me_val_mat")
+            
+            # Paramètres ajoutés issus de la feuille d'essai
+            m5_val = f_st.number_input("M5 (Total refus et passant sur 80µm)", value=1920.6, step=0.1, disabled=not user_can_edit)
+            fond_tamis_val = f_st.number_input("Fond de tamis (g)", value=1.4, step=0.1, disabled=not user_can_edit)
+            
             w_opt = f_st.number_input("Proctor Wopt (%)", value=14.2, step=0.5, disabled=not user_can_edit)
             ip = f_st.number_input("Indice de Plasticité (IP)", value=4.2, step=0.5, disabled=not user_can_edit)
             vbs_val = f_st.number_input("VBS (Bleu de Manganèse)", value=0.42, step=0.01, format="%.2f", disabled=not user_can_edit)
             dens_val = f_st.number_input("Proctor Densité OPN", value=1.73, step=0.01, disabled=not user_can_edit)
 
             a_factor = me_val / m4_val if m4_val > 0 else 0
+            m6_val = (a_factor * m5_val) + re_val
+            validation_m6 = 100.0 * (m3_val - m6_val) / m3_val if m3_val > 0 else 0.0
+
             f_st.markdown(
                 f"""
                 <div style="background-color: #f0f2f6; padding: 10px; border-radius: 6px; font-size: 0.85em;">
                     <b>Facteur a (Me/M4)</b> : {a_factor:.4f}<br>
+                    <b>M6 (Masse tamisat)</b> : {m6_val:.2f} g<br>
+                    <b>Contrôle 100(M3-M6)/M3</b> : {validation_m6:.2f}% (doit être <2%)<br>
                     <b>Proctor Wopt</b> : {w_opt:.1f}%<br>
                     <b>Indice de Plasticité (IP)</b> : {ip:.1f}%<br>
                     <b>VBS</b> : {vbs_val:.2f}
@@ -437,6 +447,7 @@ def show(supabase_client):
             "Sous-Type Matériau": selected_mat_sub,
             "Ref Echantillon": ref_ech,
             "M1 (g)": f"{m1_val}", "M2 (g)": f"{m2_val}", "M3 (g)": f"{m3_val}", "M4 (g)": f"{m4_val}",
+            "M5 (g)": f"{m5_val}", "Fond de tamis (g)": f"{fond_tamis_val}", "M6 (g)": f"{m6_val:.2f}",
             "Dmax (mm)": f"{int(dmax_detected)}", 
             "Passant 80um (%)": f"{pass_80um_val:.1f}".replace('.', ','), 
             "Passant 2mm (%)": f"{int(pass_2mm_val)}",
