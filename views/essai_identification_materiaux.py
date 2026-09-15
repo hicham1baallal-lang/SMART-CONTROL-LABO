@@ -54,7 +54,6 @@ def classer_gtr(dmax, pass_80um, ip, vbs=0.5, pass_2mm=70.0, is_roche=False, roc
 
 class IdentificationPDF(FPDF):
     def header(self):
-        # En-tête officiel style LPEE / LGV CASA SUD
         logo_path = "logo.png.jpg"
         if not os.path.exists(logo_path):
             logo_path = "logo.png"
@@ -90,7 +89,7 @@ class IdentificationPDF(FPDF):
         self.cell(0, 10, f"CTR-CSB - Projet LGV CASA SUD | Page {self.page_no()}/{{nb}}", 0, 0, "C")
 
 
-def generate_pdf(header_info, data_dict, type_mat):
+def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
     pdf = IdentificationPDF()
     pdf.alias_nb_pages()
     pdf.add_page()
@@ -109,14 +108,14 @@ def generate_pdf(header_info, data_dict, type_mat):
     pdf.cell(95, 6, f" Lieux de prélèvement : {header_info.get('lieu') or 'Stock sur chantier'}", 1, 0, "L")
     pdf.cell(95, 6, f" Numéro de prélèvement : {header_info.get('pk') or ''}", 1, 1, "L")
     pdf.cell(190, 6, f" Objet : IDENTIFICATION DU MATÉRIAU ({str(type_mat).upper()})", 1, 1, "L")
-    pdf.ln(4)
+    pdf.ln(3)
 
     # Références de normes
     pdf.set_font("Helvetica", "B", 8)
     pdf.cell(190, 5, " Référence de normes : A.G: NM 00.8.082 | IP: NF P94-051 | VBS: NM 13.1.178 | LOS ANGELES: NM EN 1097-2 | MDE: NM EN 1097-1", 1, 1, "L")
-    pdf.ln(4)
+    pdf.ln(3)
 
-    # Tableau des résultats synthétiques d'essais (Style PV joint)
+    # Tableau des résultats synthétiques d'essais
     pdf.set_font("Helvetica", "B", 8)
     pdf.set_fill_color(240, 240, 240)
     pdf.cell(190, 6, " Résultats d'essais", 1, 1, "L", fill=True)
@@ -141,15 +140,29 @@ def generate_pdf(header_info, data_dict, type_mat):
     ]
     for v, w in zip(vals, widths):
         pdf.cell(w, 6, v, 1, 0, "C")
-    pdf.ln(8)
+    pdf.ln(5)
+
+    # Insertion de la Courbe Granulométrique
+    pdf.set_font("Helvetica", "B", 8)
+    pdf.cell(190, 6, " COURBE GRANULOMÉTRIQUE", 1, 1, "L", fill=True)
+    if curve_img_path and os.path.exists(curve_img_path):
+        try:
+            # Positionnement centré de l'image de la courbe granulométrique
+            pdf.image(curve_img_path, x=15, y=pdf.get_y() + 2, w=180)
+            pdf.ln(68)
+        except Exception:
+            pdf.cell(190, 6, "[Erreur d'insertion de la courbe granulométrique]", 1, 1, "C")
+    else:
+        pdf.cell(190, 6, "[Courbe non disponible]", 1, 1, "C")
+    pdf.ln(3)
 
     # Commentaires et utilisation
     pdf.set_font("Helvetica", "B", 8)
     pdf.cell(190, 6, " Commentaires & Conditions d'utilisation :", 1, 1, "L", fill=True)
     pdf.set_font("Helvetica", "", 8)
     obs_text = data_dict.get('Observation', 'Le matériau peut être utilisé pour un remblai.')
-    pdf.multi_cell(190, 6, f" - Observation : {obs_text}\n - Conditions d'utilisation : Conforme aux exigences du projet LGV Casa Sud.", 1, "L")
-    pdf.ln(15)
+    pdf.multi_cell(190, 5, f" - Observation : {obs_text}\n - Conditions d'utilisation : Conforme aux exigences du projet LGV Casa Sud.", 1, "L")
+    pdf.ln(8)
 
     # Blocs Signatures & Visas (Conforme modèle officiel)
     pdf.set_font("Helvetica", "B", 8)
@@ -158,9 +171,9 @@ def generate_pdf(header_info, data_dict, type_mat):
     pdf.cell(64, 5, "LE CHEF DU LABORATOIRE", 1, 1, "C", fill=True)
 
     pdf.set_font("Helvetica", "", 8)
-    pdf.cell(63, 16, "Nom : ", 1, 0, "L")
-    pdf.cell(63, 16, "Nom : B. ELAMRI", 1, 0, "L")
-    pdf.cell(64, 16, "Nom : H. BAALLAL", 1, 1, "L")
+    pdf.cell(63, 14, "Nom : ", 1, 0, "L")
+    pdf.cell(63, 14, "Nom : B. ELAMRI", 1, 0, "L")
+    pdf.cell(64, 14, "Nom : H. BAALLAL", 1, 1, "L")
 
     return bytes(pdf.output())
 
@@ -325,7 +338,7 @@ def show(supabase_client):
 
             ax.plot(
                 x_indices, plot_curve_df["% Passant"],
-                marker='o', markersize=4, linestyle='-', color='#0066cc', linewidth=1.5
+                marker='o', markersize=4, linestyle='-', color='#0066cc', linewidth=1.5, label=ref_ech
             )
             ax.set_xticks(ticks_positions)
             ax.set_xticklabels(ticks_labels, rotation=70, ha='right', fontsize=7)
@@ -333,7 +346,13 @@ def show(supabase_client):
             ax.set_ylabel("% Passant (%)")
             ax.set_ylim(-2, 105)
             ax.grid(True, which="both", linestyle=":", alpha=0.6)
+            ax.legend(loc="lower right")
             fig.tight_layout()
+            
+            # Sauvegarde temporaire pour inclusion dans le PDF
+            temp_curve_path = "temp_granulometrie.png"
+            fig.savefig(temp_curve_path, dpi=200)
+            
             f_st.pyplot(fig, use_container_width=True)
             plt.close(fig)
 
@@ -427,10 +446,13 @@ def show(supabase_client):
                         "pk": row.get("pk"),
                         "date_essai": str(row.get("date_essai"))
                     }
-                    pdf_bytes = generate_pdf(header_info, row.get("details", {}), str(row.get("type_materiau")))
+                    
+                    # On utilise l'image temporaire de la courbe si elle existe
+                    curve_path_to_use = "temp_granulometrie.png" if os.path.exists("temp_granulometrie.png") else None
+                    pdf_bytes = generate_pdf(header_info, row.get("details", {}), str(row.get("type_materiau")), curve_path_to_use)
                     
                     f_st.download_button(
-                        label=f"📄 Télécharger PV PDF LPEE ({row.get('num_rapport')})",
+                        label=f"📄 Télécharger PV PDF LPEE avec Courbe ({row.get('num_rapport')})",
                         data=pdf_bytes,
                         file_name=f"PV_{str(row.get('num_rapport')).replace('/', '_')}.pdf",
                         mime="application/pdf",
