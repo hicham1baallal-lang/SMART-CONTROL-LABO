@@ -19,7 +19,7 @@ def _get_subclass_1st_table(pass_80um, ip, vbs, pass_2mm):
         elif ip < 40: return "A3"
         else: return "A4"
     elif pass_80um >= 12.0:
-        return "B5" if vbs < 0.2 else "B6"
+        return "B5" if vbs < 1.5 else "B6"
     else:
         if vbs < 0.1:
             return "D1" if pass_2mm >= 70.0 else "D2"
