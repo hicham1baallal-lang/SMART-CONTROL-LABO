@@ -114,7 +114,7 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
     pdf.cell(190, 4.5, " Normes : A.G: NM 00.8.082 | IP: NF P94-051 | VBS: NM 13.1.178 | LOS ANGELES: NM EN 1097-2 | MDE: NM EN 1097-1", 1, 1, "L")
     pdf.ln(2)
 
-    # Tableau des résultats synthétiques d'essais (Hauteur doublée : 10 au lieu de 5)
+    # Tableau des résultats synthétiques d'essais (Hauteur de ligne de valeur fixée à 10)
     pdf.set_font("Helvetica", "B", 8)
     pdf.set_fill_color(220, 230, 242)
     pdf.cell(190, 6, " Résultats d'essais", 1, 1, "L", fill=True)
