@@ -232,31 +232,6 @@ def _safe_supabase_fetch(supabase_client):
         return f_st.session_state["pv_ident_local_db"]
 
 
-def get_dynamic_material_types(supabase_client):
-    """Récupère dynamiquement la liste unique des types de matériaux depuis Supabase ou la session."""
-    default_types = ["Remblai ordinaire", "GNT 0/60", "BBSG 0/10", "Tout-venant sélectionné"]
-    
-    records = []
-    if supabase_client:
-        try:
-            res = supabase_client.table("pv_identification_materiaux").select("type_materiau").execute()
-            if res.data:
-                records = res.data
-        except Exception:
-            pass
-            
-    if not records and "pv_ident_local_db" in f_st.session_state:
-        records = f_st.session_state["pv_ident_local_db"]
-        
-    if records:
-        dynamic_types = list(set([str(r.get("type_materiau")).strip() for r in records if r.get("type_materiau")]))
-        if dynamic_types:
-            combined = sorted(list(set(default_types + dynamic_types)))
-            return combined
-            
-    return default_types
-
-
 def show(supabase_client):
     user_name = str(f_st.session_state.get("user_name", f_st.session_state.get("user", {}).get("username", ""))).upper()
     user_role = str(f_st.session_state.get("role", "")).upper()
@@ -266,22 +241,7 @@ def show(supabase_client):
     if "pv_ident_local_db" not in f_st.session_state:
         f_st.session_state["pv_ident_local_db"] = []
 
-    # --- RÉCUPÉRATION DYNAMIQUE DES MATÉRIAUX ---
-    material_options = get_dynamic_material_types(supabase_client)
-    
-    f_st.sidebar.markdown("---")
-    f_st.sidebar.subheader("🧪 Paramètres du Matériau")
-    
-    current_selected = f_st.session_state.get("sub_page_identification", material_options[0])
-    if current_selected not in material_options:
-        material_options.append(current_selected)
-        
-    selected_mat_sub = f_st.sidebar.selectbox(
-        "Sélectionner le type de matériau",
-        options=material_options,
-        index=material_options.index(current_selected) if current_selected in material_options else 0,
-        key="sub_page_identification"
-    )
+    selected_mat_sub = f_st.session_state.get("sub_page_identification", "Remblai ordinaire")
 
     f_st.title("🔬 Identification & Granulométrie des Matériaux")
     f_st.subheader(f"📌 Sous-catégorie sélectionnée : **{selected_mat_sub}**")
@@ -364,6 +324,7 @@ def show(supabase_client):
             
             fond_tamis_val = f_st.number_input("Fond de tamis (g)", value=1.4, step=0.1, disabled=not user_can_edit)
             
+            # Calcul automatique de M5 (Refus du tamis 0.08 mm + Fond de tamis)
             try:
                 row_008 = edited_sieve_df[np.isclose(edited_sieve_df["Tamis (mm)"].astype(float), 0.08, atol=1e-3)]
                 r_008_val = float(row_008["r_i (g) [<10mm]"].values[0]) if not row_008.empty else 1850.0
@@ -509,7 +470,7 @@ def show(supabase_client):
                 saved_to_db = False
                 if supabase_client:
                     try:
-                        supabase_client.table("pv_identification_materiaux").insert(payload_record).execute()
+                        res = supabase_client.table("pv_identification_materiaux").insert(payload_record).execute()
                         saved_to_db = True
                     except Exception:
                         saved_to_db = False
