@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 
-def show():
+def show(page=None):
     """Affiche l'interface de gestion et d'historique des Procès-Verbaux (PVs)."""
     st.title("📂 Historique des Procès-Verbaux")
     st.markdown("Consultez, suivez et téléchargez les rapports d'essai et PVs enregistrés.")
