@@ -1,3 +1,4 @@
+import streamlit as str_module
 import streamlit as st
 import pandas as pd
 import time
@@ -60,7 +61,7 @@ def charger_essais_plaque(projet_id):
     qu'd'échouer complètement et d'afficher "Aucun essai enregistré" alors
     que des essais existent bel et bien en base.
     """
-    colonnes_avec_zone = "id, reference, date_essai, client, emplacement, pk_profil, couche, zone_pro, nature_materiau, ev1, ev2, k_ratio, technicien, observations, points_mesure"
+    colonnes_avec_zone = "id, reference, date_essai, client, projet_chantier, emplacement, pk_profil, couche, zone_pro, nature_materiau, ev1, ev2, k_ratio, technicien, observations, points_mesure"
     colonnes_sans_zone = "id, reference, date_essai, client, emplacement, pk_profil, couche, nature_materiau, ev1, ev2, k_ratio, technicien, observations, points_mesure"
 
     for colonnes in (colonnes_avec_zone, colonnes_sans_zone):
@@ -278,9 +279,10 @@ def generer_pdf_pv(essai):
     elements.append(Paragraph("PROCÈS-VERBAL D\'ESSAI À LA PLAQUE (NF P 94-117-1)", title_style))
     elements.append(Paragraph(f"Référence : <b>{essai.get('reference', '-')}</b> | Date : {essai.get('date_essai', '-')}", subtitle_style))
 
+    projet_chantier_val = essai.get('projet_chantier') or 'LGV CASA SUD'
     data_infos = [
         [Paragraph("Client / Organisme :", bold_style), Paragraph(str(essai.get('client', '-')), normal_style),
-         Paragraph("Chantier / Projet :", bold_style), Paragraph(str(essai.get('projet', '-')), normal_style)],
+         Paragraph("Chantier / Projet :", bold_style), Paragraph(str(projet_chantier_val), normal_style)],
         [Paragraph("Emplacement / Zone :", bold_style), Paragraph(str(essai.get('emplacement', '-')), normal_style),
          Paragraph("PK / Profil :", bold_style), Paragraph(str(essai.get('pk_profil', '-')), normal_style)],
         [Paragraph("Couche / Ouvrage :", bold_style), Paragraph(str(essai.get('couche', '-')), normal_style),
@@ -647,6 +649,7 @@ def show(supabase_client):
             default_ref = editing_item.get("reference") or editing_item.get("ref_essai") or editing_item.get("ref") or "260/26/PLQ/01"
             default_date = datetime.strptime(str(editing_item["date_essai"]), "%Y-%m-%d").date() if isinstance(editing_item.get("date_essai"), str) else date.today()
             default_client = editing_item.get("client", "TGCC")
+            default_projet_chantier = editing_item.get("projet_chantier", "LGV CASA SUD")
             default_empl = editing_item.get("emplacement", "")
             default_pk = editing_item.get("pk_profil", editing_item.get("pkl", ""))
             default_couche = editing_item.get("couche", "Sous-couche et Couche de forme ferroviaire (LGV)")
@@ -663,6 +666,7 @@ def show(supabase_client):
             default_ref = "260/26/PLQ/01"
             default_date = date.today()
             default_client = "TGCC"
+            default_projet_chantier = "LGV CASA SUD"
             default_empl = "Voie B"
             default_pk = "PK 1+200"
             default_couche = "Sous-couche et Couche de forme ferroviaire (LGV)"
@@ -680,6 +684,7 @@ def show(supabase_client):
         with col1:
             date_essai = st.date_input("Date de l'essai", value=default_date, key="plaque_date")
             client = st.text_input("Client / Organisme", value=default_client, key="plaque_client")
+            projet_chantier = st.text_input("Chantier / Projet", value=default_projet_chantier, key="plaque_projet_chantier")
         with col2:
             couche_options = [
                 "Sous-couche et Couche de forme",
@@ -796,6 +801,7 @@ def show(supabase_client):
                     "reference": reference,
                     "date_essai": str(date_essai),
                     "client": client,
+                    "projet_chantier": projet_chantier,
                     "emplacement": emplacement,
                     "pk_profil": pk_profil,
                     "couche": couche,
@@ -892,6 +898,7 @@ def show(supabase_client):
                         "Référence": ref_val,
                         "Date": row.get("date_essai"),
                         "Client": row.get("client"),
+                        "Projet / Chantier": row.get("projet_chantier", "LGV CASA SUD"),
                         "Emplacement": row.get("emplacement"),
                         "Couche": row.get("couche"),
                         "EV2 (MPa)": row.get("ev2"),
@@ -972,7 +979,7 @@ def show(supabase_client):
                     st.write(f"**Référence :** {essai_selectionne.get('reference', '-')}")
                     st.write(f"**Date :** {essai_selectionne.get('date_essai', '-')}")
                     st.write(f"**Client :** {essai_selectionne.get('client', '-')}")
-                    st.write(f"**Projet :** {projets_config.nom_projet(projet_id_actif)}")
+                    st.write(f"**Chantier / Projet :** {essai_selectionne.get('projet_chantier', 'LGV CASA SUD')}")
                 with col_p2:
                     st.write(f"**Emplacement :** {essai_selectionne.get('emplacement', '-')}")
                     st.write(f"**Couche :** {essai_selectionne.get('couche', '-')}")
@@ -1062,6 +1069,7 @@ def show(supabase_client):
                             "Référence": ref_val,
                             "Date": row.get("date_essai"),
                             "Client": row.get("client"),
+                            "Projet / Chantier": row.get("projet_chantier", "LGV CASA SUD"),
                             "Emplacement": row.get("emplacement"),
                             "Couche": row.get("couche"),
                             "EV2 (MPa)": row.get("ev2"),
