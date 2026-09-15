@@ -54,7 +54,6 @@ def classer_gtr(dmax, pass_80um, ip, vbs=0.5, pass_2mm=70.0, is_roche=False, roc
 
 class IdentificationPDF(FPDF):
     def header(self):
-        # LOGO PLACÉ SUR LA MÊME LIGNE
         logo_path = "logo.png.jpg"
         if not os.path.exists(logo_path):
             logo_path = "logo.png"
@@ -64,7 +63,6 @@ class IdentificationPDF(FPDF):
             except Exception:
                 pass
         
-        # ENTÊTE INSTITUTIONNEL : TAILLE AUGMENTÉE ET CENTRÉ (x=10, largeur=190)
         self.set_font("Helvetica", "B", 11)
         self.set_xy(10, 5)
         self.cell(190, 4.5, "L.P.E.E - LABORATOIRE PUBLIC DES ESSAIS ET D'ETUDES", 0, 1, "C")
@@ -73,17 +71,14 @@ class IdentificationPDF(FPDF):
         self.set_x(10)
         self.cell(190, 4, "Centre Technique Régional CASA-SETTAT-BENI MELLAL", 0, 1, "C")
         
-        # Ligne de séparation sous l'entête institutionnel
         self.line(10, 18, 200, 18)
         
-        # TITRE EN 2 LIGNES
         self.set_xy(10, 21)
         self.set_font("Helvetica", "B", 10)
         self.set_text_color(0, 51, 102)
         self.multi_cell(190, 4.5, "RAPPORT D'ESSAI D'IDENTIFICATION\nDES MATÉRIAUX", 0, "C")
         self.set_text_color(0, 0, 0)
         
-        # Ligne de séparation après le titre
         self.line(10, 32, 200, 32)
         self.set_xy(10, 34)
 
@@ -98,7 +93,6 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
     pdf.alias_nb_pages()
     pdf.add_page()
     
-    # SÉCURITÉ TOTALE : Si le dictionnaire est vide, initialisation par défaut
     if not data_dict or not isinstance(data_dict, dict):
         data_dict = {
             "Ref Echantillon": "Ech 1",
@@ -114,12 +108,10 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
             "Observation": "Le matériau peut être utilisé pour un remblai."
         }
     
-    # Intitulé Projet LGV Casa Sud
     pdf.set_font("Helvetica", "B", 7)
     pdf.multi_cell(190, 3.5, "TRAVAUX D'EXECUTION DE TERRASSEMENT, OUVRAGES D'ART ET RETABLISSEMENTS DE COMMUNICATION ENTRE PK 5+450 et PK 10+000 - GARE CASA SUD", 0, "C")
     pdf.ln(2)
 
-    # Bloc Informations administratives
     pdf.set_font("Helvetica", "", 8)
     pdf.cell(95, 5.5, f" Client : TGCC", 1, 0, "L")
     pdf.cell(95, 5.5, f" Rapport d'Essai N° : {header_info.get('num_rapport') or 'N/A'}", 1, 1, "L")
@@ -130,23 +122,19 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
     pdf.cell(190, 5.5, f" Objet : IDENTIFICATION DU MATÉRIAU ({str(type_mat).upper()})", 1, 1, "L")
     pdf.ln(2)
 
-    # Références de normes
     pdf.set_font("Helvetica", "B", 7)
     pdf.cell(190, 4.5, " Normes : A.G: NM 00.8.082 | IP: NF P94-051 | VBS: NM 13.1.178 | LOS ANGELES: NM EN 1097-2 | MDE: NM EN 1097-1", 1, 1, "L")
     pdf.ln(2)
 
-    # --- TABLEAU DES RÉSULTATS D'ESSAIS ---
     pdf.set_font("Helvetica", "B", 8)
     pdf.set_fill_color(220, 230, 242)
     pdf.cell(190, 5.5, " Résultats d'essais", 1, 1, "C", fill=True)
     
-    # En-tête de colonne de l'échantillon
     ech_label = data_dict.get('Ref Echantillon', 'Ech 1')
     pdf.set_font("Helvetica", "B", 7.5)
     pdf.cell(60, 5.5, "", 1, 0, "C", fill=True)
     pdf.cell(130, 5.5, str(ech_label), 1, 1, "C", fill=True)
 
-    # Récupération des valeurs avec formats sécurisés
     val_80um = str(data_dict.get('Passant 80um (%)', data_dict.get('Passant 80µm (%)', '22,3')))
     val_2mm = str(data_dict.get('Passant 2mm (%)', '66'))
     val_50mm = str(data_dict.get('Passant 50mm (%)', '100'))
@@ -159,31 +147,24 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
 
     pdf.set_font("Helvetica", "", 7.5)
 
-    # Ligne %< 80 µm
     pdf.cell(60, 5, " %< 80 µm", 1, 0, "L")
     pdf.cell(130, 5, val_80um, 1, 1, "C")
 
-    # Ligne %< 2 mm
     pdf.cell(60, 5, " %< 2 mm", 1, 0, "L")
     pdf.cell(130, 5, val_2mm, 1, 1, "C")
 
-    # Ligne %< 50 mm (Passant tamis de 50 mm)
     pdf.cell(60, 5, " %< 50 mm", 1, 0, "L")
     pdf.cell(130, 5, val_50mm, 1, 1, "C")
 
-    # Ligne D MAX
     pdf.cell(60, 5, " D MAX", 1, 0, "L")
     pdf.cell(130, 5, val_dmax, 1, 1, "C")
 
-    # Ligne VBS
     pdf.cell(60, 5, " VBS", 1, 0, "L")
     pdf.cell(130, 5, val_vbs, 1, 1, "C")
 
-    # Ligne Indice de Plasticité (IP)
     pdf.cell(60, 5, " Indice de Plasticité (IP)", 1, 0, "L")
     pdf.cell(130, 5, val_ip, 1, 1, "C")
 
-    # Ligne Proctor
     pdf.cell(60, 5, " Proctor", 1, 0, "L")
     pdf.set_font("Helvetica", "B", 7)
     pdf.cell(26, 5, " Wopt", 1, 0, "C", fill=True)
@@ -194,14 +175,12 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
     pdf.set_font("Helvetica", "", 7.5)
     pdf.cell(44, 5, val_dens, 1, 1, "C")
 
-    # Ligne GTR
     pdf.cell(60, 5, " GTR", 1, 0, "L")
     pdf.set_font("Helvetica", "B", 8)
     pdf.cell(130, 5, val_gtr, 1, 1, "C")
 
     pdf.ln(2)
 
-    # --- COURBE GRANULOMÉTRIQUE ---
     pdf.set_font("Helvetica", "B", 8)
     pdf.set_fill_color(220, 230, 242)
     pdf.cell(190, 5, " COURBE GRANULOMÉTRIQUE", 1, 1, "L", fill=True)
@@ -216,7 +195,6 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
     
     pdf.ln(2)
 
-    # --- COMMENTAIRES & CONDITIONS D'UTILISATION (Juste sous la courbe) ---
     pdf.set_font("Helvetica", "B", 8)
     pdf.set_fill_color(220, 230, 242)
     pdf.cell(190, 5, " Commentaires & Conditions d'utilisation :", 1, 1, "L", fill=True)
@@ -225,7 +203,6 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
     pdf.multi_cell(190, 4, f" - Observation : {obs_text}\n - Conditions d'utilisation : Conforme aux exigences techniques du projet LGV Casa Sud.", 1, "L")
     pdf.ln(4)
 
-    # --- BLOCS SIGNATURES & VISAS ---
     pdf.set_font("Helvetica", "B", 7.5)
     pdf.set_fill_color(240, 240, 240)
     pdf.cell(63, 4.5, "LE REÇU PAR LE CLIENT", 1, 0, "C", fill=True)
@@ -241,15 +218,15 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
 
 
 def _safe_supabase_fetch(supabase_client):
-    if "pv_ident_local_db" not in f_st.session_state:
-        f_st.session_state["pv_ident_local_db"] = []
     if not supabase_client:
-        return f_st.session_state["pv_ident_local_db"]
+        f_st.error("❌ Erreur critique : La connexion à la base de données Supabase n'est pas initialisée.")
+        return []
     try:
         res = supabase_client.table("pv_identification_materiaux").select("*").order("date_prelevement", desc=True).execute()
         return res.data if res.data is not None else []
-    except Exception:
-        return f_st.session_state["pv_ident_local_db"]
+    except Exception as e:
+        f_st.error(f"❌ Erreur lors de la récupération Supabase : {e}")
+        return []
 
 
 def show(supabase_client):
@@ -257,9 +234,6 @@ def show(supabase_client):
     user_role = str(f_st.session_state.get("role", "")).upper()
     is_admin = ("ADMIN" in user_role) or ("BAALLAL" in user_name)
     user_can_edit = is_admin or ("LABO" in user_role)
-
-    if "pv_ident_local_db" not in f_st.session_state:
-        f_st.session_state["pv_ident_local_db"] = []
 
     selected_mat_sub = f_st.session_state.get("sub_page_identification", "Remblai ordinaire")
 
@@ -269,6 +243,9 @@ def show(supabase_client):
 
     if not user_can_edit:
         f_st.warning("🔒 Mode lecture seule. Droits de modification restreints.")
+
+    if not supabase_client:
+        f_st.error("⚠️ Attention : La base de données Supabase n'est pas connectée. Impossible d'enregistrer ou de charger les PVs.")
 
     tab_saisir, tab_hist, tab_synth = f_st.tabs([
         f"➕ Saisir Essai ({selected_mat_sub})",
@@ -342,7 +319,6 @@ def show(supabase_client):
             re_val = f_st.number_input("Refus R_e (10mm) (g)", value=re_val_calc, disabled=True, key="re_10mm_mat")
             me_val = f_st.number_input("Prise Me (g) [M3-Re]", value=me_val_calc, disabled=True, key="me_val_mat")
             
-            # Paramètres ajoutés issus de la feuille d'essai
             m5_val = f_st.number_input("M5 (Total refus et passant sur 80µm)", value=1920.6, step=0.1, disabled=not user_can_edit)
             fond_tamis_val = f_st.number_input("Fond de tamis (g)", value=1.4, step=0.1, disabled=not user_can_edit)
             
@@ -432,7 +408,6 @@ def show(supabase_client):
         row_2mm = result_df[result_df["Tamis (mm)"] == 2.0]
         pass_2mm_val = float(row_2mm["% Passant"].values[0]) if not row_2mm.empty else 66.0
 
-        # Passant exact du tamis de 50 mm
         row_50mm = result_df[np.isclose(result_df["Tamis (mm)"].astype(float), 50.0, atol=1e-3)]
         pass_50mm_val = float(row_50mm["% Passant"].values[0]) if not row_50mm.empty else 100.0
 
@@ -460,33 +435,24 @@ def show(supabase_client):
             "Observation": obs
         }
 
-        if f_st.button("💾 Enregistrer le PV dans l'Historique", type="primary", use_container_width=True, disabled=not user_can_edit):
-            payload_record = {
-                "num_rapport": num_rapport,
-                "type_materiau": selected_mat_sub,
-                "lieu": lieu,
-                "provenance": provenance,
-                "date_prelevement": str(date_prelevement),
-                "details": data_dict,
-                "observation": obs
-            }
-            saved_to_db = False
-            if supabase_client:
-                try:
-                    res = supabase_client.table("pv_identification_materiaux").upsert(payload_record, on_conflict="num_rapport").execute()
-                    saved_to_db = True
-                except Exception:
-                    saved_to_db = False
-            
-            f_st.session_state["pv_ident_local_db"] = [
-                r for r in f_st.session_state["pv_ident_local_db"] if r.get("num_rapport") != num_rapport
-            ]
-            f_st.session_state["pv_ident_local_db"].insert(0, payload_record)
-            
-            if saved_to_db:
-                f_st.success("✅ PV enregistré avec succès dans Supabase !")
+        if f_st.button("💾 Enregistrer le PV dans Supabase", type="primary", use_container_width=True, disabled=not user_can_edit):
+            if not supabase_client:
+                f_st.error("❌ Impossible d'enregistrer : Supabase n'est pas configuré/connecté.")
             else:
-                f_st.warning("⚠️ Stocké en session locale.")
+                payload_record = {
+                    "num_rapport": num_rapport,
+                    "type_materiau": selected_mat_sub,
+                    "lieu": lieu,
+                    "provenance": provenance,
+                    "date_prelevement": str(date_prelevement),
+                    "details": data_dict,
+                    "observation": obs
+                }
+                try:
+                    supabase_client.table("pv_identification_materiaux").upsert(payload_record, on_conflict="num_rapport").execute()
+                    f_st.success("✅ PV enregistré avec succès dans Supabase !")
+                except Exception as e:
+                    f_st.error(f"❌ Échec de l'enregistrement dans Supabase : {e}")
 
     # ---------------------------------------------------------
     # TAB 1 : 📋 PVs / HISTORIQUE & TÉLÉCHARGEMENT PDF
@@ -495,11 +461,10 @@ def show(supabase_client):
         f_st.subheader("📋 PVs / Historique, Consultation & Téléchargement PDF")
         raw_data = _safe_supabase_fetch(supabase_client)
         
-        if not raw_data and not f_st.session_state["pv_ident_local_db"]:
-            f_st.info("💡 Aucun PV d'identification enregistré.")
+        if not raw_data:
+            f_st.info("💡 Aucun PV d'identification enregistré dans Supabase.")
         else:
-            combined_records = raw_data if raw_data else f_st.session_state["pv_ident_local_db"]
-            df_hist = pd.DataFrame(combined_records)
+            df_hist = pd.DataFrame(raw_data)
             
             search_q = f_st.text_input("Filtrer par N° Rapport, Lieu ou Type :", key="search_hist_input").lower()
             if search_q:
@@ -544,21 +509,17 @@ def show(supabase_client):
                 if supabase_client:
                     try:
                         supabase_client.table("pv_identification_materiaux").delete().eq("num_rapport", selected_del).execute()
-                    except Exception:
-                        pass
-                f_st.session_state["pv_ident_local_db"] = [
-                    r for r in f_st.session_state["pv_ident_local_db"] if r.get("num_rapport") != selected_del
-                ]
-                f_st.success(f"PV {selected_del} supprimé.")
-                f_st.rerun()
+                        f_st.success(f"PV {selected_del} supprimé de Supabase.")
+                        f_st.rerun()
+                    except Exception as e:
+                        f_st.error(f"❌ Erreur lors de la suppression : {e}")
 
     # ---------------------------------------------------------
     # TAB 2 : 📊 SYNTHÈSE GLOBALE
     # ---------------------------------------------------------
     with tab_synth:
         f_st.subheader("📊 Synthèse Globale - Identification Matériaux")
-        raw_data = _safe_supabase_fetch(supabase_client)
-        data_to_use = raw_data if raw_data else f_st.session_state["pv_ident_local_db"]
+        data_to_use = _safe_supabase_fetch(supabase_client)
         if data_to_use:
             df_s = pd.DataFrame(data_to_use)
             m1, m2, m3 = f_st.columns(3)
@@ -581,4 +542,4 @@ def show(supabase_client):
                 use_container_width=True
             )
         else:
-            f_st.info("Aucune donnée disponible pour la synthèse.")
+            f_st.info("Aucune donnée disponible dans Supabase pour la synthèse.")
