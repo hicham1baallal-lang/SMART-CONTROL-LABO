@@ -322,8 +322,16 @@ def show(supabase_client):
             re_val = f_st.number_input("Refus R_e (10mm) (g)", value=re_val_calc, disabled=True, key="re_10mm_mat")
             me_val = f_st.number_input("Prise Me (g) [M3-Re]", value=me_val_calc, disabled=True, key="me_val_mat")
             
-            m5_val = f_st.number_input("M5 (Total refus et passant sur 80µm)", value=1920.6, step=0.1, disabled=not user_can_edit)
             fond_tamis_val = f_st.number_input("Fond de tamis (g)", value=1.4, step=0.1, disabled=not user_can_edit)
+            
+            # Calcul automatique de M5 (Somme des r_i [<10mm] + Fond de tamis)
+            try:
+                sum_ri = float(edited_sieve_df["r_i (g) [<10mm]"].sum())
+            except Exception:
+                sum_ri = 0.0
+            m5_calc = sum_ri + fond_tamis_val
+            
+            m5_val = f_st.number_input("M5 (Total refus et passant sur 80µm)", value=m5_calc, disabled=True, key="m5_auto_val")
             
             w_opt = f_st.number_input("Proctor Wopt (%)", value=14.2, step=0.5, disabled=not user_can_edit)
             ip = f_st.number_input("Indice de Plasticité (IP)", value=4.2, step=0.5, disabled=not user_can_edit)
@@ -425,7 +433,7 @@ def show(supabase_client):
             "Sous-Type Matériau": selected_mat_sub,
             "Ref Echantillon": ref_ech,
             "M1 (g)": f"{m1_val}", "M2 (g)": f"{m2_val}", "M3 (g)": f"{m3_val}", "M4 (g)": f"{m4_val}",
-            "M5 (g)": f"{m5_val}", "Fond de tamis (g)": f"{fond_tamis_val}", "M6 (g)": f"{m6_val:.2f}",
+            "M5 (g)": f"{m5_val:.2f}", "Fond de tamis (g)": f"{fond_tamis_val}", "M6 (g)": f"{m6_val:.2f}",
             "Dmax (mm)": f"{int(dmax_detected)}", 
             "Passant 80um (%)": f"{pass_80um_val:.1f}".replace('.', ','), 
             "Passant 2mm (%)": f"{int(pass_2mm_val)}",
