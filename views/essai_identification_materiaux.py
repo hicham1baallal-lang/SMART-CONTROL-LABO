@@ -98,17 +98,17 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
     
     if not data_dict or not isinstance(data_dict, dict):
         data_dict = {
-            "Ref Echantillon": "GNF2 GRANAL",
-            "Passant 80um (%)": "3,3",
-            "Passant 2mm (%)": "11",
-            "Passant 50mm (%)": "97",
-            "Dmax (mm)": "60",
-            "VBS": "0,20",
-            "wL (%)": "5,8",
-            "IP (%)": "4,0",
-            "Densité OPN": "2,25",
-            "Classe GTR (Auto)": "D3",
-            "Observation": "NEANT"
+            "Ref Echantillon": "Ech 1",
+            "Passant 80um (%)": "22,3",
+            "Passant 2mm (%)": "66",
+            "Passant 50mm (%)": "100",
+            "Dmax (mm)": "50",
+            "VBS": "0,42",
+            "wL (%)": "14,2",
+            "IP (%)": "4,2",
+            "Densité OPN": "1,73",
+            "Classe GTR (Auto)": "B5",
+            "Observation": "Le matériau peut être utilisé pour un remblai."
         }
     
     pdf.set_font("Helvetica", "B", 7)
@@ -121,44 +121,50 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
     pdf.cell(95, 5.5, f" Dossier : 2025-260-05985-2025-0247", 1, 0, "L")
     pdf.cell(95, 5.5, f" Date du prélèvement : {header_info.get('date_essai') or ''}", 1, 1, "L")
     pdf.cell(95, 5.5, f" Lieux de prélèvement : {header_info.get('lieu') or 'Stock sur chantier'}", 1, 0, "L")
-    pdf.cell(95, 5.5, f" Numéro de prélèvement : {header_info.get('pk') or ''}", 1, 1, "L")
+    pdf.cell(95, 5.5, f" Provenance d'échantillon : {header_info.get('pk') or ''}", 1, 1, "L")
     pdf.cell(190, 5.5, f" Objet : IDENTIFICATION DU MATÉRIAU ({str(type_mat).upper()})", 1, 1, "L")
     pdf.ln(2)
 
     pdf.set_font("Helvetica", "B", 7)
-    pdf.cell(190, 4.5, " Normes : NM EN 933-1 (2018) | IP: NF P94-051 | VBS: NM 13.1.178", 1, 1, "L")
+    pdf.cell(190, 4.5, " Normes : A.G: NM 00.8.082 | IP: NF P94-051 | VBS: NM 13.1.178 | LOS ANGELES: NM EN 1097-2 | MDE: NM EN 1097-1", 1, 1, "L")
     pdf.ln(2)
 
     pdf.set_font("Helvetica", "B", 8)
     pdf.set_fill_color(220, 230, 242)
     pdf.cell(190, 5.5, " Résultats d'essais", 1, 1, "C", fill=True)
     
-    ech_label = data_dict.get('Ref Echantillon', 'GNF2 GRANAL')
+    ech_label = data_dict.get('Ref Echantillon', 'Ech 1')
     pdf.set_font("Helvetica", "B", 7.5)
     pdf.cell(60, 5.5, "", 1, 0, "C", fill=True)
     pdf.cell(130, 5.5, str(ech_label), 1, 1, "C", fill=True)
 
-    val_80um = str(data_dict.get('Passant 80um (%)', '3,3'))
-    val_2mm = str(data_dict.get('Passant 2mm (%)', '11'))
-    val_50mm = str(data_dict.get('Passant 50mm (%)', '97'))
-    val_dmax = str(data_dict.get('Dmax (mm)', '60'))
-    val_vbs = str(data_dict.get('VBS', '0,20'))
-    val_wopt = str(data_dict.get('wL (%)', '5,8'))
-    val_ip = str(data_dict.get('IP (%)', '4,0'))
-    val_dens = str(data_dict.get('Densité OPN', '2,25'))
-    val_gtr = str(data_dict.get('Classe GTR (Auto)', 'D3'))
+    val_80um = str(data_dict.get('Passant 80um (%)', data_dict.get('Passant 80µm (%)', '22,3')))
+    val_2mm = str(data_dict.get('Passant 2mm (%)', '66'))
+    val_50mm = str(data_dict.get('Passant 50mm (%)', '100'))
+    val_dmax = str(data_dict.get('Dmax (mm)', '50'))
+    val_vbs = str(data_dict.get('VBS', '0,42'))
+    val_wopt = str(data_dict.get('wL (%)', '14,2'))
+    val_ip = str(data_dict.get('IP (%)', '4,2'))
+    val_dens = str(data_dict.get('Densité OPN', '1,73'))
+    val_gtr = str(data_dict.get('Classe GTR (Auto)', 'B5'))
 
     pdf.set_font("Helvetica", "", 7.5)
+
     pdf.cell(60, 5, " %< 80 µm", 1, 0, "L")
     pdf.cell(130, 5, val_80um, 1, 1, "C")
+
     pdf.cell(60, 5, " %< 2 mm", 1, 0, "L")
     pdf.cell(130, 5, val_2mm, 1, 1, "C")
+
     pdf.cell(60, 5, " %< 50 mm", 1, 0, "L")
     pdf.cell(130, 5, val_50mm, 1, 1, "C")
+
     pdf.cell(60, 5, " D MAX", 1, 0, "L")
     pdf.cell(130, 5, val_dmax, 1, 1, "C")
+
     pdf.cell(60, 5, " VBS", 1, 0, "L")
     pdf.cell(130, 5, val_vbs, 1, 1, "C")
+
     pdf.cell(60, 5, " Indice de Plasticité (IP)", 1, 0, "L")
     pdf.cell(130, 5, val_ip, 1, 1, "C")
 
@@ -175,6 +181,7 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
     pdf.cell(60, 5, " GTR", 1, 0, "L")
     pdf.set_font("Helvetica", "B", 8)
     pdf.cell(130, 5, val_gtr, 1, 1, "C")
+
     pdf.ln(2)
 
     pdf.set_font("Helvetica", "B", 8)
@@ -190,12 +197,13 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
         pdf.cell(190, 62, "[Courbe non disponible]", 1, 1, "C")
     
     pdf.ln(2)
+
     pdf.set_font("Helvetica", "B", 8)
     pdf.set_fill_color(220, 230, 242)
-    pdf.cell(190, 5, " Commentaires & Conditions d'utilisation :", 1, 1, "L", fill=True)
+    pdf.cell(190, 5, " Commentaires :", 1, 1, "L", fill=True)
     pdf.set_font("Helvetica", "", 7.5)
-    obs_text = data_dict.get('Observation', 'NEANT')
-    pdf.multi_cell(190, 4, f" - Observation : {obs_text}\n - Conditions d'utilisation : Conforme aux exigences techniques du projet LGV Casa Sud.", 1, "L")
+    obs_text = data_dict.get('Observation', 'Le matériau peut être utilisé pour un remblai.')
+    pdf.multi_cell(190, 4, f" - Observation : {obs_text}\n ", 1, "L")
     pdf.ln(4)
 
     pdf.set_font("Helvetica", "B", 7.5)
@@ -206,8 +214,8 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
 
     pdf.set_font("Helvetica", "", 7.5)
     pdf.cell(63, 10, "Nom : ", 1, 0, "L")
-    pdf.cell(63, 10, "Nom : B. ELAMRI", 1, 0, "L")
-    pdf.cell(64, 10, "Nom : H. BAALLAL", 1, 1, "L")
+    pdf.cell(63, 10, "Nom :                 O. IKKEN", 1, 0, "L")
+    pdf.cell(64, 10, "Nom :                 H. BAALLAL", 1, 1, "L")
 
     return bytes(pdf.output())
 
@@ -224,6 +232,31 @@ def _safe_supabase_fetch(supabase_client):
         return f_st.session_state["pv_ident_local_db"]
 
 
+def get_dynamic_material_types(supabase_client):
+    """Récupère dynamiquement la liste unique des types de matériaux depuis Supabase ou la session."""
+    default_types = ["Remblai ordinaire", "GNT 0/60", "BBSG 0/10", "Tout-venant sélectionné"]
+    
+    records = []
+    if supabase_client:
+        try:
+            res = supabase_client.table("pv_identification_materiaux").select("type_materiau").execute()
+            if res.data:
+                records = res.data
+        except Exception:
+            pass
+            
+    if not records and "pv_ident_local_db" in f_st.session_state:
+        records = f_st.session_state["pv_ident_local_db"]
+        
+    if records:
+        dynamic_types = list(set([str(r.get("type_materiau")).strip() for r in records if r.get("type_materiau")]))
+        if dynamic_types:
+            combined = sorted(list(set(default_types + dynamic_types)))
+            return combined
+            
+    return default_types
+
+
 def show(supabase_client):
     user_name = str(f_st.session_state.get("user_name", f_st.session_state.get("user", {}).get("username", ""))).upper()
     user_role = str(f_st.session_state.get("role", "")).upper()
@@ -233,11 +266,26 @@ def show(supabase_client):
     if "pv_ident_local_db" not in f_st.session_state:
         f_st.session_state["pv_ident_local_db"] = []
 
-    selected_mat_sub = f_st.session_state.get("sub_page_identification", "Remblai ordinaire")
+    # --- RÉCUPÉRATION DYNAMIQUE DES MATÉRIAUX ---
+    material_options = get_dynamic_material_types(supabase_client)
+    
+    f_st.sidebar.markdown("---")
+    f_st.sidebar.subheader("🧪 Paramètres du Matériau")
+    
+    current_selected = f_st.session_state.get("sub_page_identification", material_options[0])
+    if current_selected not in material_options:
+        material_options.append(current_selected)
+        
+    selected_mat_sub = f_st.sidebar.selectbox(
+        "Sélectionner le type de matériau",
+        options=material_options,
+        index=material_options.index(current_selected) if current_selected in material_options else 0,
+        key="sub_page_identification"
+    )
 
     f_st.title("🔬 Identification & Granulométrie des Matériaux")
-    f_st.subheader(f"📌 Feuille d'essai active : **{selected_mat_sub}**")
-    f_st.caption("Laboratoire de Contrôle Externe - Projet LGV CASA SUD (Modèle LPEE / NM EN 933-1)")
+    f_st.subheader(f"📌 Sous-catégorie sélectionnée : **{selected_mat_sub}**")
+    f_st.caption("Laboratoire de Contrôle Externe - Projet LGV CASA SUD (Modèle LPEE / NM 00.8.082)")
 
     if not user_can_edit:
         f_st.warning("🔒 Mode lecture seule. Droits de modification restreints.")
@@ -249,122 +297,47 @@ def show(supabase_client):
     ])
 
     # ---------------------------------------------------------
-    # CONFIGURATION DYNAMIQUE STRICTEMENT SÉPARÉE PAR MATÉRIAU
-    # ---------------------------------------------------------
-    mat_configs = {
-        "Remblai ordinaire": {
-            "m1": 14000.0, "m2": 13500.0, "m3": 11200.0, "m4": 2000.0,
-            "dmax_def": 50.0, "w_opt": 13.2, "ip": 12.0, "vbs": 1.45, "dens": 1.73,
-            "ref_ech": "Ech - Remblai ordinaire",
-            "sieves": [
-                (80, 0.0, 0.0), (63, 0.0, 0.0), (50, 0.0, 0.0), (40, 2500.0, 0.0),
-                (31.5, 3800.0, 0.0), (25, 4500.0, 0.0), (20, 5200.0, 0.0), (16, 5800.0, 0.0),
-                (12.5, 6200.0, 0.0), (10, 6500.0, 0.0),
-                (8, 0.0, 80.0), (6.3, 0.0, 160.0), (5, 0.0, 210.0), (4, 0.0, 260.0),
-                (3.15, 0.0, 310.0), (2.5, 0.0, 350.0), (2, 0.0, 400.0), (1.6, 0.0, 450.0),
-                (1.25, 0.0, 500.0), (1, 0.0, 550.0), (0.8, 0.0, 600.0), (0.63, 0.0, 650.0),
-                (0.5, 0.0, 700.0), (0.4, 0.0, 780.0), (0.315, 0.0, 900.0), (0.25, 0.0, 1100.0),
-                (0.2, 0.0, 1300.0), (0.16, 0.0, 1500.0), (0.1, 0.0, 1700.0), (0.08, 0.0, 1850.0)
-            ]
-        },
-        "GNT 0/60": {
-            "m1": 7901.6, "m2": 7659.7, "m3": 7659.7, "m4": 4000.0,
-            "dmax_def": 60.0, "w_opt": 5.8, "ip": 4.0, "vbs": 0.20, "dens": 2.25,
-            "ref_ech": "GNF2 GRANAL",
-            "sieves": [
-                (100, 0, 0), (80, 0, 0), (63, 0, 0), (50, 252.3, 0),
-                (40, 916.2, 0), (31.5, 1048.7, 0), (25, 887.5, 0), (20, 548.9, 0),
-                (16, 637.7, 0), (14, 295.7, 0), (12.5, 235.5, 0), (10, 465.2, 0),
-                (8, 0, 403.4), (6.3, 0, 367.2), (5, 0, 293.4), (4, 0, 215.6),
-                (3.15, 0, 192.6), (2.5, 0, 170.0), (2, 0, 151.0), (1.6, 0, 110.4),
-                (1.25, 0, 86.6), (1, 0, 61.0), (0.8, 0, 50.8), (0.63, 0, 38.1),
-                (0.5, 0, 39.1), (0.4, 0, 34.6), (0.315, 0, 30.9), (0.25, 0, 27.3),
-                (0.2, 0, 30.9), (0.16, 0, 14.0), (0.125, 0, 36.1), (0.1, 0, 7.0),
-                (0.08, 0, 1.9), (0.063, 0, 0.9)
-            ]
-        },
-        "GNF 0/40": {
-            "m1": 18000.0, "m2": 17500.0, "m3": 15000.0, "m4": 3000.0,
-            "dmax_def": 40.0, "w_opt": 7.5, "ip": 8.0, "vbs": 0.80, "dens": 2.10,
-            "ref_ech": "Ech - GNF 0/40",
-            "sieves": [
-                (50, 0.0, 0.0), (40, 0.0, 0.0), (31.5, 2000.0, 0.0), (25, 3500.0, 0.0),
-                (20, 4500.0, 0.0), (16, 5200.0, 0.0), (10, 6000.0, 0.0),
-                (6.3, 0.0, 150.0), (5, 0.0, 200.0), (2, 0.0, 400.0),
-                (1, 0.0, 550.0), (0.5, 0.0, 700.0), (0.08, 0.0, 1850.0)
-            ]
-        },
-        "GNA 0/31.5": {
-            "m1": 15000.0, "m2": 14600.0, "m3": 12500.0, "m4": 2500.0,
-            "dmax_def": 31.5, "w_opt": 6.2, "ip": 5.0, "vbs": 0.35, "dens": 2.18,
-            "ref_ech": "Ech - GNA 0/31.5",
-            "sieves": [
-                (40, 0.0, 0.0), (31.5, 0.0, 0.0), (25, 1500.0, 0.0), (20, 3000.0, 0.0),
-                (16, 4000.0, 0.0), (10, 5500.0, 0.0), (6.3, 0.0, 120.0),
-                (2, 0.0, 350.0), (1, 0.0, 500.0), (0.08, 0.0, 1500.0)
-            ]
-        },
-        "Couche de forme": {
-            "m1": 16000.0, "m2": 15500.0, "m3": 13000.0, "m4": 2500.0,
-            "dmax_def": 50.0, "w_opt": 10.0, "ip": 15.0, "vbs": 1.80, "dens": 1.95,
-            "ref_ech": "Ech - Couche de forme",
-            "sieves": [(50, 0, 0), (40, 1000, 0), (25, 3000, 0), (0.08, 0, 2000)]
-        },
-        "Sous couche 0/31.5": {
-            "m1": 15000.0, "m2": 14600.0, "m3": 12500.0, "m4": 2500.0,
-            "dmax_def": 31.5, "w_opt": 6.5, "ip": 6.0, "vbs": 0.40, "dens": 2.15,
-            "ref_ech": "Ech - Sous couche",
-            "sieves": [(31.5, 0, 0), (25, 1000, 0), (10, 4000, 0), (0.08, 0, 1500)]
-        },
-        "GNT bloc technique PRA": {
-            "m1": 28000.0, "m2": 27500.0, "m3": 24000.0, "m4": 5000.0,
-            "dmax_def": 80.0, "w_opt": 5.2, "ip": 3.0, "vbs": 0.15, "dens": 2.30,
-            "ref_ech": "Ech - GNT Bloc",
-            "sieves": [(80, 0, 0), (63, 1000, 0), (40, 5000, 0), (0.08, 0, 1200)]
-        },
-        "Remblai contigu type 2": {
-            "m1": 14000.0, "m2": 13500.0, "m3": 11200.0, "m4": 2000.0,
-            "dmax_def": 50.0, "w_opt": 12.0, "ip": 10.0, "vbs": 1.10, "dens": 1.80,
-            "ref_ech": "Ech - Remblai contigu",
-            "sieves": [(50, 0, 0), (40, 2000, 0), (0.08, 0, 1800)]
-        }
-    }
-    
-    cfg = mat_configs.get(selected_mat_sub, mat_configs["Remblai ordinaire"])
-
-    # ---------------------------------------------------------
-    # TAB 0 : ➕ SAISIE D'UN PV (Modèle totalement indépendant par matériau)
+    # TAB 0 : ➕ SAISIE D'UN PV
     # ---------------------------------------------------------
     with tab_saisir:
-        f_st.subheader(f"➕ Saisie PV d'identification — Modèle spécifique : {selected_mat_sub}")
+        f_st.subheader(f"➕ Saisie PV d'identification — {selected_mat_sub}")
         
         c1, c2, c3 = f_st.columns(3)
         with c1:
-            num_rapport = f_st.text_input("N° Rapport", value=f"25/260/LGV/CS/{selected_mat_sub[:3].upper()}/1200", key=f"num_rap_{selected_mat_sub}", disabled=not user_can_edit)
-            lieu = f_st.text_input("Lieu / Zone", value="Stock sur chantier (Zone T4)", key=f"lieu_{selected_mat_sub}", disabled=not user_can_edit)
+            num_rapport = f_st.text_input("N° Rapport", value="25/260/LGV/CS/1150", disabled=not user_can_edit)
+            lieu = f_st.text_input("Lieu / Zone", value="Stock sur chantier (Zone T4)", disabled=not user_can_edit)
         with c2:
-            pk = f_st.text_input("Provenance d'échantillon", value="PK 5+450 à PK 10+000", key=f"pk_{selected_mat_sub}", disabled=not user_can_edit)
-            date_essai = f_st.date_input("Date du prélèvement", value=datetime.date.today(), key=f"date_{selected_mat_sub}", disabled=not user_can_edit)
+            pk = f_st.text_input("Provenance d'échantillon", value="PK 5+450 à PK 10+000", disabled=not user_can_edit)
+            date_essai = f_st.date_input("Date du prélèvement", value=datetime.date.today(), disabled=not user_can_edit)
         with c3:
-            ref_ech = f_st.text_input("Référence Échantillon", value=cfg["ref_ech"], key=f"ref_ech_{selected_mat_sub}", disabled=not user_can_edit)
+            ref_ech = f_st.text_input("Référence Échantillon", value="Ech 1", disabled=not user_can_edit)
 
         f_st.markdown("---")
-        f_st.markdown(f"### 📄 Paramètres & Granulométrie dédiés pour : **{selected_mat_sub}**")
+        
+        f_st.markdown("### 📄 Feuille d'Analyse Granulométrique & Propriétés physiques")
         
         col_e1, col_e2, col_e3, col_e4 = f_st.columns(4)
         with col_e1:
-            m1_val = f_st.number_input("Masse sèche totale M1 (g)", value=cfg["m1"], step=0.1, key=f"m1_{selected_mat_sub}", disabled=not user_can_edit)
+            m1_val = f_st.number_input("Masse totale M1 (g)", value=14000.0, step=0.1, disabled=not user_can_edit)
         with col_e2:
-            m2_val = f_st.number_input("Masse sèche après lavage M2 (g)", value=cfg["m2"], step=0.1, key=f"m2_{selected_mat_sub}", disabled=not user_can_edit)
+            m2_val = f_st.number_input("Masse sèche étuve M2 (g)", value=13500.0, step=0.1, disabled=not user_can_edit)
         with col_e3:
-            m1_m2_diff = m1_val - m2_val
-            f_st.number_input("Mines retirées (M1 - M2) (g)", value=m1_m2_diff, disabled=True, format="%.1f", key=f"m1_m2_{selected_mat_sub}")
-            m3_val = m2_val
+            m3_val = f_st.number_input("Masse après lavage M3 (g)", value=11200.0, step=0.1, disabled=not user_can_edit)
         with col_e4:
-            m4_val = f_st.number_input("Prise tamisage M4 (g)", value=cfg["m4"], step=1.0, key=f"m4_{selected_mat_sub}", disabled=not user_can_edit)
+            m4_val = f_st.number_input("Prise tamisage M4 (g)", value=2000.0, step=1.0, disabled=not user_can_edit)
 
         f_st.markdown("#### Tableau de Tamisage & Refus")
-        df_template = pd.DataFrame(cfg["sieves"], columns=["Tamis (mm)", "R_i (g) [≥10mm]", "r_i (g) [<10mm]"])
+        default_sieves_desc = [
+            (80, 0.0, 0.0), (63, 0.0, 0.0), (50, 0.0, 0.0), (40, 2500.0, 0.0),
+            (31.5, 3800.0, 0.0), (25, 4500.0, 0.0), (20, 5200.0, 0.0), (16, 5800.0, 0.0),
+            (12.5, 6200.0, 0.0), (10, 6500.0, 0.0),
+            (8, 0.0, 80.0), (6.3, 0.0, 160.0), (5, 0.0, 210.0), (4, 0.0, 260.0),
+            (3.15, 0.0, 310.0), (2.5, 0.0, 350.0), (2, 0.0, 400.0), (1.6, 0.0, 450.0),
+            (1.25, 0.0, 500.0), (1, 0.0, 550.0), (0.8, 0.0, 600.0), (0.63, 0.0, 650.0),
+            (0.5, 0.0, 700.0), (0.4, 0.0, 780.0), (0.315, 0.0, 900.0), (0.25, 0.0, 1100.0),
+            (0.2, 0.0, 1300.0), (0.16, 0.0, 1500.0), (0.1, 0.0, 1700.0), (0.08, 0.0, 1850.0)
+        ]
+        df_template = pd.DataFrame(default_sieves_desc, columns=["Tamis (mm)", "R_i (g) [≥10mm]", "r_i (g) [<10mm]"])
         
         col_main_tbl, col_params_right = f_st.columns([1.3, 0.9])
         
@@ -379,43 +352,46 @@ def show(supabase_client):
 
         try:
             row_10 = edited_sieve_df[np.isclose(edited_sieve_df["Tamis (mm)"].astype(float), 10.0, atol=1e-3)]
-            re_val_calc = float(row_10["R_i (g) [≥10mm]"].values[0]) if not row_10.empty else 0.0
+            re_val_calc = float(row_10["R_i (g) [≥10mm]"].values[0]) if not row_10.empty else 6500.0
         except Exception:
-            re_val_calc = 0.0
+            re_val_calc = 6500.0
         me_val_calc = m3_val - re_val_calc
 
         with col_params_right:
-            f_st.markdown(f"##### ⚙️ Limites & Paramètres ({selected_mat_sub})")
-            re_val = f_st.number_input("Refus R_e (10mm) (g)", value=re_val_calc, disabled=True, key=f"re_10mm_{selected_mat_sub}")
-            me_val = f_st.number_input("Prise Me (g) [M3-Re]", value=me_val_calc, disabled=True, key=f"me_val_{selected_mat_sub}")
+            f_st.markdown("##### ⚙️ Caractéristiques, Limites & Paramètres Spécifiques")
+            re_val = f_st.number_input("Refus R_e (10mm) (g)", value=re_val_calc, disabled=True, key="re_10mm_mat")
+            me_val = f_st.number_input("Prise Me (g) [M3-Re]", value=me_val_calc, disabled=True, key="me_val_mat")
             
-            fond_tamis_val = f_st.number_input("Fond de tamis (g)", value=1.2 if selected_mat_sub == "GNT 0/60" else 1.4, step=0.1, disabled=not user_can_edit, key=f"fond_{selected_mat_sub}")
+            fond_tamis_val = f_st.number_input("Fond de tamis (g)", value=1.4, step=0.1, disabled=not user_can_edit)
             
             try:
                 row_008 = edited_sieve_df[np.isclose(edited_sieve_df["Tamis (mm)"].astype(float), 0.08, atol=1e-3)]
-                r_008_val = float(row_008["r_i (g) [<10mm]"].values[0]) if not row_008.empty else 1.9
+                r_008_val = float(row_008["r_i (g) [<10mm]"].values[0]) if not row_008.empty else 1850.0
             except Exception:
-                r_008_val = 1.9
+                r_008_val = 1850.0
             
             m5_calc = r_008_val + fond_tamis_val
-            m5_val = f_st.number_input("M5 (Total refus et passant sur 80µm)", value=m5_calc, disabled=True, key=f"m5_{selected_mat_sub}")
             
-            w_opt = f_st.number_input("Proctor Wopt (%)", value=cfg["w_opt"], step=0.5, disabled=not user_can_edit, key=f"wopt_{selected_mat_sub}")
-            ip = f_st.number_input("Indice de Plasticité (IP)", value=cfg["ip"], step=0.5, disabled=not user_can_edit, key=f"ip_{selected_mat_sub}")
-            vbs_val = f_st.number_input("VBS (Bleu de Manganèse)", value=cfg["vbs"], step=0.01, format="%.2f", disabled=not user_can_edit, key=f"vbs_{selected_mat_sub}")
-            dens_val = f_st.number_input("Proctor Densité OPN", value=cfg["dens"], step=0.01, disabled=not user_can_edit, key=f"dens_{selected_mat_sub}")
+            m5_val = f_st.number_input("M5 (Total refus et passant sur 80µm)", value=m5_calc, disabled=True, key="m5_auto_val")
+            
+            w_opt = f_st.number_input("Proctor Wopt (%)", value=13.2, step=0.5, disabled=not user_can_edit)
+            ip = f_st.number_input("Indice de Plasticité (IP)", value=12.0, step=0.5, disabled=not user_can_edit)
+            vbs_val = f_st.number_input("VBS (Bleu de Manganèse)", value=1.45, step=0.01, format="%.2f", disabled=not user_can_edit)
+            dens_val = f_st.number_input("Proctor Densité OPN", value=1.73, step=0.01, disabled=not user_can_edit)
 
             a_factor = me_val / m4_val if m4_val > 0 else 0
             m6_val = (a_factor * m5_val) + re_val
+            validation_m6 = 100.0 * (m3_val - m6_val) / m3_val if m3_val > 0 else 0.0
 
             f_st.markdown(
                 f"""
                 <div style="background-color: #f0f2f6; padding: 10px; border-radius: 6px; font-size: 0.85em;">
-                    <b>Modèle</b> : {selected_mat_sub}<br>
-                    <b>M1 - M2 (Fines)</b> : {m1_m2_diff:.1f} g<br>
                     <b>Facteur a (Me/M4)</b> : {a_factor:.4f}<br>
                     <b>M6 (Masse tamisat)</b> : {m6_val:.2f} g<br>
-                    <b>Proctor Wopt</b> : {w_opt:.1f}% | <b>IP</b> : {ip:.1f}% | <b>VBS</b> : {vbs_val:.2f}
+                    <b>Contrôle 100(M3-M6)/M3</b> : {validation_m6:.2f}% (doit être <2%)<br>
+                    <b>Proctor Wopt</b> : {w_opt:.1f}%<br>
+                    <b>Indice de Plasticité (IP)</b> : {ip:.1f}%<br>
+                    <b>VBS</b> : {vbs_val:.2f}
                 </div>
                 """,
                 unsafe_allow_html=True
@@ -471,33 +447,33 @@ def show(supabase_client):
             ax.legend(loc="lower right")
             fig.tight_layout()
             
-            temp_curve_path = f"temp_granulometrie_{selected_mat_sub.replace(' ', '_')}.png"
+            temp_curve_path = "temp_granulometrie.png"
             fig.savefig(temp_curve_path, dpi=200)
+            
             f_st.pyplot(fig, use_container_width=True)
             plt.close(fig)
 
-        dmax_detected = float(result_df[(result_df["R_i (g) [≥10mm]"] > 0) | (result_df["r_i (g) [<10mm]"] > 0)]["Tamis (mm)"].max()) if any((result_df["R_i (g) [≥10mm]"] > 0) | (result_df["r_i (g) [<10mm]"] > 0)) else cfg["dmax_def"]
-        
+        dmax_detected = float(result_df[(result_df["R_i (g) [≥10mm]"] > 0) | (result_df["r_i (g) [<10mm]"] > 0)]["Tamis (mm)"].max()) if any((result_df["R_i (g) [≥10mm]"] > 0) | (result_df["r_i (g) [<10mm]"] > 0)) else 50.0
         row_80um = result_df[result_df["Tamis (mm)"] == 0.08]
-        pass_80um_val = float(row_80um["% Passant"].values[0]) if not row_80um.empty else 3.3
+        pass_80um_val = float(row_80um["% Passant"].values[0]) if not row_80um.empty else 22.3
 
         row_2mm = result_df[result_df["Tamis (mm)"] == 2.0]
-        pass_2mm_val = float(row_2mm["% Passant"].values[0]) if not row_2mm.empty else 11.0
+        pass_2mm_val = float(row_2mm["% Passant"].values[0]) if not row_2mm.empty else 66.0
 
         row_50mm = result_df[np.isclose(result_df["Tamis (mm)"].astype(float), 50.0, atol=1e-3)]
-        pass_50mm_val = float(row_50mm["% Passant"].values[0]) if not row_50mm.empty else 97.0
+        pass_50mm_val = float(row_50mm["% Passant"].values[0]) if not row_50mm.empty else 100.0
 
         classe_gtr_auto = classer_gtr(dmax_detected, pass_80um_val, ip, vbs_val, pass_2mm_val)
         f_st.metric("Classe GTR (Auto)", classe_gtr_auto)
 
         is_conf = pass_80um_val <= 35.0
-        obs = "NEANT" if is_conf else f"Non Conforme / Hors fuseau ({selected_mat_sub})"
-        f_st.info(f"Observation automatique : **{obs}** | Dmax: **{dmax_detected} mm** | Passant 80um: **{pass_80um_val:.1f}%** | VBS: **{vbs_val:.2f}** | IP: **{ip:.1f}%**")
+        obs = f"Le matériau peut être utilisé pour un remblai. ({selected_mat_sub})" if is_conf else f"Non Conforme / Hors fuseau ({selected_mat_sub})"
+        f_st.info(f"Observation automatique : **{obs}** | Dmax: **{dmax_detected} mm** | Passant 50mm: **{pass_50mm_val:.1f}%** | Passant 80um: **{pass_80um_val:.1f}%** | VBS: **{vbs_val:.2f}** | IP: **{ip:.1f}%**")
 
         data_dict = {
             "Sous-Type Matériau": selected_mat_sub,
             "Ref Echantillon": ref_ech,
-            "M1 (g)": f"{m1_val}", "M2 (g)": f"{m2_val}", "M1-M2 (g)": f"{m1_m2_diff:.1f}", "M4 (g)": f"{m4_val}",
+            "M1 (g)": f"{m1_val}", "M2 (g)": f"{m2_val}", "M3 (g)": f"{m3_val}", "M4 (g)": f"{m4_val}",
             "M5 (g)": f"{m5_val:.2f}", "Fond de tamis (g)": f"{fond_tamis_val}", "M6 (g)": f"{m6_val:.2f}",
             "Dmax (mm)": f"{int(dmax_detected)}", 
             "Passant 80um (%)": f"{pass_80um_val:.1f}".replace('.', ','), 
@@ -511,7 +487,7 @@ def show(supabase_client):
             "Observation": obs
         }
 
-        if f_st.button(f"💾 Enregistrer le PV ({selected_mat_sub})", type="primary", use_container_width=True, key=f"save_btn_{selected_mat_sub}", disabled=not user_can_edit):
+        if f_st.button("💾 Enregistrer le PV dans l'Historique", type="primary", use_container_width=True, disabled=not user_can_edit):
             existing_records = _safe_supabase_fetch(supabase_client)
             if not existing_records:
                 existing_records = f_st.session_state["pv_ident_local_db"]
@@ -519,7 +495,7 @@ def show(supabase_client):
             is_duplicate = any(str(r.get("num_rapport")).strip().lower() == str(num_rapport).strip().lower() for r in existing_records)
             
             if is_duplicate:
-                f_st.error(f"❌ Erreur : Le rapport '{num_rapport}' existe déjà dans la base.")
+                f_st.error(f"❌ Erreur de blocage : Le numéro de rapport '{num_rapport}' existe déjà dans la base de données. Veuillez modifier le N° de rapport pour éviter les doublons.")
             else:
                 payload_record = {
                     "num_rapport": num_rapport,
@@ -544,15 +520,15 @@ def show(supabase_client):
                 f_st.session_state["pv_ident_local_db"].insert(0, payload_record)
                 
                 if saved_to_db:
-                    f_st.success(f"✅ PV de type [{selected_mat_sub}] enregistré avec succès !")
+                    f_st.success("✅ PV enregistré avec succès dans Supabase !")
                 else:
                     f_st.warning("⚠️ Stocké en session locale.")
 
     # ---------------------------------------------------------
-    # TAB 1 : 📋 HISTORIQUE & TÉLÉCHARGEMENT PDF
+    # TAB 1 : 📋 PVs / HISTORIQUE & TÉLÉCHARGEMENT PDF
     # ---------------------------------------------------------
     with tab_hist:
-        f_st.subheader("📋 PVs / Historique & Téléchargement PDF")
+        f_st.subheader("📋 PVs / Historique, Consultation & Téléchargement PDF")
         raw_data = _safe_supabase_fetch(supabase_client)
         
         if not raw_data and not f_st.session_state["pv_ident_local_db"]:
@@ -561,17 +537,18 @@ def show(supabase_client):
             combined_records = raw_data if raw_data else f_st.session_state["pv_ident_local_db"]
             df_hist = pd.DataFrame(combined_records)
             
-            search_q = f_st.text_input("Filtrer par N° Rapport ou Matériau :", key="search_hist_input").lower()
+            search_q = f_st.text_input("Filtrer par N° Rapport, Lieu ou Type :", key="search_hist_input").lower()
             if search_q:
                 df_hist = df_hist[df_hist.apply(lambda r: search_q in str(r.values).lower(), axis=1)]
             
+            f_st.markdown("#### Liste des PVs enregistrés et Téléchargement")
+            
             for idx, row in df_hist.iterrows():
-                mat_type_row = row.get('type_materiau', 'Remblai ordinaire')
-                with f_st.expander(f"📄 N° Rapport : {row.get('num_rapport')} | Matériau : {mat_type_row} | Date : {row.get('date_essai')}"):
+                with f_st.expander(f"📄 N° Rapport : {row.get('num_rapport')} | Type : {row.get('type_materiau')} | Date : {row.get('date_essai')}"):
                     c_info1, c_info2 = f_st.columns(2)
                     with c_info1:
-                        f_st.write(f"**Type de Matériau :** {mat_type_row}")
                         f_st.write(f"**Lieu / Zone :** {row.get('lieu')}")
+                        f_st.write(f"**Provenance d'échantillon :** {row.get('pk')}")
                     with c_info2:
                         f_st.write(f"**Observation :** {row.get('observation')}")
                         f_st.write(f"**Date d'essai :** {row.get('date_essai')}")
@@ -583,14 +560,11 @@ def show(supabase_client):
                         "date_essai": str(row.get("date_essai"))
                     }
                     
-                    curve_path_to_use = f"temp_granulometrie_{mat_type_row.replace(' ', '_')}.png"
-                    if not os.path.exists(curve_path_to_use):
-                        curve_path_to_use = "temp_granulometrie.png" if os.path.exists("temp_granulometrie.png") else None
-
-                    pdf_bytes = generate_pdf(header_info, row.get("details", {}), str(mat_type_row), curve_path_to_use)
+                    curve_path_to_use = "temp_granulometrie.png" if os.path.exists("temp_granulometrie.png") else None
+                    pdf_bytes = generate_pdf(header_info, row.get("details", {}), str(row.get("type_materiau")), curve_path_to_use)
                     
                     f_st.download_button(
-                        label=f"📄 Télécharger PDF LPEE ({row.get('num_rapport')})",
+                        label=f"📄 Télécharger PV PDF LPEE (Mis en page optimisée) ({row.get('num_rapport')})",
                         data=pdf_bytes,
                         file_name=f"PV_{str(row.get('num_rapport')).replace('/', '_')}.pdf",
                         mime="application/pdf",
@@ -601,7 +575,7 @@ def show(supabase_client):
             f_st.markdown("---")
             f_st.dataframe(df_hist, use_container_width=True)
 
-            selected_del = f_st.selectbox("Sélectionner un PV à supprimer", options=[""] + df_hist["num_rapport"].tolist() if "num_rapport" in df_hist else [], key="del_pv_select")
+            selected_del = f_st.selectbox("Sélectionner un PV à supprimer (Admin/Labo)", options=[""] + df_hist["num_rapport"].tolist() if "num_rapport" in df_hist else [], key="del_pv_select")
             if selected_del and f_st.button("🗑️ Supprimer ce PV", disabled=not user_can_edit, key="del_pv_btn"):
                 if supabase_client:
                     try:
@@ -624,6 +598,7 @@ def show(supabase_client):
         
         if data_to_use:
             df_s = pd.DataFrame(data_to_use)
+            
             if "type_materiau" in df_s.columns:
                 df_s = df_s[df_s["type_materiau"].str.lower() == selected_mat_sub.lower()]
 
@@ -631,24 +606,48 @@ def show(supabase_client):
                 f_st.info(f"Aucune donnée disponible pour le matériau : **{selected_mat_sub}**.")
             else:
                 df_s["date_essai_dt"] = pd.to_datetime(df_s["date_essai"], errors="coerce")
-                mois_fr = {1: "janvier", 2: "février", 3: "mars", 4: "avril", 5: "mai", 6: "juin", 7: "juillet", 8: "août", 9: "septembre", 10: "octobre", 11: "novembre", 12: "décembre"}
                 
-                df_s["Mois_Annee"] = df_s["date_essai_dt"].apply(lambda dt: f"{mois_fr.get(dt.month, '')} {dt.year}" if not pd.isna(dt) else "Inconnu")
+                mois_fr = {
+                    1: "janvier", 2: "février", 3: "mars", 4: "avril", 5: "mai", 6: "juin",
+                    7: "juillet", 8: "août", 9: "septembre", 10: "octobre", 11: "novembre", 12: "décembre"
+                }
+                
+                def get_mois_Annee(dt):
+                    if pd.isna(dt):
+                        return "Inconnu"
+                    return f"{mois_fr.get(dt.month, '')} {dt.year}"
+
+                df_s["Mois_Annee"] = df_s["date_essai_dt"].apply(get_mois_Annee)
+
+                f_st.markdown("#### 📅 Filtres de Synthèse")
                 mois_disponibles = sorted(df_s["Mois_Annee"].unique().tolist())
                 options_filtre = ["Tous les mois"] + [m for m in mois_disponibles if m != "Inconnu"]
                 
-                filtre_mois = f_st.selectbox("Filtrer par mois de prélèvement", options=options_filtre, key=f"select_filtre_mois_{selected_mat_sub}")
-                df_filtered = df_s[df_s["Mois_Annee"] == filtre_mois] if filtre_mois != "Tous les mois" else df_s.copy()
+                col_f1, col_f2 = f_st.columns(2)
+                with col_f1:
+                    filtre_mois = f_st.selectbox("Filtrer par mois de prélèvement", options=options_filtre, key="select_filtre_mois")
+
+                if filtre_mois != "Tous les mois":
+                    df_filtered = df_s[df_s["Mois_Annee"] == filtre_mois]
+                else:
+                    df_filtered = df_s.copy()
+
+                total_essais_count = len(df_filtered)
 
                 m1, m2, m3 = f_st.columns(3)
-                m1.metric(f"Total Essais ({selected_mat_sub})", len(df_filtered))
-                m2.metric("Conformes", len(df_filtered[df_filtered["observation"].str.contains("néant|conforme", case=False, na=False)]))
-                m3.metric("Mois", filtre_mois)
+                m1.metric(f"Total PVs / Essais ({selected_mat_sub})", total_essais_count)
+                m2.metric("Conformes", len(df_filtered[df_filtered["observation"].str.contains("Conforme", na=False)]) if "observation" in df_filtered else 0)
+                m3.metric("Mois sélectionné", filtre_mois)
+                
+                f_st.markdown("---")
+                f_st.markdown("#### Aperçu du tableau de synthèse")
                 
                 export_rows = []
                 for _, row in df_filtered.iterrows():
                     details = row.get("details", {})
-                    if not isinstance(details, dict): details = {}
+                    if not isinstance(details, dict):
+                        details = {}
+                    
                     export_rows.append({
                         "N° Rapport": row.get("num_rapport"),
                         "Date de prélèvement": row.get("date_essai"),
@@ -666,7 +665,7 @@ def show(supabase_client):
                 wb = openpyxl.Workbook()
                 ws = wb.active
                 ws.title = "Synthèse Identification"
-                
+
                 ws.page_setup.orientation = ws.ORIENTATION_PORTRAIT
                 ws.page_setup.paperSize = ws.PAPERSIZE_A4
                 ws.sheet_properties.pageSetUpPr.fitToPage = True
@@ -682,31 +681,64 @@ def show(supabase_client):
                 fill_tbl_header = PatternFill(start_color="003366", end_color="003366", fill_type="solid")
                 fill_zebra = PatternFill(start_color="F2F5F9", end_color="F2F5F9", fill_type="solid")
                 fill_white = PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid")
-                border_thin = Border(left=Side(style='thin', color='CCCCCC'), right=Side(style='thin', color='CCCCCC'), top=Side(style='thin', color='CCCCCC'), bottom=Side(style='thin', color='CCCCCC'))
+
+                border_thin = Border(
+                    left=Side(style='thin', color='CCCCCC'),
+                    right=Side(style='thin', color='CCCCCC'),
+                    top=Side(style='thin', color='CCCCCC'),
+                    bottom=Side(style='thin', color='CCCCCC')
+                )
+
+                logo_path_excel = "logo.png.jpg"
+                if not os.path.exists(logo_path_excel):
+                    logo_path_excel = "logo.png"
+                if os.path.exists(logo_path_excel):
+                    try:
+                        img_ex = OpenpyxlImage(logo_path_excel)
+                        img_ex.width = 45
+                        img_ex.height = 25
+                        ws.add_image(img_ex, 'A1')
+                    except Exception:
+                        pass
 
                 ws.merge_cells('A1:G1')
                 ws['A1'] = "L.P.E.E - LABORATOIRE PUBLIC DES ESSAIS ET D'ETUDES"
                 ws['A1'].font = font_main_title
                 ws['A1'].alignment = Alignment(horizontal='center', vertical='center')
+                ws.row_dimensions[1].height = 20
 
                 ws.merge_cells('A2:G2')
                 ws['A2'] = "Centre Technique Régional CASA-SETTAT-BENI MELLAL"
                 ws['A2'].font = font_sub_title
                 ws['A2'].alignment = Alignment(horizontal='center', vertical='center')
+                ws.row_dimensions[2].height = 16
 
                 ws.merge_cells('A3:G3')
                 ws['A3'] = f"SYNTHÈSE DES ESSAIS D'IDENTIFICATION — {selected_mat_sub.upper()} (Période: {filtre_mois})"
                 ws['A3'].font = font_section
                 ws['A3'].alignment = Alignment(horizontal='center', vertical='center')
+                ws.row_dimensions[3].height = 22
+
+                ws.row_dimensions[4].height = 8
 
                 start_row = 5
-                headers = ["N° Rapport", "Date de prélèvement", "Nombre d'essais", "Lieu / Zone", "Provenance d'échantillon", "Classification GTR", "Observation"]
+                headers = [
+                    "N° Rapport", 
+                    "Date de prélèvement", 
+                    "Nombre d'essais",
+                    "Lieu / Zone", 
+                    "Provenance d'échantillon", 
+                    "Classification GTR", 
+                    "Observation"
+                ]
+
                 for col_num, h_text in enumerate(headers, 1):
                     cell = ws.cell(row=start_row, column=col_num, value=h_text)
                     cell.font = font_tbl_header
                     cell.fill = fill_tbl_header
                     cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
                     cell.border = border_thin
+                ws.row_dimensions[start_row].height = 25
 
                 current_row = start_row + 1
                 for r_idx, row_dict in enumerate(export_rows):
@@ -724,18 +756,46 @@ def show(supabase_client):
                         c.font = font_data
                         c.fill = row_fill
                         c.border = border_thin
+                    
+                    ws.row_dimensions[current_row].height = 20
                     current_row += 1
+
+                total_row_idx = current_row
+                ws.cell(row=total_row_idx, column=1, value="TOTAL GENERAL").font = Font(name="Helvetica", size=9, bold=True)
+                ws.cell(row=total_row_idx, column=1).alignment = Alignment(horizontal='center', vertical='center')
+                ws.merge_cells(start_row=total_row_idx, start_column=1, end_row=total_row_idx, end_column=2)
+                
+                cell_tot_val = ws.cell(row=total_row_idx, column=3, value=f"=SUM(C{start_row+1}:C{total_row_idx-1})")
+                cell_tot_val.font = Font(name="Helvetica", size=9, bold=True)
+                cell_tot_val.alignment = Alignment(horizontal='center', vertical='center')
+
+                for col_num in range(1, 8):
+                    c = ws.cell(row=total_row_idx, column=col_num)
+                    c.border = border_thin
+                    if col_num > 3:
+                        c.value = ""
+
+                ws.row_dimensions[total_row_idx].height = 22
+
+                for col in ws.columns:
+                    max_len = 0
+                    col_letter = openpyxl.utils.get_column_letter(col[0].column)
+                    for cell in col:
+                        if cell.row >= start_row and cell.row <= total_row_idx:
+                            val_str = str(cell.value or "")
+                            if len(val_str) > max_len:
+                                max_len = len(val_str)
+                    ws.column_dimensions[col_letter].width = max(max_len + 4, 16)
 
                 wb.save(excel_buf)
                 excel_buf.seek(0)
                 
                 f_st.download_button(
-                    label=f"📥 Télécharger la synthèse Excel formatée — {selected_mat_sub}",
+                    label=f"📥 Télécharger la synthèse Excel formatée (A4 Portrait) — {selected_mat_sub}",
                     data=excel_buf,
-                    file_name=f"Synthese_{selected_mat_sub.replace(' ', '_')}_{filtre_mois.replace(' ', '_')}.xlsx",
+                    file_name=f"Synthese_LPEE_{selected_mat_sub.replace(' ', '_')}_{filtre_mois.replace(' ', '_')}.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     type="primary",
-                    key=f"dl_synth_{selected_mat_sub}",
                     use_container_width=True
                 )
         else:
