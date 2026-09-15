@@ -98,17 +98,17 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
     
     if not data_dict or not isinstance(data_dict, dict):
         data_dict = {
-            "Ref Echantillon": "Ech 1",
-            "Passant 80um (%)": "22,3",
-            "Passant 2mm (%)": "66",
-            "Passant 50mm (%)": "100",
-            "Dmax (mm)": "50",
-            "VBS": "0,42",
-            "wL (%)": "14,2",
-            "IP (%)": "4,2",
-            "Densité OPN": "1,73",
-            "Classe GTR (Auto)": "B5",
-            "Observation": "Le matériau peut être utilisé pour un remblai."
+            "Ref Echantillon": "GNF2 GRANAL",
+            "Passant 80um (%)": "3,3",
+            "Passant 2mm (%)": "11",
+            "Passant 50mm (%)": "97",
+            "Dmax (mm)": "60",
+            "VBS": "0,20",
+            "wL (%)": "5,8",
+            "IP (%)": "4,0",
+            "Densité OPN": "2,25",
+            "Classe GTR (Auto)": "D3",
+            "Observation": "NEANT"
         }
     
     pdf.set_font("Helvetica", "B", 7)
@@ -126,27 +126,27 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
     pdf.ln(2)
 
     pdf.set_font("Helvetica", "B", 7)
-    pdf.cell(190, 4.5, " Normes : A.G: NM 00.8.082 | IP: NF P94-051 | VBS: NM 13.1.178 | LOS ANGELES: NM EN 1097-2 | MDE: NM EN 1097-1", 1, 1, "L")
+    pdf.cell(190, 4.5, " Normes : NM EN 933-1 (2018) | IP: NF P94-051 | VBS: NM 13.1.178", 1, 1, "L")
     pdf.ln(2)
 
     pdf.set_font("Helvetica", "B", 8)
     pdf.set_fill_color(220, 230, 242)
     pdf.cell(190, 5.5, " Résultats d'essais", 1, 1, "C", fill=True)
     
-    ech_label = data_dict.get('Ref Echantillon', 'Ech 1')
+    ech_label = data_dict.get('Ref Echantillon', 'GNF2 GRANAL')
     pdf.set_font("Helvetica", "B", 7.5)
     pdf.cell(60, 5.5, "", 1, 0, "C", fill=True)
     pdf.cell(130, 5.5, str(ech_label), 1, 1, "C", fill=True)
 
-    val_80um = str(data_dict.get('Passant 80um (%)', data_dict.get('Passant 80µm (%)', '22,3')))
-    val_2mm = str(data_dict.get('Passant 2mm (%)', '66'))
-    val_50mm = str(data_dict.get('Passant 50mm (%)', '100'))
-    val_dmax = str(data_dict.get('Dmax (mm)', '50'))
-    val_vbs = str(data_dict.get('VBS', '0,42'))
-    val_wopt = str(data_dict.get('wL (%)', '14,2'))
-    val_ip = str(data_dict.get('IP (%)', '4,2'))
-    val_dens = str(data_dict.get('Densité OPN', '1,73'))
-    val_gtr = str(data_dict.get('Classe GTR (Auto)', 'B5'))
+    val_80um = str(data_dict.get('Passant 80um (%)', '3,3'))
+    val_2mm = str(data_dict.get('Passant 2mm (%)', '11'))
+    val_50mm = str(data_dict.get('Passant 50mm (%)', '97'))
+    val_dmax = str(data_dict.get('Dmax (mm)', '60'))
+    val_vbs = str(data_dict.get('VBS', '0,20'))
+    val_wopt = str(data_dict.get('wL (%)', '5,8'))
+    val_ip = str(data_dict.get('IP (%)', '4,0'))
+    val_dens = str(data_dict.get('Densité OPN', '2,25'))
+    val_gtr = str(data_dict.get('Classe GTR (Auto)', 'D3'))
 
     pdf.set_font("Helvetica", "", 7.5)
     pdf.cell(60, 5, " %< 80 µm", 1, 0, "L")
@@ -194,7 +194,7 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
     pdf.set_fill_color(220, 230, 242)
     pdf.cell(190, 5, " Commentaires & Conditions d'utilisation :", 1, 1, "L", fill=True)
     pdf.set_font("Helvetica", "", 7.5)
-    obs_text = data_dict.get('Observation', 'Le matériau est conforme.')
+    obs_text = data_dict.get('Observation', 'NEANT')
     pdf.multi_cell(190, 4, f" - Observation : {obs_text}\n - Conditions d'utilisation : Conforme aux exigences techniques du projet LGV Casa Sud.", 1, "L")
     pdf.ln(4)
 
@@ -237,7 +237,7 @@ def show(supabase_client):
 
     f_st.title("🔬 Identification & Granulométrie des Matériaux")
     f_st.subheader(f"📌 Feuille d'essai active : **{selected_mat_sub}**")
-    f_st.caption("Laboratoire de Contrôle Externe - Projet LGV CASA SUD (Modèle LPEE / NM 00.8.082)")
+    f_st.caption("Laboratoire de Contrôle Externe - Projet LGV CASA SUD (Modèle LPEE / NM EN 933-1)")
 
     if not user_can_edit:
         f_st.warning("🔒 Mode lecture seule. Droits de modification restreints.")
@@ -254,35 +254,79 @@ def show(supabase_client):
     mat_configs = {
         "Remblai ordinaire": {
             "m1": 14000.0, "m2": 13500.0, "m3": 11200.0, "m4": 2000.0,
-            "dmax_def": 50.0, "w_opt": 13.2, "ip": 12.0, "vbs": 1.45, "dens": 1.73
+            "dmax_def": 50.0, "w_opt": 13.2, "ip": 12.0, "vbs": 1.45, "dens": 1.73,
+            "ref_ech": "Ech - Remblai ordinaire",
+            "sieves": [
+                (80, 0.0, 0.0), (63, 0.0, 0.0), (50, 0.0, 0.0), (40, 2500.0, 0.0),
+                (31.5, 3800.0, 0.0), (25, 4500.0, 0.0), (20, 5200.0, 0.0), (16, 5800.0, 0.0),
+                (12.5, 6200.0, 0.0), (10, 6500.0, 0.0),
+                (8, 0.0, 80.0), (6.3, 0.0, 160.0), (5, 0.0, 210.0), (4, 0.0, 260.0),
+                (3.15, 0.0, 310.0), (2.5, 0.0, 350.0), (2, 0.0, 400.0), (1.6, 0.0, 450.0),
+                (1.25, 0.0, 500.0), (1, 0.0, 550.0), (0.8, 0.0, 600.0), (0.63, 0.0, 650.0),
+                (0.5, 0.0, 700.0), (0.4, 0.0, 780.0), (0.315, 0.0, 900.0), (0.25, 0.0, 1100.0),
+                (0.2, 0.0, 1300.0), (0.16, 0.0, 1500.0), (0.1, 0.0, 1700.0), (0.08, 0.0, 1850.0)
+            ]
         },
         "GNT 0/60": {
-            "m1": 25000.0, "m2": 24500.0, "m3": 21000.0, "m4": 4000.0,
-            "dmax_def": 60.0, "w_opt": 5.8, "ip": 4.0, "vbs": 0.20, "dens": 2.25
+            "m1": 7901.6, "m2": 7659.7, "m3": 7659.7, "m4": 4000.0,
+            "dmax_def": 60.0, "w_opt": 5.8, "ip": 4.0, "vbs": 0.20, "dens": 2.25,
+            "ref_ech": "GNF2 GRANAL",
+            "sieves": [
+                (100, 0, 0), (80, 0, 0), (63, 0, 0), (50, 252.3, 0),
+                (40, 916.2, 0), (31.5, 1048.7, 0), (25, 887.5, 0), (20, 548.9, 0),
+                (16, 637.7, 0), (14, 295.7, 0), (12.5, 235.5, 0), (10, 465.2, 0),
+                (8, 0, 403.4), (6.3, 0, 367.2), (5, 0, 293.4), (4, 0, 215.6),
+                (3.15, 0, 192.6), (2.5, 0, 170.0), (2, 0, 151.0), (1.6, 0, 110.4),
+                (1.25, 0, 86.6), (1, 0, 61.0), (0.8, 0, 50.8), (0.63, 0, 38.1),
+                (0.5, 0, 39.1), (0.4, 0, 34.6), (0.315, 0, 30.9), (0.25, 0, 27.3),
+                (0.2, 0, 30.9), (0.16, 0, 14.0), (0.125, 0, 36.1), (0.1, 0, 7.0),
+                (0.08, 0, 1.9), (0.063, 0, 0.9)
+            ]
         },
         "GNF 0/40": {
             "m1": 18000.0, "m2": 17500.0, "m3": 15000.0, "m4": 3000.0,
-            "dmax_def": 40.0, "w_opt": 7.5, "ip": 8.0, "vbs": 0.80, "dens": 2.10
+            "dmax_def": 40.0, "w_opt": 7.5, "ip": 8.0, "vbs": 0.80, "dens": 2.10,
+            "ref_ech": "Ech - GNF 0/40",
+            "sieves": [
+                (50, 0.0, 0.0), (40, 0.0, 0.0), (31.5, 2000.0, 0.0), (25, 3500.0, 0.0),
+                (20, 4500.0, 0.0), (16, 5200.0, 0.0), (10, 6000.0, 0.0),
+                (6.3, 0.0, 150.0), (5, 0.0, 200.0), (2, 0.0, 400.0),
+                (1, 0.0, 550.0), (0.5, 0.0, 700.0), (0.08, 0.0, 1850.0)
+            ]
         },
         "GNA 0/31.5": {
             "m1": 15000.0, "m2": 14600.0, "m3": 12500.0, "m4": 2500.0,
-            "dmax_def": 31.5, "w_opt": 6.2, "ip": 5.0, "vbs": 0.35, "dens": 2.18
+            "dmax_def": 31.5, "w_opt": 6.2, "ip": 5.0, "vbs": 0.35, "dens": 2.18,
+            "ref_ech": "Ech - GNA 0/31.5",
+            "sieves": [
+                (40, 0.0, 0.0), (31.5, 0.0, 0.0), (25, 1500.0, 0.0), (20, 3000.0, 0.0),
+                (16, 4000.0, 0.0), (10, 5500.0, 0.0), (6.3, 0.0, 120.0),
+                (2, 0.0, 350.0), (1, 0.0, 500.0), (0.08, 0.0, 1500.0)
+            ]
         },
         "Couche de forme": {
             "m1": 16000.0, "m2": 15500.0, "m3": 13000.0, "m4": 2500.0,
-            "dmax_def": 50.0, "w_opt": 10.0, "ip": 15.0, "vbs": 1.80, "dens": 1.95
+            "dmax_def": 50.0, "w_opt": 10.0, "ip": 15.0, "vbs": 1.80, "dens": 1.95,
+            "ref_ech": "Ech - Couche de forme",
+            "sieves": [(50, 0, 0), (40, 1000, 0), (25, 3000, 0), (0.08, 0, 2000)]
         },
         "Sous couche 0/31.5": {
             "m1": 15000.0, "m2": 14600.0, "m3": 12500.0, "m4": 2500.0,
-            "dmax_def": 31.5, "w_opt": 6.5, "ip": 6.0, "vbs": 0.40, "dens": 2.15
+            "dmax_def": 31.5, "w_opt": 6.5, "ip": 6.0, "vbs": 0.40, "dens": 2.15,
+            "ref_ech": "Ech - Sous couche",
+            "sieves": [(31.5, 0, 0), (25, 1000, 0), (10, 4000, 0), (0.08, 0, 1500)]
         },
         "GNT bloc technique PRA": {
             "m1": 28000.0, "m2": 27500.0, "m3": 24000.0, "m4": 5000.0,
-            "dmax_def": 80.0, "w_opt": 5.2, "ip": 3.0, "vbs": 0.15, "dens": 2.30
+            "dmax_def": 80.0, "w_opt": 5.2, "ip": 3.0, "vbs": 0.15, "dens": 2.30,
+            "ref_ech": "Ech - GNT Bloc",
+            "sieves": [(80, 0, 0), (63, 1000, 0), (40, 5000, 0), (0.08, 0, 1200)]
         },
         "Remblai contigu type 2": {
             "m1": 14000.0, "m2": 13500.0, "m3": 11200.0, "m4": 2000.0,
-            "dmax_def": 50.0, "w_opt": 12.0, "ip": 10.0, "vbs": 1.10, "dens": 1.80
+            "dmax_def": 50.0, "w_opt": 12.0, "ip": 10.0, "vbs": 1.10, "dens": 1.80,
+            "ref_ech": "Ech - Remblai contigu",
+            "sieves": [(50, 0, 0), (40, 2000, 0), (0.08, 0, 1800)]
         }
     }
     
@@ -296,13 +340,13 @@ def show(supabase_client):
         
         c1, c2, c3 = f_st.columns(3)
         with c1:
-            num_rapport = f_st.text_input("N° Rapport", value=f"25/260/LGV/CS/{selected_mat_sub[:3].upper()}/1150", disabled=not user_can_edit)
+            num_rapport = f_st.text_input("N° Rapport", value=f"25/260/LGV/CS/{selected_mat_sub[:3].upper()}/1200", disabled=not user_can_edit)
             lieu = f_st.text_input("Lieu / Zone", value="Stock sur chantier (Zone T4)", disabled=not user_can_edit)
         with c2:
             pk = f_st.text_input("Provenance d'échantillon", value="PK 5+450 à PK 10+000", disabled=not user_can_edit)
             date_essai = f_st.date_input("Date du prélèvement", value=datetime.date.today(), disabled=not user_can_edit)
         with c3:
-            ref_ech = f_st.text_input("Référence Échantillon", value=f"Ech - {selected_mat_sub}", disabled=not user_can_edit)
+            ref_ech = f_st.text_input("Référence Échantillon", value=cfg["ref_ech"], disabled=not user_can_edit)
 
         f_st.markdown("---")
         f_st.markdown(f"### 📄 Paramètres & Granulométrie adaptés pour : **{selected_mat_sub}**")
@@ -318,17 +362,7 @@ def show(supabase_client):
             m4_val = f_st.number_input("Prise tamisage M4 (g)", value=cfg["m4"], step=1.0, disabled=not user_can_edit)
 
         f_st.markdown("#### Tableau de Tamisage & Refus")
-        default_sieves_desc = [
-            (80, 0.0, 0.0), (63, 0.0, 0.0), (50, 0.0, 0.0), (40, 2500.0, 0.0),
-            (31.5, 3800.0, 0.0), (25, 4500.0, 0.0), (20, 5200.0, 0.0), (16, 5800.0, 0.0),
-            (12.5, 6200.0, 0.0), (10, 6500.0, 0.0),
-            (8, 0.0, 80.0), (6.3, 0.0, 160.0), (5, 0.0, 210.0), (4, 0.0, 260.0),
-            (3.15, 0.0, 310.0), (2.5, 0.0, 350.0), (2, 0.0, 400.0), (1.6, 0.0, 450.0),
-            (1.25, 0.0, 500.0), (1, 0.0, 550.0), (0.8, 0.0, 600.0), (0.63, 0.0, 650.0),
-            (0.5, 0.0, 700.0), (0.4, 0.0, 780.0), (0.315, 0.0, 900.0), (0.25, 0.0, 1100.0),
-            (0.2, 0.0, 1300.0), (0.16, 0.0, 1500.0), (0.1, 0.0, 1700.0), (0.08, 0.0, 1850.0)
-        ]
-        df_template = pd.DataFrame(default_sieves_desc, columns=["Tamis (mm)", "R_i (g) [≥10mm]", "r_i (g) [<10mm]"])
+        df_template = pd.DataFrame(cfg["sieves"], columns=["Tamis (mm)", "R_i (g) [≥10mm]", "r_i (g) [<10mm]"])
         
         col_main_tbl, col_params_right = f_st.columns([1.3, 0.9])
         
@@ -343,9 +377,9 @@ def show(supabase_client):
 
         try:
             row_10 = edited_sieve_df[np.isclose(edited_sieve_df["Tamis (mm)"].astype(float), 10.0, atol=1e-3)]
-            re_val_calc = float(row_10["R_i (g) [≥10mm]"].values[0]) if not row_10.empty else 6500.0
+            re_val_calc = float(row_10["R_i (g) [≥10mm]"].values[0]) if not row_10.empty else 0.0
         except Exception:
-            re_val_calc = 6500.0
+            re_val_calc = 0.0
         me_val_calc = m3_val - re_val_calc
 
         with col_params_right:
@@ -353,14 +387,13 @@ def show(supabase_client):
             re_val = f_st.number_input("Refus R_e (10mm) (g)", value=re_val_calc, disabled=True, key=f"re_10mm_{selected_mat_sub}")
             me_val = f_st.number_input("Prise Me (g) [M3-Re]", value=me_val_calc, disabled=True, key=f"me_val_{selected_mat_sub}")
             
-            fond_tamis_val = f_st.number_input("Fond de tamis (g)", value=1.4, step=0.1, disabled=not user_can_edit, key=f"fond_{selected_mat_sub}")
+            fond_tamis_val = f_st.number_input("Fond de tamis (g)", value=1.2 if selected_mat_sub == "GNT 0/60" else 1.4, step=0.1, disabled=not user_can_edit, key=f"fond_{selected_mat_sub}")
             
-            # Calcul automatique M5 (Refus tamis 0.08 mm + Fond de tamis)
             try:
                 row_008 = edited_sieve_df[np.isclose(edited_sieve_df["Tamis (mm)"].astype(float), 0.08, atol=1e-3)]
-                r_008_val = float(row_008["r_i (g) [<10mm]"].values[0]) if not row_008.empty else 1850.0
+                r_008_val = float(row_008["r_i (g) [<10mm]"].values[0]) if not row_008.empty else 1.9
             except Exception:
-                r_008_val = 1850.0
+                r_008_val = 1.9
             
             m5_calc = r_008_val + fond_tamis_val
             m5_val = f_st.number_input("M5 (Total refus et passant sur 80µm)", value=m5_calc, disabled=True, key=f"m5_{selected_mat_sub}")
@@ -445,19 +478,19 @@ def show(supabase_client):
         dmax_detected = float(result_df[(result_df["R_i (g) [≥10mm]"] > 0) | (result_df["r_i (g) [<10mm]"] > 0)]["Tamis (mm)"].max()) if any((result_df["R_i (g) [≥10mm]"] > 0) | (result_df["r_i (g) [<10mm]"] > 0)) else cfg["dmax_def"]
         
         row_80um = result_df[result_df["Tamis (mm)"] == 0.08]
-        pass_80um_val = float(row_80um["% Passant"].values[0]) if not row_80um.empty else 22.3
+        pass_80um_val = float(row_80um["% Passant"].values[0]) if not row_80um.empty else 3.3
 
         row_2mm = result_df[result_df["Tamis (mm)"] == 2.0]
-        pass_2mm_val = float(row_2mm["% Passant"].values[0]) if not row_2mm.empty else 66.0
+        pass_2mm_val = float(row_2mm["% Passant"].values[0]) if not row_2mm.empty else 11.0
 
         row_50mm = result_df[np.isclose(result_df["Tamis (mm)"].astype(float), 50.0, atol=1e-3)]
-        pass_50mm_val = float(row_50mm["% Passant"].values[0]) if not row_50mm.empty else 100.0
+        pass_50mm_val = float(row_50mm["% Passant"].values[0]) if not row_50mm.empty else 97.0
 
         classe_gtr_auto = classer_gtr(dmax_detected, pass_80um_val, ip, vbs_val, pass_2mm_val)
         f_st.metric("Classe GTR (Auto)", classe_gtr_auto)
 
         is_conf = pass_80um_val <= 35.0
-        obs = f"Le matériau {selected_mat_sub} est conforme aux exigences." if is_conf else f"Non Conforme / Hors fuseau ({selected_mat_sub})"
+        obs = "NEANT" if is_conf else f"Non Conforme / Hors fuseau ({selected_mat_sub})"
         f_st.info(f"Observation automatique : **{obs}** | Dmax: **{dmax_detected} mm** | Passant 80um: **{pass_80um_val:.1f}%** | VBS: **{vbs_val:.2f}** | IP: **{ip:.1f}%**")
 
         data_dict = {
@@ -604,7 +637,7 @@ def show(supabase_client):
 
                 m1, m2, m3 = f_st.columns(3)
                 m1.metric(f"Total Essais ({selected_mat_sub})", len(df_filtered))
-                m2.metric("Conformes", len(df_filtered[df_filtered["observation"].str.contains("conforme", case=False, na=False)]))
+                m2.metric("Conformes", len(df_filtered[df_filtered["observation"].str.contains("néant|conforme", case=False, na=False)]))
                 m3.metric("Mois", filtre_mois)
                 
                 export_rows = []
@@ -629,7 +662,6 @@ def show(supabase_client):
                 ws = wb.active
                 ws.title = "Synthèse Identification"
                 
-                # Configuration Excel A4 Portrait
                 ws.page_setup.orientation = ws.ORIENTATION_PORTRAIT
                 ws.page_setup.paperSize = ws.PAPERSIZE_A4
                 ws.sheet_properties.pageSetUpPr.fitToPage = True
