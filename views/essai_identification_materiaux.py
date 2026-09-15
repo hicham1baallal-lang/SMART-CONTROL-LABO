@@ -195,32 +195,31 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
 
     pdf.ln(2)
 
-    # Insertion de la Courbe Granulométrique (Hauteur ajustée à h=58 dans le PDF)
+    # --- COURBE GRANULOMÉTRIQUE ---
     pdf.set_font("Helvetica", "B", 8)
     pdf.set_fill_color(220, 230, 242)
     pdf.cell(190, 5, " COURBE GRANULOMÉTRIQUE", 1, 1, "L", fill=True)
     if curve_img_path and os.path.exists(curve_img_path):
         try:
-            pdf.image(curve_img_path, x=10, y=pdf.get_y() + 1, w=190, h=58)
-            pdf.ln(59) # Décaler le curseur en fonction de la nouvelle hauteur de l'image
+            pdf.image(curve_img_path, x=10, y=pdf.get_y() + 1, w=190, h=6.2 * 10) # Hauteur proportionnelle à 6.2 pouces (~62 mm)
+            pdf.ln(64) # Décalage après l'image
         except Exception:
-            pdf.cell(190, 58, "[Erreur d'insertion de la courbe]", 1, 1, "C")
+            pdf.cell(190, 62, "[Erreur d'insertion de la courbe]", 1, 1, "C")
     else:
-        pdf.cell(190, 58, "[Courbe non disponible]", 1, 1, "C")
+        pdf.cell(190, 62, "[Courbe non disponible]", 1, 1, "C")
     
-    # Positionnement bas de page
-    pdf.set_y(220)
+    pdf.ln(2)
 
-    # Commentaires & Conditions d'utilisation
+    # --- COMMENTAIRES & CONDITIONS D'UTILISATION (Déplacé ici, juste sous la courbe) ---
     pdf.set_font("Helvetica", "B", 8)
     pdf.set_fill_color(220, 230, 242)
     pdf.cell(190, 5, " Commentaires & Conditions d'utilisation :", 1, 1, "L", fill=True)
     pdf.set_font("Helvetica", "", 7.5)
     obs_text = data_dict.get('Observation', 'Le matériau peut être utilisé pour un remblai.')
     pdf.multi_cell(190, 4, f" - Observation : {obs_text}\n - Conditions d'utilisation : Conforme aux exigences techniques du projet LGV Casa Sud.", 1, "L")
-    pdf.ln(2)
+    pdf.ln(4)
 
-    # Blocs Signatures & Visas
+    # --- BLOCS SIGNATURES & VISAS ---
     pdf.set_font("Helvetica", "B", 7.5)
     pdf.set_fill_color(240, 240, 240)
     pdf.cell(63, 4.5, "LE REÇU PAR LE CLIENT", 1, 0, "C", fill=True)
@@ -377,7 +376,7 @@ def show(supabase_client):
         with col_tbl_res:
             f_st.dataframe(result_df, use_container_width=True, height=380)
         with col_plt:
-            # HAUTEUR DE LA COURBE MISE À JOUR À 6.2 (figsize=(7.0, 6.2))
+            # HAUTEUR DE LA COURBE MAINTENUE À 6.2
             fig, ax = plt.subplots(figsize=(7.0, 6.2))
             plot_curve_df = result_df.sort_values(by="Tamis (mm)", ascending=True).reset_index(drop=True)
             
