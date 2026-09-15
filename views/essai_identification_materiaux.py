@@ -214,8 +214,8 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
 
     pdf.set_font("Helvetica", "", 7.5)
     pdf.cell(63, 10, "Nom : ", 1, 0, "L")
-    pdf.cell(63, 10, "Nom :     O. IKKEN", 1, 0, "L")
-    pdf.cell(64, 10, "Nom :     H. BAALLAL", 1, 1, "L")
+    pdf.cell(63, 10, "Nom :         O. IKKEN", 1, 0, "L")
+    pdf.cell(64, 10, "Nom :         H. BAALLAL", 1, 1, "L")
 
     return bytes(pdf.output())
 
