@@ -9,8 +9,7 @@ import streamlit as st
 def generer_document_synthese(dict_dfs_filtres, mois_annee_str):
   """Génère un fichier Word en mémoire contenant un rapport structuré
 
-  avec un nombre restreint de colonnes essentielles pour éviter l'effet
-  'écrasé'.
+  uniquement pour les types d'essais sélectionnés par l'utilisateur.
   """
   doc = Document()
 
@@ -28,12 +27,12 @@ def generer_document_synthese(dict_dfs_filtres, mois_annee_str):
   )
   doc.add_paragraph(
       "Ce rapport présente les extraits des tableaux de synthèse par type"
-      " d'essai."
+      " d'essai sélectionné."
   )
 
   donnees_presentes = False
 
-  # Sélection stricte des colonnes essentielles par type d'essai pour éviter l'explosion des colonnes
+  # Sélection stricte des colonnes essentielles par type d'essai pour éviter l'étirement
   colonnes_essentielles = {
       "Essai à la Plaque": [
           "Date",
@@ -70,7 +69,6 @@ def generer_document_synthese(dict_dfs_filtres, mois_annee_str):
       colonnes_a_afficher = [c for c in c_preferes if c in df.columns]
 
       if not colonnes_a_afficher:
-        # Par défaut, on prend au maximum les 5 premières colonnes non techniques
         cols_utiles = [
             c
             for c in df.columns
@@ -103,7 +101,7 @@ def generer_document_synthese(dict_dfs_filtres, mois_annee_str):
       doc.add_paragraph("")  # Espacement entre les tableaux
 
   if not donnees_presentes:
-    doc.add_paragraph("Aucun essai disponible pour cette période.")
+    doc.add_paragraph("Aucun essai sélectionné ou disponible pour cette période.")
 
   buffer = io.BytesIO()
   doc.save(buffer)
@@ -114,8 +112,8 @@ def generer_document_synthese(dict_dfs_filtres, mois_annee_str):
 def afficher_vue(supabase_client=None):
   st.subheader("📜 Historique & Synthèse Mensuelle Globale")
   st.write(
-      "Consultez les synthèses mensuelles par type d'essai (Plaque, Teneur en"
-      " eau, Compacité, etc.) filtrées par mois."
+      "Consultez les synthèses mensuelles par type d'essai et personnalisez"
+      " votre rapport global."
   )
 
   tables_essais = [
@@ -170,7 +168,8 @@ def afficher_vue(supabase_client=None):
         }),
     }
 
-  st.markdown("### 🔍 Sélection de la Période")
+  # --- Sélecteur d'année et de mois ---
+  st.markdown("### 🔍 1. Sélection de la Période")
   col1, col2 = st.columns(2)
 
   toutes_les_dates = []
@@ -218,15 +217,41 @@ def afficher_vue(supabase_client=None):
 
   mois_annee_str = f"{mois_noms[selected_month_num]} {selected_year}"
 
+  # --- Rubrique de filtrage des types d'essais à inclure ---
   st.markdown("---")
   st.markdown(
-      f"### 📊 Synthèse par Type d'Essai pour : **{mois_annee_str}**"
+      "### 🎛️ 2. Filtrer les types d'essais à inclure dans la synthèse globale"
+  )
+  st.write(
+      "Cochez les types d'essais que vous désirez intégrer dans l'affichage et"
+      " dans le document Word :"
+  )
+
+  types_disponibles = list(dict_dfs_bruts.keys())
+  selected_types = {}
+
+  # Organisation des cases à cocher en colonnes (jusqu'à 3 par ligne)
+  cols_checkboxes = st.columns(min(len(types_disponibles), 3))
+  for idx, nom_type in enumerate(types_disponibles):
+    col_target = cols_checkboxes[idx % len(cols_checkboxes)]
+    with col_target:
+      selected_types[nom_type] = st.checkbox(
+          f"Inclure : {nom_type}", value=True, key=f"chk_{nom_type}"
+      )
+
+  st.markdown("---")
+  st.markdown(
+      f"### 📊 3. Aperçu des tableaux filtrés pour : **{mois_annee_str}**"
   )
 
   dict_dfs_filtres = {}
   total_essais_mois = 0
 
   for nom_type, df in dict_dfs_bruts.items():
+    # Si l'utilisateur a décoché ce type d'essai, on l'ignore
+    if not selected_types.get(nom_type, True):
+      continue
+
     if df.empty:
       continue
 
@@ -259,12 +284,16 @@ def afficher_vue(supabase_client=None):
         st.info(f"Aucun enregistrement pour {nom_type} en {mois_annee_str}.")
 
   st.markdown("---")
-  st.markdown(f"**Total général des essais pour le mois :** {total_essais_mois}")
+  st.markdown(
+      f"**Total général des essais sélectionnés pour le mois :**"
+      f" {total_essais_mois}"
+  )
 
+  # --- Section Export Word ---
   st.markdown("### 📥 Exporter le Rapport de Synthèse Mensuelle")
   st.write(
-      f"Téléchargez le rapport Word (.docx) structuré contenant les extraits"
-      f" distincts de chaque tableau pour **{mois_annee_str}**."
+      f"Téléchargez le rapport Word (.docx) contenant uniquement les types"
+      f" d'essais sélectionnés pour **{mois_annee_str}**."
   )
 
   if total_essais_mois > 0:
@@ -281,7 +310,10 @@ def afficher_vue(supabase_client=None):
         ),
     )
   else:
-    st.warning("Aucune donnée disponible pour générer un rapport sur cette période.")
+    st.warning(
+        "Aucune donnée disponible ou sélectionnée pour générer un rapport sur"
+        " cette période."
+    )
 
 
 def show(supabase_client=None):
