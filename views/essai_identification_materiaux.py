@@ -59,34 +59,33 @@ class IdentificationPDF(FPDF):
             logo_path = "logo.png"
         if os.path.exists(logo_path):
             try:
-                self.image(logo_path, 10, 8, 22)
+                self.image(logo_path, 10, 8, 20)
             except Exception:
                 pass
         
-        self.set_font("Helvetica", "B", 10)
-        self.set_xy(35, 8)
-        self.cell(100, 5, "L.P.E.E", 0, 1, "L")
-        self.set_font("Helvetica", "B", 8)
-        self.set_x(35)
-        self.cell(100, 4, "LABORATOIRE PUBLIC DES ESSAIS ET D'ETUDES", 0, 1, "L")
-        self.set_font("Helvetica", "", 8)
-        self.set_x(35)
-        self.cell(100, 4, "Centre Technique Régional CASA-SETTAT-BENI MELLAL", 0, 1, "L")
-        
         self.set_font("Helvetica", "B", 9)
-        self.set_xy(135, 8)
-        self.cell(65, 5, "Laboratoire du contrôle externe", 0, 1, "R")
+        self.set_xy(32, 8)
+        self.cell(90, 4, "L.P.E.E - LABORATOIRE PUBLIC DES ESSAIS ET D'ETUDES", 0, 1, "L")
+        self.set_font("Helvetica", "", 7)
+        self.set_x(32)
+        self.cell(90, 3, "Centre Technique Régional CASA-SETTAT-BENI MELLAL", 0, 1, "L")
         
-        self.ln(4)
+        self.set_font("Helvetica", "B", 8)
+        self.set_xy(130, 8)
+        self.cell(70, 4, "Laboratoire du contrôle externe", 0, 1, "R")
+        
+        self.ln(2)
         self.set_font("Helvetica", "B", 10)
-        self.cell(0, 6, "RAPPORT D'ESSAI D'IDENTIFICATION DES MATÉRIAUX", 0, 1, "C")
-        self.line(10, 28, 200, 28)
-        self.ln(4)
+        self.set_text_color(0, 51, 102)  # Bleu institutionnel
+        self.cell(0, 5, "RAPPORT D'ESSAI D'IDENTIFICATION DES MATÉRIAUX", 0, 1, "C")
+        self.set_text_color(0, 0, 0)
+        self.line(10, 24, 200, 24)
+        self.set_xy(10, 25)
 
     def footer(self):
-        self.set_y(-15)
-        self.set_font("Helvetica", "I", 8)
-        self.cell(0, 10, f"CTR-CSB - Projet LGV CASA SUD | Page {self.page_no()}/{{nb}}", 0, 0, "C")
+        self.set_y(-12)
+        self.set_font("Helvetica", "I", 7)
+        self.cell(0, 8, f"CTR-CSB - Projet LGV CASA SUD | Page {self.page_no()}/{{nb}}", 0, 0, "C")
 
 
 def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
@@ -95,36 +94,36 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
     pdf.add_page()
     
     # Intitulé Projet LGV Casa Sud
-    pdf.set_font("Helvetica", "B", 8)
-    pdf.multi_cell(190, 4, "TRAVAUX D'EXECUTION DE TERRASSEMENT, OUVRAGES D'ART ET RETABLISSEMENTS DE COMMUNICATION ENTRE PK 5+450 et PK 10+000 - GARE CASA SUD", 0, "C")
-    pdf.ln(3)
+    pdf.set_font("Helvetica", "B", 7)
+    pdf.multi_cell(190, 3.5, "TRAVAUX D'EXECUTION DE TERRASSEMENT, OUVRAGES D'ART ET RETABLISSEMENTS DE COMMUNICATION ENTRE PK 5+450 et PK 10+000 - GARE CASA SUD", 0, "C")
+    pdf.ln(2)
 
-    # Bloc Informations administratives et chantier
+    # Bloc Informations administratives (Cadre épuré)
     pdf.set_font("Helvetica", "", 8)
-    pdf.cell(95, 6, f" Client : TGCC", 1, 0, "L")
-    pdf.cell(95, 6, f" Rapport d'Essai N° : {header_info.get('num_rapport') or 'N/A'}", 1, 1, "L")
-    pdf.cell(95, 6, f" Dossier : 2025-260-05985-2025-0247", 1, 0, "L")
-    pdf.cell(95, 6, f" Date du prélèvement : {header_info.get('date_essai') or ''}", 1, 1, "L")
-    pdf.cell(95, 6, f" Lieux de prélèvement : {header_info.get('lieu') or 'Stock sur chantier'}", 1, 0, "L")
-    pdf.cell(95, 6, f" Numéro de prélèvement : {header_info.get('pk') or ''}", 1, 1, "L")
-    pdf.cell(190, 6, f" Objet : IDENTIFICATION DU MATÉRIAU ({str(type_mat).upper()})", 1, 1, "L")
-    pdf.ln(3)
+    pdf.cell(95, 5.5, f" Client : TGCC", 1, 0, "L")
+    pdf.cell(95, 5.5, f" Rapport d'Essai N° : {header_info.get('num_rapport') or 'N/A'}", 1, 1, "L")
+    pdf.cell(95, 5.5, f" Dossier : 2025-260-05985-2025-0247", 1, 0, "L")
+    pdf.cell(95, 5.5, f" Date du prélèvement : {header_info.get('date_essai') or ''}", 1, 1, "L")
+    pdf.cell(95, 5.5, f" Lieux de prélèvement : {header_info.get('lieu') or 'Stock sur chantier'}", 1, 0, "L")
+    pdf.cell(95, 5.5, f" Numéro de prélèvement : {header_info.get('pk') or ''}", 1, 1, "L")
+    pdf.cell(190, 5.5, f" Objet : IDENTIFICATION DU MATÉRIAU ({str(type_mat).upper()})", 1, 1, "L")
+    pdf.ln(2)
 
     # Références de normes
-    pdf.set_font("Helvetica", "B", 8)
-    pdf.cell(190, 5, " Référence de normes : A.G: NM 00.8.082 | IP: NF P94-051 | VBS: NM 13.1.178 | LOS ANGELES: NM EN 1097-2 | MDE: NM EN 1097-1", 1, 1, "L")
-    pdf.ln(3)
+    pdf.set_font("Helvetica", "B", 7)
+    pdf.cell(190, 4.5, " Normes : A.G: NM 00.8.082 | IP: NF P94-051 | VBS: NM 13.1.178 | LOS ANGELES: NM EN 1097-2 | MDE: NM EN 1097-1", 1, 1, "L")
+    pdf.ln(2)
 
-    # Tableau des résultats synthétiques d'essais
+    # Tableau des résultats synthétiques d'essais (Avec couleur d'en-tête élégante)
     pdf.set_font("Helvetica", "B", 8)
-    pdf.set_fill_color(240, 240, 240)
-    pdf.cell(190, 6, " Résultats d'essais", 1, 1, "L", fill=True)
+    pdf.set_fill_color(220, 230, 242)  # Bleu clair pastel
+    pdf.cell(190, 5.5, " Résultats d'essais", 1, 1, "L", fill=True)
     
     pdf.set_font("Helvetica", "B", 7)
     headers = ["%< 80um", "%< 2mm", "%< 50mm", "D MAX", "VBS", "Wopt", "Densité OPN", "GTR"]
     widths = [24, 23, 23, 23, 23, 24, 25, 25]
     for h, w in zip(headers, widths):
-        pdf.cell(w, 6, h, 1, 0, "C", fill=True)
+        pdf.cell(w, 5, h, 1, 0, "C", fill=True)
     pdf.ln()
 
     pdf.set_font("Helvetica", "", 8)
@@ -139,41 +138,43 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
         str(data_dict.get('Classe GTR (Auto)', '-'))
     ]
     for v, w in zip(vals, widths):
-        pdf.cell(w, 6, v, 1, 0, "C")
-    pdf.ln(5)
+        pdf.cell(w, 5, v, 1, 0, "C")
+    pdf.ln(3)
 
     # Insertion de la Courbe Granulométrique
     pdf.set_font("Helvetica", "B", 8)
-    pdf.cell(190, 6, " COURBE GRANULOMÉTRIQUE", 1, 1, "L", fill=True)
+    pdf.set_fill_color(220, 230, 242)
+    pdf.cell(190, 5.5, " COURBE GRANULOMÉTRIQUE", 1, 1, "L", fill=True)
     if curve_img_path and os.path.exists(curve_img_path):
         try:
-            # Positionnement centré de l'image de la courbe granulométrique
-            pdf.image(curve_img_path, x=15, y=pdf.get_y() + 2, w=180)
-            pdf.ln(68)
+            pdf.image(curve_img_path, x=25, y=pdf.get_y() + 2, w=160)
+            pdf.ln(62)
         except Exception:
-            pdf.cell(190, 6, "[Erreur d'insertion de la courbe granulométrique]", 1, 1, "C")
+            pdf.cell(190, 5, "[Erreur d'insertion de la courbe]", 1, 1, "C")
     else:
-        pdf.cell(190, 6, "[Courbe non disponible]", 1, 1, "C")
-    pdf.ln(3)
+        pdf.cell(190, 5, "[Courbe non disponible]", 1, 1, "C")
+    pdf.ln(2)
 
     # Commentaires et utilisation
     pdf.set_font("Helvetica", "B", 8)
-    pdf.cell(190, 6, " Commentaires & Conditions d'utilisation :", 1, 1, "L", fill=True)
-    pdf.set_font("Helvetica", "", 8)
+    pdf.set_fill_color(220, 230, 242)
+    pdf.cell(190, 5.5, " Commentaires & Conditions d'utilisation :", 1, 1, "L", fill=True)
+    pdf.set_font("Helvetica", "", 7.5)
     obs_text = data_dict.get('Observation', 'Le matériau peut être utilisé pour un remblai.')
-    pdf.multi_cell(190, 5, f" - Observation : {obs_text}\n - Conditions d'utilisation : Conforme aux exigences du projet LGV Casa Sud.", 1, "L")
-    pdf.ln(8)
+    pdf.multi_cell(190, 4.5, f" - Observation : {obs_text}\n - Conditions d'utilisation : Conforme aux exigences techniques du projet LGV Casa Sud.", 1, "L")
+    pdf.ln(3)
 
-    # Blocs Signatures & Visas (Conforme modèle officiel)
-    pdf.set_font("Helvetica", "B", 8)
+    # Blocs Signatures & Visas
+    pdf.set_font("Helvetica", "B", 7.5)
+    pdf.set_fill_color(240, 240, 240)
     pdf.cell(63, 5, "LE REÇU PAR LE CLIENT", 1, 0, "C", fill=True)
     pdf.cell(63, 5, "LE COORDINATEUR DES ESSAIS", 1, 0, "C", fill=True)
     pdf.cell(64, 5, "LE CHEF DU LABORATOIRE", 1, 1, "C", fill=True)
 
-    pdf.set_font("Helvetica", "", 8)
-    pdf.cell(63, 14, "Nom : ", 1, 0, "L")
-    pdf.cell(63, 14, "Nom : B. ELAMRI", 1, 0, "L")
-    pdf.cell(64, 14, "Nom : H. BAALLAL", 1, 1, "L")
+    pdf.set_font("Helvetica", "", 7.5)
+    pdf.cell(63, 12, "Nom : ", 1, 0, "L")
+    pdf.cell(63, 12, "Nom : B. ELAMRI", 1, 0, "L")
+    pdf.cell(64, 12, "Nom : H. BAALLAL", 1, 1, "L")
 
     return bytes(pdf.output())
 
@@ -338,7 +339,7 @@ def show(supabase_client):
 
             ax.plot(
                 x_indices, plot_curve_df["% Passant"],
-                marker='o', markersize=4, linestyle='-', color='#0066cc', linewidth=1.5, label=ref_ech
+                marker='o', markersize=4, linestyle='-', color='#004080', linewidth=1.8, label=ref_ech
             )
             ax.set_xticks(ticks_positions)
             ax.set_xticklabels(ticks_labels, rotation=70, ha='right', fontsize=7)
@@ -349,7 +350,6 @@ def show(supabase_client):
             ax.legend(loc="lower right")
             fig.tight_layout()
             
-            # Sauvegarde temporaire pour inclusion dans le PDF
             temp_curve_path = "temp_granulometrie.png"
             fig.savefig(temp_curve_path, dpi=200)
             
@@ -447,12 +447,11 @@ def show(supabase_client):
                         "date_essai": str(row.get("date_essai"))
                     }
                     
-                    # On utilise l'image temporaire de la courbe si elle existe
                     curve_path_to_use = "temp_granulometrie.png" if os.path.exists("temp_granulometrie.png") else None
                     pdf_bytes = generate_pdf(header_info, row.get("details", {}), str(row.get("type_materiau")), curve_path_to_use)
                     
                     f_st.download_button(
-                        label=f"📄 Télécharger PV PDF LPEE avec Courbe ({row.get('num_rapport')})",
+                        label=f"📄 Télécharger PV PDF LPEE (Mis en page & Couleur) ({row.get('num_rapport')})",
                         data=pdf_bytes,
                         file_name=f"PV_{str(row.get('num_rapport')).replace('/', '_')}.pdf",
                         mime="application/pdf",
