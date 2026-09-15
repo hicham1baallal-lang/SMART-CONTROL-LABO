@@ -114,14 +114,14 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
     pdf.cell(190, 4, " Normes : A.G: NM 00.8.082 | IP: NF P94-051 | VBS: NM 13.1.178 | LOS ANGELES: NM EN 1097-2 | MDE: NM EN 1097-1", 1, 1, "L")
     pdf.ln(1.5)
 
-    # Tableau des résultats synthétiques d'essais
+    # Tableau des résultats synthétiques d'essais (Largeur totale de 190 mm répartie uniformément)
     pdf.set_font("Helvetica", "B", 7.5)
     pdf.set_fill_color(220, 230, 242)
     pdf.cell(190, 5, " Résultats d'essais", 1, 1, "L", fill=True)
     
     pdf.set_font("Helvetica", "B", 7)
     headers = ["%< 80um", "%< 2mm", "%< 50mm", "D MAX", "VBS", "Wopt", "Densité OPN", "GTR"]
-    widths = [24, 23, 23, 23, 23, 24, 25, 25]
+    widths = [22, 22, 22, 22, 22, 25, 27, 28]  # Ajustement des largeurs pour occuper toute la largeur (190mm) et éviter la troncature
     for h, w in zip(headers, widths):
         pdf.cell(w, 5, h, 1, 0, "C", fill=True)
     pdf.ln()
@@ -138,7 +138,7 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
         str(data_dict.get('Classe GTR (Auto)', '-'))
     ]
     for v, w in zip(vals, widths):
-        pdf.cell(w, 9.0, v, 1, 0, "C")  # Hauteur augmentée à 9.0 mm pour la ligne des valeurs
+        pdf.cell(w, 9.0, v, 1, 0, "C")  # Hauteur de ligne fixée à 9.0 mm
     pdf.ln(2)
 
     # Insertion de la Courbe Granulométrique
