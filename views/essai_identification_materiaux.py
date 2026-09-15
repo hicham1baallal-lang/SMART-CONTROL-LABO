@@ -249,7 +249,7 @@ def show(supabase_client):
     ])
 
     # ---------------------------------------------------------
-    # CONFIGURATION DYNAMIQUE DES PARAMÈTRES PAR TYPE DE MATÉRIAU
+    # CONFIGURATION DYNAMIQUE STRICTEMENT SÉPARÉE PAR MATÉRIAU
     # ---------------------------------------------------------
     mat_configs = {
         "Remblai ordinaire": {
@@ -333,35 +333,35 @@ def show(supabase_client):
     cfg = mat_configs.get(selected_mat_sub, mat_configs["Remblai ordinaire"])
 
     # ---------------------------------------------------------
-    # TAB 0 : ➕ SAISIE D'UN PV
+    # TAB 0 : ➕ SAISIE D'UN PV (Modèle totalement indépendant par matériau)
     # ---------------------------------------------------------
     with tab_saisir:
-        f_st.subheader(f"➕ Saisie PV d'identification — Spécifique : {selected_mat_sub}")
+        f_st.subheader(f"➕ Saisie PV d'identification — Modèle spécifique : {selected_mat_sub}")
         
         c1, c2, c3 = f_st.columns(3)
         with c1:
-            num_rapport = f_st.text_input("N° Rapport", value=f"25/260/LGV/CS/{selected_mat_sub[:3].upper()}/1200", disabled=not user_can_edit)
-            lieu = f_st.text_input("Lieu / Zone", value="Stock sur chantier (Zone T4)", disabled=not user_can_edit)
+            num_rapport = f_st.text_input("N° Rapport", value=f"25/260/LGV/CS/{selected_mat_sub[:3].upper()}/1200", key=f"num_rap_{selected_mat_sub}", disabled=not user_can_edit)
+            lieu = f_st.text_input("Lieu / Zone", value="Stock sur chantier (Zone T4)", key=f"lieu_{selected_mat_sub}", disabled=not user_can_edit)
         with c2:
-            pk = f_st.text_input("Provenance d'échantillon", value="PK 5+450 à PK 10+000", disabled=not user_can_edit)
-            date_essai = f_st.date_input("Date du prélèvement", value=datetime.date.today(), disabled=not user_can_edit)
+            pk = f_st.text_input("Provenance d'échantillon", value="PK 5+450 à PK 10+000", key=f"pk_{selected_mat_sub}", disabled=not user_can_edit)
+            date_essai = f_st.date_input("Date du prélèvement", value=datetime.date.today(), key=f"date_{selected_mat_sub}", disabled=not user_can_edit)
         with c3:
-            ref_ech = f_st.text_input("Référence Échantillon", value=cfg["ref_ech"], disabled=not user_can_edit)
+            ref_ech = f_st.text_input("Référence Échantillon", value=cfg["ref_ech"], key=f"ref_ech_{selected_mat_sub}", disabled=not user_can_edit)
 
         f_st.markdown("---")
-        f_st.markdown(f"### 📄 Paramètres & Granulométrie adaptés pour : **{selected_mat_sub}**")
+        f_st.markdown(f"### 📄 Paramètres & Granulométrie dédiés pour : **{selected_mat_sub}**")
         
         col_e1, col_e2, col_e3, col_e4 = f_st.columns(4)
         with col_e1:
-            m1_val = f_st.number_input("Masse sèche totale M1 (g)", value=cfg["m1"], step=0.1, disabled=not user_can_edit)
+            m1_val = f_st.number_input("Masse sèche totale M1 (g)", value=cfg["m1"], step=0.1, key=f"m1_{selected_mat_sub}", disabled=not user_can_edit)
         with col_e2:
-            m2_val = f_st.number_input("Masse sèche après lavage M2 (g)", value=cfg["m2"], step=0.1, disabled=not user_can_edit)
+            m2_val = f_st.number_input("Masse sèche après lavage M2 (g)", value=cfg["m2"], step=0.1, key=f"m2_{selected_mat_sub}", disabled=not user_can_edit)
         with col_e3:
             m1_m2_diff = m1_val - m2_val
-            f_st.number_input("Mines retirées (M1 - M2) (g)", value=m1_m2_diff, disabled=True, format="%.1f")
-            m3_val = m2_val # Utilise M2 comme masse de référence après lavage pour M3
+            f_st.number_input("Mines retirées (M1 - M2) (g)", value=m1_m2_diff, disabled=True, format="%.1f", key=f"m1_m2_{selected_mat_sub}")
+            m3_val = m2_val
         with col_e4:
-            m4_val = f_st.number_input("Prise tamisage M4 (g)", value=cfg["m4"], step=1.0, disabled=not user_can_edit)
+            m4_val = f_st.number_input("Prise tamisage M4 (g)", value=cfg["m4"], step=1.0, key=f"m4_{selected_mat_sub}", disabled=not user_can_edit)
 
         f_st.markdown("#### Tableau de Tamisage & Refus")
         df_template = pd.DataFrame(cfg["sieves"], columns=["Tamis (mm)", "R_i (g) [≥10mm]", "r_i (g) [<10mm]"])
@@ -407,12 +407,11 @@ def show(supabase_client):
 
             a_factor = me_val / m4_val if m4_val > 0 else 0
             m6_val = (a_factor * m5_val) + re_val
-            validation_m6 = 100.0 * (m3_val - m6_val) / m3_val if m3_val > 0 else 0.0
 
             f_st.markdown(
                 f"""
                 <div style="background-color: #f0f2f6; padding: 10px; border-radius: 6px; font-size: 0.85em;">
-                    <b>Matériau</b> : {selected_mat_sub}<br>
+                    <b>Modèle</b> : {selected_mat_sub}<br>
                     <b>M1 - M2 (Fines)</b> : {m1_m2_diff:.1f} g<br>
                     <b>Facteur a (Me/M4)</b> : {a_factor:.4f}<br>
                     <b>M6 (Masse tamisat)</b> : {m6_val:.2f} g<br>
@@ -472,7 +471,7 @@ def show(supabase_client):
             ax.legend(loc="lower right")
             fig.tight_layout()
             
-            temp_curve_path = "temp_granulometrie.png"
+            temp_curve_path = f"temp_granulometrie_{selected_mat_sub.replace(' ', '_')}.png"
             fig.savefig(temp_curve_path, dpi=200)
             f_st.pyplot(fig, use_container_width=True)
             plt.close(fig)
@@ -512,7 +511,7 @@ def show(supabase_client):
             "Observation": obs
         }
 
-        if f_st.button(f"💾 Enregistrer le PV ({selected_mat_sub})", type="primary", use_container_width=True, disabled=not user_can_edit):
+        if f_st.button(f"💾 Enregistrer le PV ({selected_mat_sub})", type="primary", use_container_width=True, key=f"save_btn_{selected_mat_sub}", disabled=not user_can_edit):
             existing_records = _safe_supabase_fetch(supabase_client)
             if not existing_records:
                 existing_records = f_st.session_state["pv_ident_local_db"]
@@ -567,10 +566,11 @@ def show(supabase_client):
                 df_hist = df_hist[df_hist.apply(lambda r: search_q in str(r.values).lower(), axis=1)]
             
             for idx, row in df_hist.iterrows():
-                with f_st.expander(f"📄 N° Rapport : {row.get('num_rapport')} | Matériau : {row.get('type_materiau')} | Date : {row.get('date_essai')}"):
+                mat_type_row = row.get('type_materiau', 'Remblai ordinaire')
+                with f_st.expander(f"📄 N° Rapport : {row.get('num_rapport')} | Matériau : {mat_type_row} | Date : {row.get('date_essai')}"):
                     c_info1, c_info2 = f_st.columns(2)
                     with c_info1:
-                        f_st.write(f"**Type de Matériau :** {row.get('type_materiau')}")
+                        f_st.write(f"**Type de Matériau :** {mat_type_row}")
                         f_st.write(f"**Lieu / Zone :** {row.get('lieu')}")
                     with c_info2:
                         f_st.write(f"**Observation :** {row.get('observation')}")
@@ -583,8 +583,11 @@ def show(supabase_client):
                         "date_essai": str(row.get("date_essai"))
                     }
                     
-                    curve_path_to_use = "temp_granulometrie.png" if os.path.exists("temp_granulometrie.png") else None
-                    pdf_bytes = generate_pdf(header_info, row.get("details", {}), str(row.get("type_materiau")), curve_path_to_use)
+                    curve_path_to_use = f"temp_granulometrie_{mat_type_row.replace(' ', '_')}.png"
+                    if not os.path.exists(curve_path_to_use):
+                        curve_path_to_use = "temp_granulometrie.png" if os.path.exists("temp_granulometrie.png") else None
+
+                    pdf_bytes = generate_pdf(header_info, row.get("details", {}), str(mat_type_row), curve_path_to_use)
                     
                     f_st.download_button(
                         label=f"📄 Télécharger PDF LPEE ({row.get('num_rapport')})",
@@ -634,7 +637,7 @@ def show(supabase_client):
                 mois_disponibles = sorted(df_s["Mois_Annee"].unique().tolist())
                 options_filtre = ["Tous les mois"] + [m for m in mois_disponibles if m != "Inconnu"]
                 
-                filtre_mois = f_st.selectbox("Filtrer par mois de prélèvement", options=options_filtre, key="select_filtre_mois")
+                filtre_mois = f_st.selectbox("Filtrer par mois de prélèvement", options=options_filtre, key=f"select_filtre_mois_{selected_mat_sub}")
                 df_filtered = df_s[df_s["Mois_Annee"] == filtre_mois] if filtre_mois != "Tous les mois" else df_s.copy()
 
                 m1, m2, m3 = f_st.columns(3)
@@ -732,6 +735,7 @@ def show(supabase_client):
                     file_name=f"Synthese_{selected_mat_sub.replace(' ', '_')}_{filtre_mois.replace(' ', '_')}.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     type="primary",
+                    key=f"dl_synth_{selected_mat_sub}",
                     use_container_width=True
                 )
         else:
