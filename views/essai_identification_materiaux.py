@@ -147,24 +147,25 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
     pdf.cell(190, 5, " COURBE GRANULOMÉTRIQUE", 1, 1, "L", fill=True)
     if curve_img_path and os.path.exists(curve_img_path):
         try:
-            pdf.image(curve_img_path, x=30, y=pdf.get_y() + 1, w=150, h=45)
-            pdf.ln(47)
+            pdf.image(curve_img_path, x=30, y=pdf.get_y() + 1, w=150, h=42)
         except Exception:
-            pdf.cell(190, 45, "[Erreur d'insertion de la courbe]", 1, 1, "C")
+            pdf.cell(190, 42, "[Erreur d'insertion de la courbe]", 1, 1, "C")
     else:
-        pdf.cell(190, 45, "[Courbe non disponible]", 1, 1, "C")
-    pdf.ln(1)
+        pdf.cell(190, 42, "[Courbe non disponible]", 1, 1, "C")
+    
+    # Positionnement forcé plus bas sur la page pour les commentaires et les visas
+    pdf.set_y(205)
 
-    # Positionnement en bas de page : Commentaires & Conditions d'utilisation
+    # Commentaires & Conditions d'utilisation
     pdf.set_font("Helvetica", "B", 8)
     pdf.set_fill_color(220, 230, 242)
     pdf.cell(190, 5, " Commentaires & Conditions d'utilisation :", 1, 1, "L", fill=True)
     pdf.set_font("Helvetica", "", 7.5)
     obs_text = data_dict.get('Observation', 'Le matériau peut être utilisé pour un remblai.')
     pdf.multi_cell(190, 4, f" - Observation : {obs_text}\n - Conditions d'utilisation : Conforme aux exigences techniques du projet LGV Casa Sud.", 1, "L")
-    pdf.ln(1.5)
+    pdf.ln(2)
 
-    # Blocs Signatures & Visas tout en bas
+    # Blocs Signatures & Visas tout en bas de la page
     pdf.set_font("Helvetica", "B", 7.5)
     pdf.set_fill_color(240, 240, 240)
     pdf.cell(63, 4.5, "LE REÇU PAR LE CLIENT", 1, 0, "C", fill=True)
