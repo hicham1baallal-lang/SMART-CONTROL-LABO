@@ -195,18 +195,18 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
 
     pdf.ln(2)
 
-    # Insertion de la Courbe Granulométrique (Taille augmentée dans le PDF)
+    # Insertion de la Courbe Granulométrique (Hauteur augmentée dans le PDF à h=55)
     pdf.set_font("Helvetica", "B", 8)
     pdf.set_fill_color(220, 230, 242)
     pdf.cell(190, 5, " COURBE GRANULOMÉTRIQUE", 1, 1, "L", fill=True)
     if curve_img_path and os.path.exists(curve_img_path):
         try:
-            pdf.image(curve_img_path, x=10, y=pdf.get_y() + 1, w=190, h=45)
-            pdf.ln(46) # Décaler le curseur en fonction de la hauteur de l'image
+            pdf.image(curve_img_path, x=10, y=pdf.get_y() + 1, w=190, h=55)
+            pdf.ln(56) # Décaler le curseur en fonction de la nouvelle hauteur de l'image
         except Exception:
-            pdf.cell(190, 45, "[Erreur d'insertion de la courbe]", 1, 1, "C")
+            pdf.cell(190, 55, "[Erreur d'insertion de la courbe]", 1, 1, "C")
     else:
-        pdf.cell(190, 45, "[Courbe non disponible]", 1, 1, "C")
+        pdf.cell(190, 55, "[Courbe non disponible]", 1, 1, "C")
     
     # Positionnement bas de page
     pdf.set_y(220)
@@ -377,8 +377,8 @@ def show(supabase_client):
         with col_tbl_res:
             f_st.dataframe(result_df, use_container_width=True, height=380)
         with col_plt:
-            # TAILLE DE LA COURBE AUGMENTÉE (figsize plus grand)
-            fig, ax = plt.subplots(figsize=(7.0, 4.5))
+            # HAUTEUR DE LA COURBE AUGMENTÉE (figsize avec hauteur de 5.8)
+            fig, ax = plt.subplots(figsize=(7.0, 5.8))
             plot_curve_df = result_df.sort_values(by="Tamis (mm)", ascending=True).reset_index(drop=True)
             
             x_indices = np.arange(len(plot_curve_df))
