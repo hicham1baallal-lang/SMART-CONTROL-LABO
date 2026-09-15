@@ -59,15 +59,15 @@ class IdentificationPDF(FPDF):
             logo_path = "logo.png"
         if os.path.exists(logo_path):
             try:
-                self.image(logo_path, 10, 8, 20)
+                self.image(logo_path, 10, 8, 18)
             except Exception:
                 pass
         
         self.set_font("Helvetica", "B", 9)
-        self.set_xy(32, 8)
+        self.set_xy(30, 8)
         self.cell(90, 4, "L.P.E.E - LABORATOIRE PUBLIC DES ESSAIS ET D'ETUDES", 0, 1, "L")
         self.set_font("Helvetica", "", 7)
-        self.set_x(32)
+        self.set_x(30)
         self.cell(90, 3, "Centre Technique Régional CASA-SETTAT-BENI MELLAL", 0, 1, "L")
         
         self.set_font("Helvetica", "B", 8)
@@ -75,17 +75,17 @@ class IdentificationPDF(FPDF):
         self.cell(70, 4, "Laboratoire du contrôle externe", 0, 1, "R")
         
         self.ln(2)
-        self.set_font("Helvetica", "B", 10)
+        self.set_font("Helvetica", "B", 9.5)
         self.set_text_color(0, 51, 102)  # Bleu institutionnel
         self.cell(0, 5, "RAPPORT D'ESSAI D'IDENTIFICATION DES MATÉRIAUX", 0, 1, "C")
         self.set_text_color(0, 0, 0)
-        self.line(10, 24, 200, 24)
-        self.set_xy(10, 25)
+        self.line(10, 23, 200, 23)
+        self.set_xy(10, 24)
 
     def footer(self):
-        self.set_y(-12)
+        self.set_y(-10)
         self.set_font("Helvetica", "I", 7)
-        self.cell(0, 8, f"CTR-CSB - Projet LGV CASA SUD | Page {self.page_no()}/{{nb}}", 0, 0, "C")
+        self.cell(0, 6, f"CTR-CSB - Projet LGV CASA SUD | Page {self.page_no()}/{{nb}}", 0, 0, "C")
 
 
 def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
@@ -93,31 +93,31 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
     pdf.alias_nb_pages()
     pdf.add_page()
     
-    # Intitulé Projet LGV Casa Sud
+    # Intitulé Projet LGV Casa Sud sur la ligne suivante, espacé
     pdf.set_font("Helvetica", "B", 7)
-    pdf.multi_cell(190, 3.5, "TRAVAUX D'EXECUTION DE TERRASSEMENT, OUVRAGES D'ART ET RETABLISSEMENTS DE COMMUNICATION ENTRE PK 5+450 et PK 10+000 - GARE CASA SUD", 0, "C")
+    pdf.multi_cell(190, 3.5, "TRAVAUX D'EXECUTION DE TERRASSEMENT, OUVRAGES D'ART ET RETABLISSEMENTS DE COMMUNICATION\nENTRE PK 5+450 et PK 10+000 - GARE CASA SUD", 0, "C")
     pdf.ln(2)
 
-    # Bloc Informations administratives (Cadre épuré)
-    pdf.set_font("Helvetica", "", 8)
-    pdf.cell(95, 5.5, f" Client : TGCC", 1, 0, "L")
-    pdf.cell(95, 5.5, f" Rapport d'Essai N° : {header_info.get('num_rapport') or 'N/A'}", 1, 1, "L")
-    pdf.cell(95, 5.5, f" Dossier : 2025-260-05985-2025-0247", 1, 0, "L")
-    pdf.cell(95, 5.5, f" Date du prélèvement : {header_info.get('date_essai') or ''}", 1, 1, "L")
-    pdf.cell(95, 5.5, f" Lieux de prélèvement : {header_info.get('lieu') or 'Stock sur chantier'}", 1, 0, "L")
-    pdf.cell(95, 5.5, f" Numéro de prélèvement : {header_info.get('pk') or ''}", 1, 1, "L")
-    pdf.cell(190, 5.5, f" Objet : IDENTIFICATION DU MATÉRIAU ({str(type_mat).upper()})", 1, 1, "L")
-    pdf.ln(2)
+    # Bloc Informations administratives
+    pdf.set_font("Helvetica", "", 7.5)
+    pdf.cell(95, 5, f" Client : TGCC", 1, 0, "L")
+    pdf.cell(95, 5, f" Rapport d'Essai N° : {header_info.get('num_rapport') or 'N/A'}", 1, 1, "L")
+    pdf.cell(95, 5, f" Dossier : 2025-260-05985-2025-0247", 1, 0, "L")
+    pdf.cell(95, 5, f" Date du prélèvement : {header_info.get('date_essai') or ''}", 1, 1, "L")
+    pdf.cell(95, 5, f" Lieux de prélèvement : {header_info.get('lieu') or 'Stock sur chantier'}", 1, 0, "L")
+    pdf.cell(95, 5, f" Numéro de prélèvement : {header_info.get('pk') or ''}", 1, 1, "L")
+    pdf.cell(190, 5, f" Objet : IDENTIFICATION DU MATÉRIAU ({str(type_mat).upper()})", 1, 1, "L")
+    pdf.ln(1.5)
 
     # Références de normes
     pdf.set_font("Helvetica", "B", 7)
-    pdf.cell(190, 4.5, " Normes : A.G: NM 00.8.082 | IP: NF P94-051 | VBS: NM 13.1.178 | LOS ANGELES: NM EN 1097-2 | MDE: NM EN 1097-1", 1, 1, "L")
-    pdf.ln(2)
+    pdf.cell(190, 4, " Normes : A.G: NM 00.8.082 | IP: NF P94-051 | VBS: NM 13.1.178 | LOS ANGELES: NM EN 1097-2 | MDE: NM EN 1097-1", 1, 1, "L")
+    pdf.ln(1.5)
 
-    # Tableau des résultats synthétiques d'essais (Avec couleur d'en-tête élégante)
-    pdf.set_font("Helvetica", "B", 8)
-    pdf.set_fill_color(220, 230, 242)  # Bleu clair pastel
-    pdf.cell(190, 5.5, " Résultats d'essais", 1, 1, "L", fill=True)
+    # Tableau des résultats synthétiques d'essais (Hauteurs augmentées)
+    pdf.set_font("Helvetica", "B", 7.5)
+    pdf.set_fill_color(220, 230, 242)
+    pdf.cell(190, 5, " Résultats d'essais", 1, 1, "L", fill=True)
     
     pdf.set_font("Helvetica", "B", 7)
     headers = ["%< 80um", "%< 2mm", "%< 50mm", "D MAX", "VBS", "Wopt", "Densité OPN", "GTR"]
@@ -126,7 +126,7 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
         pdf.cell(w, 5, h, 1, 0, "C", fill=True)
     pdf.ln()
 
-    pdf.set_font("Helvetica", "", 8)
+    pdf.set_font("Helvetica", "", 7.5)
     vals = [
         str(data_dict.get('Passant 80µm (%)', '-')),
         str(data_dict.get('Passant 2mm (%)', '-')),
@@ -138,43 +138,43 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
         str(data_dict.get('Classe GTR (Auto)', '-'))
     ]
     for v, w in zip(vals, widths):
-        pdf.cell(w, 5, v, 1, 0, "C")
-    pdf.ln(3)
-
-    # Insertion de la Courbe Granulométrique
-    pdf.set_font("Helvetica", "B", 8)
-    pdf.set_fill_color(220, 230, 242)
-    pdf.cell(190, 5.5, " COURBE GRANULOMÉTRIQUE", 1, 1, "L", fill=True)
-    if curve_img_path and os.path.exists(curve_img_path):
-        try:
-            pdf.image(curve_img_path, x=25, y=pdf.get_y() + 2, w=160)
-            pdf.ln(62)
-        except Exception:
-            pdf.cell(190, 5, "[Erreur d'insertion de la courbe]", 1, 1, "C")
-    else:
-        pdf.cell(190, 5, "[Courbe non disponible]", 1, 1, "C")
+        pdf.cell(w, 6.5, v, 1, 0, "C")  # Hauteur augmentée à 6.5
     pdf.ln(2)
 
-    # Commentaires et utilisation
-    pdf.set_font("Helvetica", "B", 8)
+    # Insertion de la Courbe Granulométrique
+    pdf.set_font("Helvetica", "B", 7.5)
     pdf.set_fill_color(220, 230, 242)
-    pdf.cell(190, 5.5, " Commentaires & Conditions d'utilisation :", 1, 1, "L", fill=True)
-    pdf.set_font("Helvetica", "", 7.5)
+    pdf.cell(190, 5, " COURBE GRANULOMÉTRIQUE", 1, 1, "L", fill=True)
+    if curve_img_path and os.path.exists(curve_img_path):
+        try:
+            pdf.image(curve_img_path, x=30, y=pdf.get_y() + 1, w=150, h=48)
+            pdf.ln(50)
+        except Exception:
+            pdf.cell(190, 45, "[Erreur d'insertion de la courbe]", 1, 1, "C")
+    else:
+        pdf.cell(190, 45, "[Courbe non disponible]", 1, 1, "C")
+    pdf.ln(1.5)
+
+    # Commentaires et conditions d'utilisation déplacés sous la courbe
+    pdf.set_font("Helvetica", "B", 7.5)
+    pdf.set_fill_color(220, 230, 242)
+    pdf.cell(190, 5, " Commentaires & Conditions d'utilisation :", 1, 1, "L", fill=True)
+    pdf.set_font("Helvetica", "", 7)
     obs_text = data_dict.get('Observation', 'Le matériau peut être utilisé pour un remblai.')
-    pdf.multi_cell(190, 4.5, f" - Observation : {obs_text}\n - Conditions d'utilisation : Conforme aux exigences techniques du projet LGV Casa Sud.", 1, "L")
-    pdf.ln(3)
+    pdf.multi_cell(190, 4, f" - Observation : {obs_text}\n - Conditions d'utilisation : Conforme aux exigences techniques du projet LGV Casa Sud.", 1, "L")
+    pdf.ln(2)
 
     # Blocs Signatures & Visas
-    pdf.set_font("Helvetica", "B", 7.5)
+    pdf.set_font("Helvetica", "B", 7)
     pdf.set_fill_color(240, 240, 240)
-    pdf.cell(63, 5, "LE REÇU PAR LE CLIENT", 1, 0, "C", fill=True)
-    pdf.cell(63, 5, "LE COORDINATEUR DES ESSAIS", 1, 0, "C", fill=True)
-    pdf.cell(64, 5, "LE CHEF DU LABORATOIRE", 1, 1, "C", fill=True)
+    pdf.cell(63, 4.5, "LE REÇU PAR LE CLIENT", 1, 0, "C", fill=True)
+    pdf.cell(63, 4.5, "LE COORDINATEUR DES ESSAIS", 1, 0, "C", fill=True)
+    pdf.cell(64, 4.5, "LE CHEF DU LABORATOIRE", 1, 1, "C", fill=True)
 
-    pdf.set_font("Helvetica", "", 7.5)
-    pdf.cell(63, 12, "Nom : ", 1, 0, "L")
-    pdf.cell(63, 12, "Nom : B. ELAMRI", 1, 0, "L")
-    pdf.cell(64, 12, "Nom : H. BAALLAL", 1, 1, "L")
+    pdf.set_font("Helvetica", "", 7)
+    pdf.cell(63, 10, "Nom : ", 1, 0, "L")
+    pdf.cell(63, 10, "Nom : B. ELAMRI", 1, 0, "L")
+    pdf.cell(64, 10, "Nom : H. BAALLAL", 1, 1, "L")
 
     return bytes(pdf.output())
 
@@ -451,7 +451,7 @@ def show(supabase_client):
                     pdf_bytes = generate_pdf(header_info, row.get("details", {}), str(row.get("type_materiau")), curve_path_to_use)
                     
                     f_st.download_button(
-                        label=f"📄 Télécharger PV PDF LPEE (Mis en page & Couleur) ({row.get('num_rapport')})",
+                        label=f"📄 Télécharger PV PDF LPEE (Mis en page corrigée) ({row.get('num_rapport')})",
                         data=pdf_bytes,
                         file_name=f"PV_{str(row.get('num_rapport')).replace('/', '_')}.pdf",
                         mime="application/pdf",
