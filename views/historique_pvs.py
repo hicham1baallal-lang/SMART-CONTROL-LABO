@@ -203,7 +203,8 @@ def afficher_vue(supabase_client=None):
             toutes_les_dates.extend(parsed.dropna().tolist())
 
     if toutes_les_dates:
-        s_dates = pd.Series(toutes_les_dates)
+        # Conversion explicite en DatetimeIndex / Series typée pour éviter l'erreur .dt
+        s_dates = pd.to_datetime(pd.Series(toutes_les_dates))
         annees_dispo = sorted(s_dates.dt.year.unique().tolist(), reverse=True)
     else:
         annees_dispo = [datetime.date.today().year]
