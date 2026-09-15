@@ -287,7 +287,7 @@ def show(supabase_client):
             num_rapport = f_st.text_input("N° Rapport", value="25/260/LGV/CS/1150", disabled=not user_can_edit)
             lieu = f_st.text_input("Lieu / Zone", value="Stock sur chantier (Zone T4)", disabled=not user_can_edit)
         with c2:
-            pk = f_st.text_input("PK / Section", value="PK 5+450 à PK 10+000", disabled=not user_can_edit)
+            pk = f_st.text_input("Provenance d'échantillon", value="PK 5+450 à PK 10+000", disabled=not user_can_edit)
             date_essai = f_st.date_input("Date Essai", value=datetime.date.today(), disabled=not user_can_edit)
         with c3:
             ref_ech = f_st.text_input("Référence Échantillon", value="Ech 1", disabled=not user_can_edit)
