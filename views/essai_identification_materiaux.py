@@ -104,10 +104,11 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
             "Ref Echantillon": "Ech 1",
             "Passant 80um (%)": "22,3",
             "Passant 2mm (%)": "66",
-            "Passant 50mm (%)": "89",
+            "Passant 50mm (%)": "100",
             "Dmax (mm)": "50",
             "VBS": "0,42",
             "wL (%)": "14,2",
+            "IP (%)": "4,2",
             "Densité OPN": "1,73",
             "Classe GTR (Auto)": "B5",
             "Observation": "Le matériau peut être utilisé pour un remblai."
@@ -148,10 +149,11 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
     # Récupération des valeurs avec formats sécurisés
     val_80um = str(data_dict.get('Passant 80um (%)', data_dict.get('Passant 80µm (%)', '22,3')))
     val_2mm = str(data_dict.get('Passant 2mm (%)', '66'))
-    val_50mm = str(data_dict.get('Passant 50mm (%)', '89'))
+    val_50mm = str(data_dict.get('Passant 50mm (%)', '100'))
     val_dmax = str(data_dict.get('Dmax (mm)', '50'))
     val_vbs = str(data_dict.get('VBS', '0,42'))
     val_wopt = str(data_dict.get('wL (%)', '14,2'))
+    val_ip = str(data_dict.get('IP (%)', '4,2'))
     val_dens = str(data_dict.get('Densité OPN', '1,73'))
     val_gtr = str(data_dict.get('Classe GTR (Auto)', 'B5'))
 
@@ -165,7 +167,7 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
     pdf.cell(60, 5, " %< 2 mm", 1, 0, "L")
     pdf.cell(130, 5, val_2mm, 1, 1, "C")
 
-    # Ligne %< 50 mm
+    # Ligne %< 50 mm (Passant tamis de 50 mm)
     pdf.cell(60, 5, " %< 50 mm", 1, 0, "L")
     pdf.cell(130, 5, val_50mm, 1, 1, "C")
 
@@ -176,6 +178,10 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
     # Ligne VBS
     pdf.cell(60, 5, " VBS", 1, 0, "L")
     pdf.cell(130, 5, val_vbs, 1, 1, "C")
+
+    # Ligne Indice de Plasticité (IP)
+    pdf.cell(60, 5, " Indice de Plasticité (IP)", 1, 0, "L")
+    pdf.cell(130, 5, val_ip, 1, 1, "C")
 
     # Ligne Proctor
     pdf.cell(60, 5, " Proctor", 1, 0, "L")
@@ -302,7 +308,7 @@ def show(supabase_client):
 
         f_st.markdown("#### Tableau de Tamisage & Refus")
         default_sieves_desc = [
-            (80, 0.0, 0.0), (63, 0.0, 0.0), (50, 1200.0, 0.0), (40, 2500.0, 0.0),
+            (80, 0.0, 0.0), (63, 0.0, 0.0), (50, 0.0, 0.0), (40, 2500.0, 0.0),
             (31.5, 3800.0, 0.0), (25, 4500.0, 0.0), (20, 5200.0, 0.0), (16, 5800.0, 0.0),
             (12.5, 6200.0, 0.0), (10, 6500.0, 0.0),
             (8, 0.0, 80.0), (6.3, 0.0, 160.0), (5, 0.0, 210.0), (4, 0.0, 260.0),
@@ -335,9 +341,9 @@ def show(supabase_client):
             f_st.markdown("##### ⚙️ Caractéristiques & Limites")
             re_val = f_st.number_input("Refus R_e (10mm) (g)", value=re_val_calc, disabled=True, key="re_10mm_mat")
             me_val = f_st.number_input("Prise Me (g) [M3-Re]", value=me_val_calc, disabled=True, key="me_val_mat")
-            w_l = f_st.number_input("Proctor Wopt (%)", value=14.2, step=0.5, disabled=not user_can_edit)
+            w_opt = f_st.number_input("Proctor Wopt (%)", value=14.2, step=0.5, disabled=not user_can_edit)
             ip = f_st.number_input("Indice de Plasticité (IP)", value=4.2, step=0.5, disabled=not user_can_edit)
-            vbs_val = f_st.number_input("VBS (Bleu de Manganèse)", value=0.42, step=0.01, disabled=not user_can_edit)
+            vbs_val = f_st.number_input("VBS (Bleu de Manganèse)", value=0.42, step=0.01, format="%.2f", disabled=not user_can_edit)
             dens_val = f_st.number_input("Proctor Densité OPN", value=1.73, step=0.01, disabled=not user_can_edit)
 
             a_factor = me_val / m4_val if m4_val > 0 else 0
@@ -345,7 +351,9 @@ def show(supabase_client):
                 f"""
                 <div style="background-color: #f0f2f6; padding: 10px; border-radius: 6px; font-size: 0.85em;">
                     <b>Facteur a (Me/M4)</b> : {a_factor:.4f}<br>
-                    <b>Indice de Plasticité (IP)</b> : {ip:.1f}%
+                    <b>Proctor Wopt</b> : {w_opt:.1f}%<br>
+                    <b>Indice de Plasticité (IP)</b> : {ip:.1f}%<br>
+                    <b>VBS</b> : {vbs_val:.2f}
                 </div>
                 """,
                 unsafe_allow_html=True
@@ -414,15 +422,16 @@ def show(supabase_client):
         row_2mm = result_df[result_df["Tamis (mm)"] == 2.0]
         pass_2mm_val = float(row_2mm["% Passant"].values[0]) if not row_2mm.empty else 66.0
 
-        row_50mm = result_df[result_df["Tamis (mm)"] == 50.0]
-        pass_50mm_val = float(row_50mm["% Passant"].values[0]) if not row_50mm.empty else 89.0
+        # Passant exact du tamis de 50 mm
+        row_50mm = result_df[np.isclose(result_df["Tamis (mm)"].astype(float), 50.0, atol=1e-3)]
+        pass_50mm_val = float(row_50mm["% Passant"].values[0]) if not row_50mm.empty else 100.0
 
         classe_gtr_auto = classer_gtr(dmax_detected, pass_80um_val, ip, vbs_val, pass_2mm_val)
         f_st.metric("Classe GTR (Auto)", classe_gtr_auto)
 
         is_conf = pass_80um_val <= 35.0
         obs = f"Le matériau peut être utilisé pour un remblai. ({selected_mat_sub})" if is_conf else f"Non Conforme / Hors fuseau ({selected_mat_sub})"
-        f_st.info(f"Observation automatique : **{obs}** | Dmax: **{dmax_detected} mm** | Passant 80um: **{pass_80um_val:.1f}%** | VBS: **{vbs_val}**")
+        f_st.info(f"Observation automatique : **{obs}** | Dmax: **{dmax_detected} mm** | Passant 50mm: **{pass_50mm_val:.1f}%** | Passant 80um: **{pass_80um_val:.1f}%** | VBS: **{vbs_val:.2f}** | IP: **{ip:.1f}%**")
 
         data_dict = {
             "Sous-Type Matériau": selected_mat_sub,
@@ -431,8 +440,9 @@ def show(supabase_client):
             "Dmax (mm)": f"{int(dmax_detected)}", 
             "Passant 80um (%)": f"{pass_80um_val:.1f}".replace('.', ','), 
             "Passant 2mm (%)": f"{int(pass_2mm_val)}",
-            "Passant 50mm (%)": f"{int(pass_50mm_val)}",
-            "wL (%)": f"{w_l:.1f}".replace('.', ','), 
+            "Passant 50mm (%)": f"{pass_50mm_val:.1f}".replace('.', ','),
+            "wL (%)": f"{w_opt:.1f}".replace('.', ','), 
+            "IP (%)": f"{ip:.1f}".replace('.', ','),
             "Densité OPN": f"{dens_val:.2f}".replace('.', ','),
             "VBS": f"{vbs_val:.2f}".replace('.', ','),
             "Classe GTR (Auto)": classe_gtr_auto,
