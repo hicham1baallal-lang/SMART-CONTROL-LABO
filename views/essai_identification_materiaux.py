@@ -201,8 +201,8 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
     pdf.cell(190, 5, " COURBE GRANULOMÉTRIQUE", 1, 1, "L", fill=True)
     if curve_img_path and os.path.exists(curve_img_path):
         try:
-            pdf.image(curve_img_path, x=10, y=pdf.get_y() + 1, w=190, h=6.2 * 10) # Hauteur proportionnelle à 6.2 pouces (~62 mm)
-            pdf.ln(64) # Décalage après l'image
+            pdf.image(curve_img_path, x=10, y=pdf.get_y() + 1, w=190, h=6.2 * 10)
+            pdf.ln(64)
         except Exception:
             pdf.cell(190, 62, "[Erreur d'insertion de la courbe]", 1, 1, "C")
     else:
@@ -210,7 +210,7 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
     
     pdf.ln(2)
 
-    # --- COMMENTAIRES & CONDITIONS D'UTILISATION (Déplacé ici, juste sous la courbe) ---
+    # --- COMMENTAIRES & CONDITIONS D'UTILISATION (Juste sous la courbe) ---
     pdf.set_font("Helvetica", "B", 8)
     pdf.set_fill_color(220, 230, 242)
     pdf.cell(190, 5, " Commentaires & Conditions d'utilisation :", 1, 1, "L", fill=True)
@@ -336,12 +336,11 @@ def show(supabase_client):
             re_val = f_st.number_input("Refus R_e (10mm) (g)", value=re_val_calc, disabled=True, key="re_10mm_mat")
             me_val = f_st.number_input("Prise Me (g) [M3-Re]", value=me_val_calc, disabled=True, key="me_val_mat")
             w_l = f_st.number_input("Proctor Wopt (%)", value=14.2, step=0.5, disabled=not user_can_edit)
-            w_p = f_st.number_input("Lim. Plasticité wP (%)", value=10.0, step=0.5, disabled=not user_can_edit)
+            ip = f_st.number_input("Indice de Plasticité (IP)", value=4.2, step=0.5, disabled=not user_can_edit)
             vbs_val = f_st.number_input("VBS (Bleu de Manganèse)", value=0.42, step=0.01, disabled=not user_can_edit)
             dens_val = f_st.number_input("Proctor Densité OPN", value=1.73, step=0.01, disabled=not user_can_edit)
 
             a_factor = me_val / m4_val if m4_val > 0 else 0
-            ip = max(0.0, w_l - w_p)
             f_st.markdown(
                 f"""
                 <div style="background-color: #f0f2f6; padding: 10px; border-radius: 6px; font-size: 0.85em;">
@@ -376,7 +375,6 @@ def show(supabase_client):
         with col_tbl_res:
             f_st.dataframe(result_df, use_container_width=True, height=380)
         with col_plt:
-            # HAUTEUR DE LA COURBE MAINTENUE À 6.2
             fig, ax = plt.subplots(figsize=(7.0, 6.2))
             plot_curve_df = result_df.sort_values(by="Tamis (mm)", ascending=True).reset_index(drop=True)
             
