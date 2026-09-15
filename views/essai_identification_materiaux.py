@@ -54,39 +54,41 @@ def classer_gtr(dmax, pass_80um, ip, vbs=0.5, pass_2mm=70.0, is_roche=False, roc
 
 class IdentificationPDF(FPDF):
     def header(self):
+        # LOGO PLACÉ TOUT EN HAUT DE LA PAGE (Y=6)
         logo_path = "logo.png.jpg"
         if not os.path.exists(logo_path):
             logo_path = "logo.png"
         if os.path.exists(logo_path):
             try:
-                self.image(logo_path, 10, 8, 20)
+                self.image(logo_path, 10, 6, 22)
             except Exception:
                 pass
         
+        # ENTÊTE INSTITUTIONNEL DÉCALÉ VERS LA DROITE DU LOGO
         self.set_font("Helvetica", "B", 9)
-        self.set_xy(32, 8)
+        self.set_xy(35, 6)
         self.cell(90, 4, "L.P.E.E - LABORATOIRE PUBLIC DES ESSAIS ET D'ETUDES", 0, 1, "L")
         self.set_font("Helvetica", "", 7)
-        self.set_x(32)
+        self.set_x(35)
         self.cell(90, 3, "Centre Technique Régional CASA-SETTAT-BENI MELLAL", 0, 1, "L")
         
         self.set_font("Helvetica", "B", 8)
-        self.set_xy(130, 8)
+        self.set_xy(130, 6)
         self.cell(70, 4, "Laboratoire du contrôle externe", 0, 1, "R")
         
         # Ligne de séparation sous l'entête institutionnel
-        self.line(10, 20, 200, 20)
+        self.line(10, 18, 200, 18)
         
-        # TITRE EN 2 LIGNES DÉPLACÉ PLUS BAS
-        self.set_xy(10, 23)
+        # TITRE EN 2 LIGNES
+        self.set_xy(10, 21)
         self.set_font("Helvetica", "B", 10)
         self.set_text_color(0, 51, 102)
         self.multi_cell(190, 4.5, "RAPPORT D'ESSAI D'IDENTIFICATION\nDES MATÉRIAUX", 0, "C")
         self.set_text_color(0, 0, 0)
         
         # Ligne de séparation après le titre
-        self.line(10, 34, 200, 34)
-        self.set_xy(10, 36)
+        self.line(10, 32, 200, 32)
+        self.set_xy(10, 34)
 
     def footer(self):
         self.set_y(-12)
