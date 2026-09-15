@@ -135,38 +135,51 @@ def afficher_vue(supabase_client=None):
       except Exception:
         pass
 
-  if not dict_dfs_bruts:
-    dict_dfs_bruts = {
-        "Essai à la Plaque": pd.DataFrame({
-            "ID": [1, 2],
-            "Date": ["2026-09-05", "2026-08-20"],
-            "Ouvrage": ["PRA 0500", "PRO 0636"],
-            "Module_K": [120, 110],
-            "Statut": ["Validé", "En attente"],
-        }),
-        "Compacité": pd.DataFrame({
-            "ID": [1, 2, 3],
-            "Date": ["2026-09-01", "2026-09-15", "2026-06-10"],
-            "Ouvrage": ["PRO 0636", "PRO 0745", "PRO 0636"],
-            "Densite_Seche": [2.35, 2.40, 2.28],
-            "Statut": ["Validé", "Validé", "Validé"],
-        }),
-        "Teneur en Eau": pd.DataFrame({
-            "ID": [1],
-            "Date": ["2026-09-10"],
-            "Ouvrage": ["PRO 0745"],
-            "Teneur_Eau_pct": [5.2],
-            "Statut": ["Validé"],
-        }),
-        "Granulats pour Béton": pd.DataFrame({
-            "ID": [1],
-            "Date": ["2026-09-12"],
-            "Ouvrage": ["PRO 0745"],
-            "Type_Granulat": ["GNT 0/60"],
-            "Observation": ["Conforme"],
-            "Statut": ["Validé"],
-        }),
-    }
+  # Données de secours par défaut pour chaque table si elle est absente de Supabase
+  donnees_demo_defaut = {
+      "Essai à la Plaque": pd.DataFrame({
+          "ID": [1, 2],
+          "Date": ["2026-09-05", "2026-08-20"],
+          "Ouvrage": ["PRA 0500", "PRO 0636"],
+          "Module_K": [120, 110],
+          "Statut": ["Validé", "En attente"],
+      }),
+      "Compacité": pd.DataFrame({
+          "ID": [1, 2, 3],
+          "Date": ["2026-09-01", "2026-09-15", "2026-06-10"],
+          "Ouvrage": ["PRO 0636", "PRO 0745", "PRO 0636"],
+          "Densite_Seche": [2.35, 2.40, 2.28],
+          "Statut": ["Validé", "Validé", "Validé"],
+      }),
+      "Teneur en Eau": pd.DataFrame({
+          "ID": [1],
+          "Date": ["2026-09-10"],
+          "Ouvrage": ["PRO 0745"],
+          "Teneur_Eau_pct": [5.2],
+          "Statut": ["Validé"],
+      }),
+      "Granulats pour Béton": pd.DataFrame({
+          "ID": [1],
+          "Date": ["2026-09-12"],
+          "Ouvrage": ["PRO 0745"],
+          "Type_Granulat": ["GNT 0/60"],
+          "Observation": ["Conforme"],
+          "Statut": ["Validé"],
+      }),
+      "Identification Matériau": pd.DataFrame({
+          "ID": [1],
+          "Date": ["2026-09-03"],
+          "Ouvrage": ["PRA 0500"],
+          "Type_Materiau": ["Sol sélectionné"],
+          "Statut": ["Validé"],
+      }),
+  }
+
+  for nom_type, _ in tables_essais:
+    if nom_type not in dict_dfs_bruts or dict_dfs_bruts[nom_type].empty:
+      dict_dfs_bruts[nom_type] = donnees_demo_defaut.get(
+          nom_type, pd.DataFrame()
+      )
 
   # --- 1. Sélection de la Période ---
   st.markdown("### 🔍 1. Sélection de la Période")
