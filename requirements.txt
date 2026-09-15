@@ -11,4 +11,3 @@ qrcode
 Pillow
 extra-streamlit-components
 reportlab
-pip install python-docx
