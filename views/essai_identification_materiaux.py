@@ -1,6 +1,7 @@
 import datetime
 import io
 import os
+import unicodedata
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -55,6 +56,72 @@ def classer_gtr(dmax, pass_80um, ip, vbs=0.5, pass_2mm=70.0, is_roche=False, roc
         return f"{c_base}{sub_comp}"
 
 
+# =====================================================================
+# REGISTRE DES TYPES DE MATÉRIAUX — chaque type a son propre code
+# et appartient à une famille de feuille d'essai :
+#   - "REMBLAI" : feuille classique GTR (VBS + IP)
+#   - "GRAVE"   : feuille graves non traitées (LA / MDE / Coeff. Aplat. / ES)
+#                 avec VBS en plus uniquement pour GNF et GNA
+# =====================================================================
+MATERIAL_TYPES = {
+    "REM-ORD": {"label": "Remblai ordinaire", "family": "REMBLAI", "has_vbs": True},
+    "REM-CTG2": {"label": "Remblai contigu type 2", "family": "REMBLAI", "has_vbs": True},
+    "CDF": {"label": "Couche de forme", "family": "GRAVE", "has_vbs": False},
+    "SC-031": {"label": "Sous couche 0/31.5", "family": "GRAVE", "has_vbs": False},
+    "GNF-040": {"label": "GNF 0/40", "family": "GRAVE", "has_vbs": True},
+    "GNA-031": {"label": "GNA 0/31.5", "family": "GRAVE", "has_vbs": True},
+    "GNT-060": {"label": "GNT 0/60", "family": "GRAVE", "has_vbs": False},
+    "GNT-PRA": {"label": "GNT Bloc technique PRA", "family": "GRAVE", "has_vbs": False},
+}
+
+
+def _normalize_label(txt):
+    """Normalise un libellé (accents/casse/espaces) pour un matching robuste."""
+    txt = str(txt or "").strip().upper()
+    txt = "".join(c for c in unicodedata.normalize("NFD", txt) if unicodedata.category(c) != "Mn")
+    return " ".join(txt.split())
+
+
+_LABEL_TO_CODE = {_normalize_label(v["label"]): k for k, v in MATERIAL_TYPES.items()}
+
+
+def get_material_code(selected_label):
+    """Retrouve le code matériau (ex: GNF-040) à partir du libellé affiché."""
+    key = _normalize_label(selected_label)
+    if key in _LABEL_TO_CODE:
+        return _LABEL_TO_CODE[key]
+    for norm_label, code in _LABEL_TO_CODE.items():
+        if norm_label in key or key in norm_label:
+            return code
+    return "REM-ORD"
+
+
+def get_material_config(selected_label):
+    """Retourne (code, config) pour le libellé de matériau sélectionné."""
+    code = get_material_code(selected_label)
+    return code, MATERIAL_TYPES[code]
+
+
+def classer_grave(la, mde, coeff_apl, es, pass_80um):
+    """
+    Classification indicative des graves non traitées (GNF/GNA/GNT/Couche de forme)
+    à partir de Los Angeles (LA), Micro-Deval (MDE), coefficient d'aplatissement et
+    équivalent de sable (ES). Seuils usuels indicatifs — à ajuster selon le CCTP du projet.
+    """
+    if la <= 25 and mde <= 15 and coeff_apl <= 20 and es >= 40:
+        classe = "GNT1"
+    elif la <= 30 and mde <= 20 and coeff_apl <= 30 and es >= 30:
+        classe = "GNT2"
+    elif la <= 35 and mde <= 25 and coeff_apl <= 35 and es >= 25:
+        classe = "GNT3"
+    else:
+        classe = "Hors classe"
+
+    if pass_80um > 12.0:
+        classe += " (fines > 12% : à vérifier)"
+    return classe
+
+
 class IdentificationPDF(FPDF):
     def header(self):
         logo_path = "logo.png.jpg"
@@ -98,6 +165,7 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
     
     if not data_dict or not isinstance(data_dict, dict):
         data_dict = {
+            "Code Materiau": "REM-ORD",
             "Ref Echantillon": "Ech 1",
             "Passant 80um (%)": "22,3",
             "Passant 2mm (%)": "66",
@@ -107,10 +175,15 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
             "wL (%)": "14,2",
             "IP (%)": "4,2",
             "Densité OPN": "1,73",
-            "Classe GTR (Auto)": "B5",
+            "Classification (Auto)": "B5",
             "Observation": "Le matériau peut être utilisé pour un remblai."
         }
-    
+
+    mat_code = data_dict.get("Code Materiau") or get_material_code(type_mat)
+    mat_config = MATERIAL_TYPES.get(mat_code, MATERIAL_TYPES["REM-ORD"])
+    family = mat_config["family"]
+    mat_label = mat_config["label"]
+
     pdf.set_font("Helvetica", "B", 7)
     pdf.multi_cell(190, 3.5, "TRAVAUX D'EXECUTION DE TERRASSEMENT, OUVRAGES D'ART ET RETABLISSEMENTS DE COMMUNICATION ENTRE PK 5+450 et PK 10+000 - GARE CASA SUD", 0, "C")
     pdf.ln(2)
@@ -122,11 +195,17 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
     pdf.cell(95, 5.5, f" Date du prélèvement : {header_info.get('date_essai') or ''}", 1, 1, "L")
     pdf.cell(95, 5.5, f" Lieux de prélèvement : {header_info.get('lieu') or 'Stock sur chantier'}", 1, 0, "L")
     pdf.cell(95, 5.5, f" Provenance d'échantillon : {header_info.get('pk') or ''}", 1, 1, "L")
-    pdf.cell(190, 5.5, f" Objet : IDENTIFICATION DU MATÉRIAU ({str(type_mat).upper()})", 1, 1, "L")
+    pdf.cell(190, 5.5, f" Objet : IDENTIFICATION DU MATÉRIAU - {mat_code} ({mat_label.upper()})", 1, 1, "L")
     pdf.ln(2)
 
     pdf.set_font("Helvetica", "B", 7)
-    pdf.cell(190, 4.5, " Normes : A.G: NM 00.8.082 | IP: NF P94-051 | VBS: NM 13.1.178 | LOS ANGELES: NM EN 1097-2 | MDE: NM EN 1097-1", 1, 1, "L")
+    if family == "REMBLAI":
+        normes_txt = " Normes : A.G: NM 00.8.082 | IP: NF P94-051 | VBS: NM 13.1.178"
+    else:
+        normes_txt = " Normes : A.G: NM 00.8.082 | LA: NM EN 1097-2 | MDE: NM EN 1097-1 | Coef. Aplatissement: NM EN 933-3 | ES: NM EN 933-8"
+        if mat_config["has_vbs"]:
+            normes_txt += " | VBS: NM 13.1.178"
+    pdf.cell(190, 4.5, normes_txt, 1, 1, "L")
     pdf.ln(2)
 
     pdf.set_font("Helvetica", "B", 8)
@@ -138,35 +217,31 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
     pdf.cell(60, 5.5, "", 1, 0, "C", fill=True)
     pdf.cell(130, 5.5, str(ech_label), 1, 1, "C", fill=True)
 
-    val_80um = str(data_dict.get('Passant 80um (%)', data_dict.get('Passant 80µm (%)', '22,3')))
-    val_2mm = str(data_dict.get('Passant 2mm (%)', '66'))
-    val_50mm = str(data_dict.get('Passant 50mm (%)', '100'))
-    val_dmax = str(data_dict.get('Dmax (mm)', '50'))
-    val_vbs = str(data_dict.get('VBS', '0,42'))
     val_wopt = str(data_dict.get('wL (%)', '14,2'))
-    val_ip = str(data_dict.get('IP (%)', '4,2'))
     val_dens = str(data_dict.get('Densité OPN', '1,73'))
-    val_gtr = str(data_dict.get('Classe GTR (Auto)', 'B5'))
+    val_class = str(data_dict.get('Classification (Auto)', data_dict.get('Classe GTR (Auto)', 'B5')))
 
-    pdf.set_font("Helvetica", "", 7.5)
+    def _row(label, value):
+        pdf.set_font("Helvetica", "", 7.5)
+        pdf.cell(60, 5, f" {label}", 1, 0, "L")
+        pdf.cell(130, 5, str(value), 1, 1, "C")
 
-    pdf.cell(60, 5, " %< 80 µm", 1, 0, "L")
-    pdf.cell(130, 5, val_80um, 1, 1, "C")
+    _row("%< 80 µm", data_dict.get('Passant 80um (%)', data_dict.get('Passant 80µm (%)', '22,3')))
+    _row("%< 2 mm", data_dict.get('Passant 2mm (%)', '66'))
+    _row("%< 50 mm", data_dict.get('Passant 50mm (%)', '100'))
+    _row("D MAX", data_dict.get('Dmax (mm)', '50'))
 
-    pdf.cell(60, 5, " %< 2 mm", 1, 0, "L")
-    pdf.cell(130, 5, val_2mm, 1, 1, "C")
-
-    pdf.cell(60, 5, " %< 50 mm", 1, 0, "L")
-    pdf.cell(130, 5, val_50mm, 1, 1, "C")
-
-    pdf.cell(60, 5, " D MAX", 1, 0, "L")
-    pdf.cell(130, 5, val_dmax, 1, 1, "C")
-
-    pdf.cell(60, 5, " VBS", 1, 0, "L")
-    pdf.cell(130, 5, val_vbs, 1, 1, "C")
-
-    pdf.cell(60, 5, " Indice de Plasticité (IP)", 1, 0, "L")
-    pdf.cell(130, 5, val_ip, 1, 1, "C")
+    if family == "REMBLAI":
+        _row("VBS", data_dict.get('VBS', '0,42'))
+        _row("Indice de Plasticité (IP)", data_dict.get('IP (%)', '4,2'))
+    else:
+        _row("Los Angeles LA (%)", data_dict.get('LA (%)', '-'))
+        _row("Micro-Deval MDE (%)", data_dict.get('MDE (%)', '-'))
+        _row("Coefficient d'aplatissement (%)", data_dict.get('Coefficient Aplatissement (%)', '-'))
+        _row("Équivalent de Sable ES (%)", data_dict.get('ES (%)', '-'))
+        if mat_config["has_vbs"]:
+            _row("VBS", data_dict.get('VBS', '-'))
+        _row("Indice de Plasticité (IP)", data_dict.get('IP (%)', '-'))
 
     pdf.cell(60, 5, " Proctor", 1, 0, "L")
     pdf.set_font("Helvetica", "B", 7)
@@ -178,9 +253,10 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
     pdf.set_font("Helvetica", "", 7.5)
     pdf.cell(44, 5, val_dens, 1, 1, "C")
 
-    pdf.cell(60, 5, " GTR", 1, 0, "L")
+    class_label = "GTR" if family == "REMBLAI" else "Classification GNT"
+    pdf.cell(60, 5, f" {class_label}", 1, 0, "L")
     pdf.set_font("Helvetica", "B", 8)
-    pdf.cell(130, 5, val_gtr, 1, 1, "C")
+    pdf.cell(130, 5, val_class, 1, 1, "C")
 
     pdf.ln(2)
 
@@ -242,9 +318,10 @@ def show(supabase_client):
         f_st.session_state["pv_ident_local_db"] = []
 
     selected_mat_sub = f_st.session_state.get("sub_page_identification", "Remblai ordinaire")
+    mat_code, mat_config = get_material_config(selected_mat_sub)
 
     f_st.title("🔬 Identification & Granulométrie des Matériaux")
-    f_st.subheader(f"📌 Sous-catégorie sélectionnée : **{selected_mat_sub}**")
+    f_st.subheader(f"📌 Sous-catégorie sélectionnée : **{mat_code} — {selected_mat_sub}**")
     f_st.caption("Laboratoire de Contrôle Externe - Projet LGV CASA SUD (Modèle LPEE / NM 00.8.082)")
 
     if not user_can_edit:
@@ -307,7 +384,7 @@ def show(supabase_client):
                 disabled=["Tamis (mm)"] if not user_can_edit else [],
                 use_container_width=True,
                 height=500,
-                key=f"sieve_editor_{selected_mat_sub.replace(' ', '_')}"
+                key=f"sieve_editor_{mat_code}"
             )
 
         try:
@@ -319,10 +396,10 @@ def show(supabase_client):
 
         with col_params_right:
             f_st.markdown("##### ⚙️ Caractéristiques, Limites & Paramètres Spécifiques")
-            re_val = f_st.number_input("Refus R_e (10mm) (g)", value=re_val_calc, disabled=True, key="re_10mm_mat")
-            me_val = f_st.number_input("Prise Me (g) [M3-Re]", value=me_val_calc, disabled=True, key="me_val_mat")
+            re_val = f_st.number_input("Refus R_e (10mm) (g)", value=re_val_calc, disabled=True, key=f"re_10mm_mat_{mat_code}")
+            me_val = f_st.number_input("Prise Me (g) [M3-Re]", value=me_val_calc, disabled=True, key=f"me_val_mat_{mat_code}")
             
-            fond_tamis_val = f_st.number_input("Fond de tamis (g)", value=1.4, step=0.1, disabled=not user_can_edit)
+            fond_tamis_val = f_st.number_input("Fond de tamis (g)", value=1.4, step=0.1, disabled=not user_can_edit, key=f"fond_tamis_{mat_code}")
             
             # Calcul automatique de M5 (Refus du tamis 0.08 mm + Fond de tamis)
             try:
@@ -333,30 +410,54 @@ def show(supabase_client):
             
             m5_calc = r_008_val + fond_tamis_val
             
-            m5_val = f_st.number_input("M5 (Total refus et passant sur 80µm)", value=m5_calc, disabled=True, key="m5_auto_val")
+            m5_val = f_st.number_input("M5 (Total refus et passant sur 80µm)", value=m5_calc, disabled=True, key=f"m5_auto_val_{mat_code}")
             
-            w_opt = f_st.number_input("Proctor Wopt (%)", value=13.2, step=0.5, disabled=not user_can_edit)
-            ip = f_st.number_input("Indice de Plasticité (IP)", value=12.0, step=0.5, disabled=not user_can_edit)
-            vbs_val = f_st.number_input("VBS (Bleu de Manganèse)", value=1.45, step=0.01, format="%.2f", disabled=not user_can_edit)
-            dens_val = f_st.number_input("Proctor Densité OPN", value=1.73, step=0.01, disabled=not user_can_edit)
+            w_opt = f_st.number_input("Proctor Wopt (%)", value=13.2, step=0.5, disabled=not user_can_edit, key=f"wopt_{mat_code}")
+            dens_val = f_st.number_input("Proctor Densité OPN", value=1.73, step=0.01, disabled=not user_can_edit, key=f"dens_{mat_code}")
+
+            # --- Essais spécifiques : dépendent de la famille du matériau ---
+            ip = 0.0
+            vbs_val = 0.0
+            la_val = 0.0
+            mde_val = 0.0
+            coeff_apl_val = 0.0
+            es_val = 0.0
+
+            if mat_config["family"] == "REMBLAI":
+                f_st.markdown(f"###### Essais spécifiques — {mat_code} (Remblai / GTR)")
+                ip = f_st.number_input("Indice de Plasticité (IP)", value=12.0, step=0.5, disabled=not user_can_edit, key=f"ip_{mat_code}")
+                vbs_val = f_st.number_input("VBS (Bleu de Méthylène)", value=1.45, step=0.01, format="%.2f", disabled=not user_can_edit, key=f"vbs_{mat_code}")
+            else:
+                f_st.markdown(f"###### Essais spécifiques — {mat_code} (Grave non traitée)")
+                la_val = f_st.number_input("Los Angeles LA (%)", value=22.0, step=0.5, disabled=not user_can_edit, key=f"la_{mat_code}")
+                mde_val = f_st.number_input("Micro-Deval MDE (%)", value=15.0, step=0.5, disabled=not user_can_edit, key=f"mde_{mat_code}")
+                coeff_apl_val = f_st.number_input("Coefficient d'aplatissement (%)", value=18.0, step=0.5, disabled=not user_can_edit, key=f"apl_{mat_code}")
+                es_val = f_st.number_input("Équivalent de Sable ES (%)", value=45.0, step=0.5, disabled=not user_can_edit, key=f"es_{mat_code}")
+                ip = f_st.number_input("Indice de Plasticité (IP)", value=0.0, step=0.5, disabled=not user_can_edit, key=f"ip_{mat_code}")
+                if mat_config["has_vbs"]:
+                    vbs_val = f_st.number_input("VBS (Bleu de Méthylène)", value=0.5, step=0.01, format="%.2f", disabled=not user_can_edit, key=f"vbs_{mat_code}")
 
             a_factor = me_val / m4_val if m4_val > 0 else 0
             m6_val = (a_factor * m5_val) + re_val
             validation_m6 = 100.0 * (m3_val - m6_val) / m3_val if m3_val > 0 else 0.0
 
-            f_st.markdown(
-                f"""
+            info_html = f"""
                 <div style="background-color: #f0f2f6; padding: 10px; border-radius: 6px; font-size: 0.85em;">
                     <b>Facteur a (Me/M4)</b> : {a_factor:.4f}<br>
                     <b>M6 (Masse tamisat)</b> : {m6_val:.2f} g<br>
-                    <b>Contrôle 100(M3-M6)/M3</b> : {validation_m6:.2f}% (doit être <2%)<br>
+                    <b>Contrôle 100(M3-M6)/M3</b> : {validation_m6:.2f}% (doit être &lt;2%)<br>
                     <b>Proctor Wopt</b> : {w_opt:.1f}%<br>
-                    <b>Indice de Plasticité (IP)</b> : {ip:.1f}%<br>
-                    <b>VBS</b> : {vbs_val:.2f}
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
+            """
+            if mat_config["family"] == "REMBLAI":
+                info_html += f"<b>Indice de Plasticité (IP)</b> : {ip:.1f}%<br><b>VBS</b> : {vbs_val:.2f}<br>"
+            else:
+                info_html += f"<b>LA</b> : {la_val:.1f}% &nbsp; | &nbsp; <b>MDE</b> : {mde_val:.1f}%<br>"
+                info_html += f"<b>Coef. Aplatissement</b> : {coeff_apl_val:.1f}% &nbsp; | &nbsp; <b>ES</b> : {es_val:.1f}%<br>"
+                if mat_config["has_vbs"]:
+                    info_html += f"<b>VBS</b> : {vbs_val:.2f}<br>"
+            info_html += "</div>"
+
+            f_st.markdown(info_html, unsafe_allow_html=True)
 
         work_df = edited_sieve_df.sort_values(by="Tamis (mm)", ascending=False).reset_index(drop=True)
         cum_refus_list = []
@@ -424,14 +525,19 @@ def show(supabase_client):
         row_50mm = result_df[np.isclose(result_df["Tamis (mm)"].astype(float), 50.0, atol=1e-3)]
         pass_50mm_val = float(row_50mm["% Passant"].values[0]) if not row_50mm.empty else 100.0
 
-        classe_gtr_auto = classer_gtr(dmax_detected, pass_80um_val, ip, vbs_val, pass_2mm_val)
-        f_st.metric("Classe GTR (Auto)", classe_gtr_auto)
+        if mat_config["family"] == "REMBLAI":
+            classe_auto = classer_gtr(dmax_detected, pass_80um_val, ip, vbs_val, pass_2mm_val)
+            f_st.metric(f"Classe GTR (Auto) — {mat_code}", classe_auto)
+        else:
+            classe_auto = classer_grave(la_val, mde_val, coeff_apl_val, es_val, pass_80um_val)
+            f_st.metric(f"Classification GNT (Auto) — {mat_code}", classe_auto)
 
         is_conf = pass_80um_val <= 35.0
-        obs = f"Le matériau peut être utilisé pour un remblai. ({selected_mat_sub})" if is_conf else f"Non Conforme / Hors fuseau ({selected_mat_sub})"
-        f_st.info(f"Observation automatique : **{obs}** | Dmax: **{dmax_detected} mm** | Passant 50mm: **{pass_50mm_val:.1f}%** | Passant 80um: **{pass_80um_val:.1f}%** | VBS: **{vbs_val:.2f}** | IP: **{ip:.1f}%**")
+        obs = f"Le matériau peut être utilisé. ({mat_code} - {selected_mat_sub})" if is_conf else f"Non Conforme / Hors fuseau ({mat_code} - {selected_mat_sub})"
+        f_st.info(f"Observation automatique : **{obs}** | Dmax: **{dmax_detected} mm** | Passant 50mm: **{pass_50mm_val:.1f}%** | Passant 80um: **{pass_80um_val:.1f}%**")
 
         data_dict = {
+            "Code Materiau": mat_code,
             "Sous-Type Matériau": selected_mat_sub,
             "Ref Echantillon": ref_ech,
             "M1 (g)": f"{m1_val}", "M2 (g)": f"{m2_val}", "M3 (g)": f"{m3_val}", "M4 (g)": f"{m4_val}",
@@ -441,12 +547,22 @@ def show(supabase_client):
             "Passant 2mm (%)": f"{int(pass_2mm_val)}",
             "Passant 50mm (%)": f"{pass_50mm_val:.1f}".replace('.', ','),
             "wL (%)": f"{w_opt:.1f}".replace('.', ','), 
-            "IP (%)": f"{ip:.1f}".replace('.', ','),
             "Densité OPN": f"{dens_val:.2f}".replace('.', ','),
-            "VBS": f"{vbs_val:.2f}".replace('.', ','),
-            "Classe GTR (Auto)": classe_gtr_auto,
+            "Classification (Auto)": classe_auto,
             "Observation": obs
         }
+
+        if mat_config["family"] == "REMBLAI":
+            data_dict["IP (%)"] = f"{ip:.1f}".replace('.', ',')
+            data_dict["VBS"] = f"{vbs_val:.2f}".replace('.', ',')
+        else:
+            data_dict["LA (%)"] = f"{la_val:.1f}".replace('.', ',')
+            data_dict["MDE (%)"] = f"{mde_val:.1f}".replace('.', ',')
+            data_dict["Coefficient Aplatissement (%)"] = f"{coeff_apl_val:.1f}".replace('.', ',')
+            data_dict["ES (%)"] = f"{es_val:.1f}".replace('.', ',')
+            data_dict["IP (%)"] = f"{ip:.1f}".replace('.', ',')
+            if mat_config["has_vbs"]:
+                data_dict["VBS"] = f"{vbs_val:.2f}".replace('.', ',')
 
         if f_st.button("💾 Enregistrer le PV dans l'Historique", type="primary", use_container_width=True, disabled=not user_can_edit):
             existing_records = _safe_supabase_fetch(supabase_client)
@@ -461,6 +577,8 @@ def show(supabase_client):
                 payload_record = {
                     "num_rapport": num_rapport,
                     "type_materiau": selected_mat_sub,
+                    "code_materiau": mat_code,
+                    "famille_materiau": mat_config["family"],
                     "lieu": lieu,
                     "pk": pk,
                     "date_essai": str(date_essai),
@@ -505,7 +623,7 @@ def show(supabase_client):
             f_st.markdown("#### Liste des PVs enregistrés et Téléchargement")
             
             for idx, row in df_hist.iterrows():
-                with f_st.expander(f"📄 N° Rapport : {row.get('num_rapport')} | Type : {row.get('type_materiau')} | Date : {row.get('date_essai')}"):
+                with f_st.expander(f"📄 N° Rapport : {row.get('num_rapport')} | Code : {row.get('code_materiau', get_material_code(row.get('type_materiau')))} | Type : {row.get('type_materiau')} | Date : {row.get('date_essai')}"):
                     c_info1, c_info2 = f_st.columns(2)
                     with c_info1:
                         f_st.write(f"**Lieu / Zone :** {row.get('lieu')}")
@@ -611,11 +729,12 @@ def show(supabase_client):
                     
                     export_rows.append({
                         "N° Rapport": row.get("num_rapport"),
+                        "Code Matériau": details.get("Code Materiau", row.get("code_materiau", get_material_code(row.get("type_materiau")))),
                         "Date de prélèvement": row.get("date_essai"),
                         "Nombre d'essais": 1,
                         "Lieu / Zone": row.get("lieu"),
                         "Provenance d'échantillon": row.get("pk"),
-                        "Classification GTR": details.get("Classe GTR (Auto)", "N/A"),
+                        "Classification": details.get("Classification (Auto)", details.get("Classe GTR (Auto)", "N/A")),
                         "Observation": row.get("observation")
                     })
 
@@ -662,19 +781,19 @@ def show(supabase_client):
                     except Exception:
                         pass
 
-                ws.merge_cells('A1:G1')
+                ws.merge_cells('A1:H1')
                 ws['A1'] = "L.P.E.E - LABORATOIRE PUBLIC DES ESSAIS ET D'ETUDES"
                 ws['A1'].font = font_main_title
                 ws['A1'].alignment = Alignment(horizontal='center', vertical='center')
                 ws.row_dimensions[1].height = 20
 
-                ws.merge_cells('A2:G2')
+                ws.merge_cells('A2:H2')
                 ws['A2'] = "Centre Technique Régional CASA-SETTAT-BENI MELLAL"
                 ws['A2'].font = font_sub_title
                 ws['A2'].alignment = Alignment(horizontal='center', vertical='center')
                 ws.row_dimensions[2].height = 16
 
-                ws.merge_cells('A3:G3')
+                ws.merge_cells('A3:H3')
                 ws['A3'] = f"SYNTHÈSE DES ESSAIS D'IDENTIFICATION — {selected_mat_sub.upper()} (Période: {filtre_mois})"
                 ws['A3'].font = font_section
                 ws['A3'].alignment = Alignment(horizontal='center', vertical='center')
@@ -684,12 +803,13 @@ def show(supabase_client):
 
                 start_row = 5
                 headers = [
-                    "N° Rapport", 
+                    "N° Rapport",
+                    "Code Matériau",
                     "Date de prélèvement", 
                     "Nombre d'essais",
                     "Lieu / Zone", 
                     "Provenance d'échantillon", 
-                    "Classification GTR", 
+                    "Classification", 
                     "Observation"
                 ]
 
@@ -704,15 +824,16 @@ def show(supabase_client):
                 current_row = start_row + 1
                 for r_idx, row_dict in enumerate(export_rows):
                     ws.cell(row=current_row, column=1, value=row_dict.get("N° Rapport")).alignment = Alignment(horizontal='center', vertical='center')
-                    ws.cell(row=current_row, column=2, value=row_dict.get("Date de prélèvement")).alignment = Alignment(horizontal='center', vertical='center')
-                    ws.cell(row=current_row, column=3, value=row_dict.get("Nombre d'essais")).alignment = Alignment(horizontal='center', vertical='center')
-                    ws.cell(row=current_row, column=4, value=row_dict.get("Lieu / Zone")).alignment = Alignment(horizontal='left', vertical='center')
-                    ws.cell(row=current_row, column=5, value=row_dict.get("Provenance d'échantillon")).alignment = Alignment(horizontal='left', vertical='center')
-                    ws.cell(row=current_row, column=6, value=row_dict.get("Classification GTR")).alignment = Alignment(horizontal='center', vertical='center')
-                    ws.cell(row=current_row, column=7, value=row_dict.get("Observation")).alignment = Alignment(horizontal='left', vertical='center')
+                    ws.cell(row=current_row, column=2, value=row_dict.get("Code Matériau")).alignment = Alignment(horizontal='center', vertical='center')
+                    ws.cell(row=current_row, column=3, value=row_dict.get("Date de prélèvement")).alignment = Alignment(horizontal='center', vertical='center')
+                    ws.cell(row=current_row, column=4, value=row_dict.get("Nombre d'essais")).alignment = Alignment(horizontal='center', vertical='center')
+                    ws.cell(row=current_row, column=5, value=row_dict.get("Lieu / Zone")).alignment = Alignment(horizontal='left', vertical='center')
+                    ws.cell(row=current_row, column=6, value=row_dict.get("Provenance d'échantillon")).alignment = Alignment(horizontal='left', vertical='center')
+                    ws.cell(row=current_row, column=7, value=row_dict.get("Classification")).alignment = Alignment(horizontal='center', vertical='center')
+                    ws.cell(row=current_row, column=8, value=row_dict.get("Observation")).alignment = Alignment(horizontal='left', vertical='center')
 
                     row_fill = fill_zebra if r_idx % 2 == 1 else fill_white
-                    for col_num in range(1, 8):
+                    for col_num in range(1, 9):
                         c = ws.cell(row=current_row, column=col_num)
                         c.font = font_data
                         c.fill = row_fill
@@ -724,16 +845,16 @@ def show(supabase_client):
                 total_row_idx = current_row
                 ws.cell(row=total_row_idx, column=1, value="TOTAL GENERAL").font = Font(name="Helvetica", size=9, bold=True)
                 ws.cell(row=total_row_idx, column=1).alignment = Alignment(horizontal='center', vertical='center')
-                ws.merge_cells(start_row=total_row_idx, start_column=1, end_row=total_row_idx, end_column=2)
+                ws.merge_cells(start_row=total_row_idx, start_column=1, end_row=total_row_idx, end_column=3)
                 
-                cell_tot_val = ws.cell(row=total_row_idx, column=3, value=f"=SUM(C{start_row+1}:C{total_row_idx-1})")
+                cell_tot_val = ws.cell(row=total_row_idx, column=4, value=f"=SUM(D{start_row+1}:D{total_row_idx-1})")
                 cell_tot_val.font = Font(name="Helvetica", size=9, bold=True)
                 cell_tot_val.alignment = Alignment(horizontal='center', vertical='center')
 
-                for col_num in range(1, 8):
+                for col_num in range(1, 9):
                     c = ws.cell(row=total_row_idx, column=col_num)
                     c.border = border_thin
-                    if col_num > 3:
+                    if col_num > 4:
                         c.value = ""
 
                 ws.row_dimensions[total_row_idx].height = 22
