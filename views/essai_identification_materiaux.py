@@ -114,9 +114,9 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
     pdf.cell(190, 4.5, " Normes : A.G: NM 00.8.082 | IP: NF P94-051 | VBS: NM 13.1.178 | LOS ANGELES: NM EN 1097-2 | MDE: NM EN 1097-1", 1, 1, "L")
     pdf.ln(2)
 
-    # Tableau des résultats synthétiques d'essais (Avec couleur d'en-tête élégante)
+    # Tableau des résultats synthétiques d'essais
     pdf.set_font("Helvetica", "B", 8)
-    pdf.set_fill_color(220, 230, 242)  # Bleu clair pastel
+    pdf.set_fill_color(220, 230, 242)
     pdf.cell(190, 5.5, " Résultats d'essais", 1, 1, "L", fill=True)
     
     pdf.set_font("Helvetica", "B", 7)
@@ -139,42 +139,42 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
     ]
     for v, w in zip(vals, widths):
         pdf.cell(w, 5, v, 1, 0, "C")
-    pdf.ln(3)
+    pdf.ln(2)
 
     # Insertion de la Courbe Granulométrique
     pdf.set_font("Helvetica", "B", 8)
     pdf.set_fill_color(220, 230, 242)
-    pdf.cell(190, 5.5, " COURBE GRANULOMÉTRIQUE", 1, 1, "L", fill=True)
+    pdf.cell(190, 5, " COURBE GRANULOMÉTRIQUE", 1, 1, "L", fill=True)
     if curve_img_path and os.path.exists(curve_img_path):
         try:
-            pdf.image(curve_img_path, x=25, y=pdf.get_y() + 2, w=160)
-            pdf.ln(62)
+            pdf.image(curve_img_path, x=30, y=pdf.get_y() + 1, w=150, h=45)
+            pdf.ln(47)
         except Exception:
-            pdf.cell(190, 5, "[Erreur d'insertion de la courbe]", 1, 1, "C")
+            pdf.cell(190, 45, "[Erreur d'insertion de la courbe]", 1, 1, "C")
     else:
-        pdf.cell(190, 5, "[Courbe non disponible]", 1, 1, "C")
-    pdf.ln(2)
+        pdf.cell(190, 45, "[Courbe non disponible]", 1, 1, "C")
+    pdf.ln(1)
 
-    # Commentaires et utilisation
+    # Positionnement en bas de page : Commentaires & Conditions d'utilisation
     pdf.set_font("Helvetica", "B", 8)
     pdf.set_fill_color(220, 230, 242)
-    pdf.cell(190, 5.5, " Commentaires & Conditions d'utilisation :", 1, 1, "L", fill=True)
+    pdf.cell(190, 5, " Commentaires & Conditions d'utilisation :", 1, 1, "L", fill=True)
     pdf.set_font("Helvetica", "", 7.5)
     obs_text = data_dict.get('Observation', 'Le matériau peut être utilisé pour un remblai.')
-    pdf.multi_cell(190, 4.5, f" - Observation : {obs_text}\n - Conditions d'utilisation : Conforme aux exigences techniques du projet LGV Casa Sud.", 1, "L")
-    pdf.ln(3)
+    pdf.multi_cell(190, 4, f" - Observation : {obs_text}\n - Conditions d'utilisation : Conforme aux exigences techniques du projet LGV Casa Sud.", 1, "L")
+    pdf.ln(1.5)
 
-    # Blocs Signatures & Visas
+    # Blocs Signatures & Visas tout en bas
     pdf.set_font("Helvetica", "B", 7.5)
     pdf.set_fill_color(240, 240, 240)
-    pdf.cell(63, 5, "LE REÇU PAR LE CLIENT", 1, 0, "C", fill=True)
-    pdf.cell(63, 5, "LE COORDINATEUR DES ESSAIS", 1, 0, "C", fill=True)
-    pdf.cell(64, 5, "LE CHEF DU LABORATOIRE", 1, 1, "C", fill=True)
+    pdf.cell(63, 4.5, "LE REÇU PAR LE CLIENT", 1, 0, "C", fill=True)
+    pdf.cell(63, 4.5, "LE COORDINATEUR DES ESSAIS", 1, 0, "C", fill=True)
+    pdf.cell(64, 4.5, "LE CHEF DU LABORATOIRE", 1, 1, "C", fill=True)
 
     pdf.set_font("Helvetica", "", 7.5)
-    pdf.cell(63, 12, "Nom : ", 1, 0, "L")
-    pdf.cell(63, 12, "Nom : B. ELAMRI", 1, 0, "L")
-    pdf.cell(64, 12, "Nom : H. BAALLAL", 1, 1, "L")
+    pdf.cell(63, 10, "Nom : ", 1, 0, "L")
+    pdf.cell(63, 10, "Nom : B. ELAMRI", 1, 0, "L")
+    pdf.cell(64, 10, "Nom : H. BAALLAL", 1, 1, "L")
 
     return bytes(pdf.output())
 
@@ -451,7 +451,7 @@ def show(supabase_client):
                     pdf_bytes = generate_pdf(header_info, row.get("details", {}), str(row.get("type_materiau")), curve_path_to_use)
                     
                     f_st.download_button(
-                        label=f"📄 Télécharger PV PDF LPEE (Mis en page & Couleur) ({row.get('num_rapport')})",
+                        label=f"📄 Télécharger PV PDF LPEE (Mis en page optimisée) ({row.get('num_rapport')})",
                         data=pdf_bytes,
                         file_name=f"PV_{str(row.get('num_rapport')).replace('/', '_')}.pdf",
                         mime="application/pdf",
