@@ -101,7 +101,7 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
     pdf.multi_cell(190, 3.5, "TRAVAUX D'EXECUTION DE TERRASSEMENT, OUVRAGES D'ART ET RETABLISSEMENTS DE COMMUNICATION ENTRE PK 5+450 et PK 10+000 - GARE CASA SUD", 0, "C")
     pdf.ln(2)
 
-    # Bloc Informations administratives (Cadre épuré)
+    # Bloc Informations administratives
     pdf.set_font("Helvetica", "", 8)
     pdf.cell(95, 5.5, f" Client : TGCC", 1, 0, "L")
     pdf.cell(95, 5.5, f" Rapport d'Essai N° : {header_info.get('num_rapport') or 'N/A'}", 1, 1, "L")
@@ -117,7 +117,7 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
     pdf.cell(190, 4.5, " Normes : A.G: NM 00.8.082 | IP: NF P94-051 | VBS: NM 13.1.178 | LOS ANGELES: NM EN 1097-2 | MDE: NM EN 1097-1", 1, 1, "L")
     pdf.ln(2)
 
-    # Tableau des résultats synthétiques d'essais (Hauteur de ligne de valeur fixée à 10)
+    # --- TABLEAU DES RÉSULTATS SYNTHÉTIQUES D'ESSAIS (CORRIGÉ) ---
     pdf.set_font("Helvetica", "B", 8)
     pdf.set_fill_color(220, 230, 242)
     pdf.cell(190, 6, " Résultats d'essais", 1, 1, "L", fill=True)
@@ -126,10 +126,10 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
     headers = ["%< 80um", "%< 2mm", "%< 50mm", "D MAX", "VBS", "Wopt", "Densité OPN", "GTR"]
     widths = [24, 23, 23, 23, 23, 24, 25, 25]
     for h, w in zip(headers, widths):
-        pdf.cell(w, 10, h, 1, 0, "C", fill=True)
+        pdf.cell(w, 7, h, 1, 0, "C", fill=True)
     pdf.ln()
 
-    # Récupération robuste des valeurs avec gestion des clés (compatibilité 'um' et 'µm')
+    # Récupération robuste des valeurs avec gestion universelle des clés
     val_80um = str(data_dict.get('Passant 80um (%)', data_dict.get('Passant 80µm (%)', data_dict.get('Passant 80um', '-'))))
     val_2mm = str(data_dict.get('Passant 2mm (%)', data_dict.get('Passant 2mm', '-')))
     val_dmax = str(data_dict.get('Dmax (mm)', data_dict.get('DMAX', '-')))
@@ -149,8 +149,8 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
         val_gtr
     ]
     for v, w in zip(vals, widths):
-        pdf.cell(w, 10, v, 1, 0, "C")
-    pdf.ln(2)
+        pdf.cell(w, 8, v, 1, 0, "C")
+    pdf.ln(3)
 
     # Insertion de la Courbe Granulométrique
     pdf.set_font("Helvetica", "B", 8)
@@ -164,7 +164,7 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
     else:
         pdf.cell(190, 40, "[Courbe non disponible]", 1, 1, "C")
     
-    # Positionnement forcé en bas de page pour les commentaires et les visas
+    # Positionnement pour les commentaires et les visas en bas de page
     pdf.set_y(210)
 
     # Commentaires & Conditions d'utilisation
@@ -419,12 +419,12 @@ def show(supabase_client):
             f_st.session_state["pv_ident_local_db"].insert(0, payload_record)
             
             if saved_to_db:
-                f_st.success("✅ PV enregistré avec succès dans Supabase ! Rendez-vous dans la fenêtre '📋 PVs / Historique & Administration' pour le télécharger.")
+                f_st.success("✅ PV enregistré avec succès dans Supabase ! Rendez-vous dans l'onglet '📋 PVs / Historique & Administration' pour le télécharger.")
             else:
-                f_st.warning(f"⚠️ Stocké en session locale. (Erreur Supabase : `{db_error_msg[:100]}`). Rendez-vous à la fenêtre 2 pour le télécharger.")
+                f_st.warning(f"⚠️ Stocké en session locale. (Erreur Supabase : `{db_error_msg[:100]}`).")
 
     # ---------------------------------------------------------
-    # TAB 1 : 📋 PVs / HISTORIQUE, CONSULTATION & TÉLÉCHARGEMENT PDF
+    # TAB 1 : 📋 PVs / HISTORIQUE & TÉLÉCHARGEMENT PDF
     # ---------------------------------------------------------
     with tab_hist:
         f_st.subheader("📋 PVs / Historique, Consultation & Téléchargement PDF")
