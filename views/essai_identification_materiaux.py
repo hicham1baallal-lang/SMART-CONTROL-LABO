@@ -138,7 +138,7 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
         str(data_dict.get('Classe GTR (Auto)', '-'))
     ]
     for v, w in zip(vals, widths):
-        pdf.cell(w, 6.5, v, 1, 0, "C")  # Hauteur augmentée à 6.5
+        pdf.cell(w, 7.5, v, 1, 0, "C")  # Hauteur augmentée à 7.5 pour agrandir le tableau
     pdf.ln(2)
 
     # Insertion de la Courbe Granulométrique
