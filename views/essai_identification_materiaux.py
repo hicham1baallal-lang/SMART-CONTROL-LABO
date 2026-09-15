@@ -124,9 +124,9 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
     pdf.cell(95, 5.5, f" Client : TGCC", 1, 0, "L")
     pdf.cell(95, 5.5, f" Rapport d'Essai N° : {header_info.get('num_rapport') or 'N/A'}", 1, 1, "L")
     pdf.cell(95, 5.5, f" Dossier : 2025-260-05985-2025-0247", 1, 0, "L")
-    pdf.cell(95, 5.5, f" Date du prélèvement : {header_info.get('date_essai') or ''}", 1, 1, "L")
+    pdf.cell(95, 5.5, f" Date de prélèvement : {header_info.get('date_prelevement') or ''}", 1, 1, "L")
     pdf.cell(95, 5.5, f" Lieux de prélèvement : {header_info.get('lieu') or 'Stock sur chantier'}", 1, 0, "L")
-    pdf.cell(95, 5.5, f" Numéro de prélèvement : {header_info.get('pk') or ''}", 1, 1, "L")
+    pdf.cell(95, 5.5, f" Provenance d'échantillon : {header_info.get('provenance') or ''}", 1, 1, "L")
     pdf.cell(190, 5.5, f" Objet : IDENTIFICATION DU MATÉRIAU ({str(type_mat).upper()})", 1, 1, "L")
     pdf.ln(2)
 
@@ -246,7 +246,7 @@ def _safe_supabase_fetch(supabase_client):
     if not supabase_client:
         return f_st.session_state["pv_ident_local_db"]
     try:
-        res = supabase_client.table("pv_identification_materiaux").select("*").order("date_essai", desc=True).execute()
+        res = supabase_client.table("pv_identification_materiaux").select("*").order("date_prelevement", desc=True).execute()
         return res.data if res.data is not None else []
     except Exception:
         return f_st.session_state["pv_ident_local_db"]
@@ -287,8 +287,8 @@ def show(supabase_client):
             num_rapport = f_st.text_input("N° Rapport", value="25/260/LGV/CS/1150", disabled=not user_can_edit)
             lieu = f_st.text_input("Lieu / Zone", value="Stock sur chantier (Zone T4)", disabled=not user_can_edit)
         with c2:
-            pk = f_st.text_input("PK / Section", value="PK 5+450 à PK 10+000", disabled=not user_can_edit)
-            date_essai = f_st.date_input("Date Essai", value=datetime.date.today(), disabled=not user_can_edit)
+            provenance = f_st.text_input("Provenance d'échantillon", value="Emprunt Km 7+200", disabled=not user_can_edit)
+            date_prelevement = f_st.date_input("Date de prélèvement", value=datetime.date.today(), disabled=not user_can_edit)
         with c3:
             ref_ech = f_st.text_input("Référence Échantillon", value="Ech 1", disabled=not user_can_edit)
 
@@ -465,8 +465,8 @@ def show(supabase_client):
                 "num_rapport": num_rapport,
                 "type_materiau": selected_mat_sub,
                 "lieu": lieu,
-                "pk": pk,
-                "date_essai": str(date_essai),
+                "provenance": provenance,
+                "date_prelevement": str(date_prelevement),
                 "details": data_dict,
                 "observation": obs
             }
@@ -508,20 +508,20 @@ def show(supabase_client):
             f_st.markdown("#### Liste des PVs enregistrés et Téléchargement")
             
             for idx, row in df_hist.iterrows():
-                with f_st.expander(f"📄 N° Rapport : {row.get('num_rapport')} | Type : {row.get('type_materiau')} | Date : {row.get('date_essai')}"):
+                with f_st.expander(f"📄 N° Rapport : {row.get('num_rapport')} | Type : {row.get('type_materiau')} | Date prélèv. : {row.get('date_prelevement')}"):
                     c_info1, c_info2 = f_st.columns(2)
                     with c_info1:
                         f_st.write(f"**Lieu / Zone :** {row.get('lieu')}")
-                        f_st.write(f"**PK / Section :** {row.get('pk')}")
+                        f_st.write(f"**Provenance d'échantillon :** {row.get('provenance')}")
                     with c_info2:
                         f_st.write(f"**Observation :** {row.get('observation')}")
-                        f_st.write(f"**Date d'essai :** {row.get('date_essai')}")
+                        f_st.write(f"**Date de prélèvement :** {row.get('date_prelevement')}")
                     
                     header_info = {
                         "num_rapport": row.get("num_rapport"),
                         "lieu": row.get("lieu"),
-                        "pk": row.get("pk"),
-                        "date_essai": str(row.get("date_essai"))
+                        "provenance": row.get("provenance"),
+                        "date_prelevement": str(row.get("date_prelevement"))
                     }
                     
                     curve_path_to_use = "temp_granulometrie.png" if os.path.exists("temp_granulometrie.png") else None
