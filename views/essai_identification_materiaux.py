@@ -96,11 +96,16 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
     # SÉCURITÉ TOTALE : Si le dictionnaire est vide, initialisation par défaut
     if not data_dict or not isinstance(data_dict, dict):
         data_dict = {
-            "M1 (g)": "14000.0", "M2 (g)": "13500.0", "M3 (g)": "11200.0", "M4 (g)": "2000.0",
-            "Dmax (mm)": "50.0", "Passant 80um (%)": "22.3", "Passant 2mm (%)": "66.0",
-            "wL (%)": "30.0", "wP (%)": "18.0", "IP (%)": "12.0", "VBS": "0.42",
-            "Los Angeles (LA)": "24.0", "Micro-Deval (MDE)": "18.0",
-            "Classe GTR (Auto)": "B2", "Observation": "Le matériau peut être utilisé pour un remblai."
+            "Ref Echantillon": "Ech 1",
+            "Passant 80um (%)": "22,3",
+            "Passant 2mm (%)": "66",
+            "Passant 50mm (%)": "89",
+            "Dmax (mm)": "50",
+            "VBS": "0,42",
+            "wL (%)": "14,2",
+            "Densité OPN": "1,73",
+            "Classe GTR (Auto)": "B5",
+            "Observation": "Le matériau peut être utilisé pour un remblai."
         }
     
     # Intitulé Projet LGV Casa Sud
@@ -124,37 +129,64 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
     pdf.cell(190, 4.5, " Normes : A.G: NM 00.8.082 | IP: NF P94-051 | VBS: NM 13.1.178 | LOS ANGELES: NM EN 1097-2 | MDE: NM EN 1097-1", 1, 1, "L")
     pdf.ln(2)
 
-    # --- TABLEAU DES LIGNES DE RÉSULTATS D'ESSAIS (PARAMÈTRES ET VALEURS) ---
+    # --- TABLEAU DES RÉSULTATS D'ESSAIS (Conforme à l'image fournie) ---
     pdf.set_font("Helvetica", "B", 8)
     pdf.set_fill_color(220, 230, 242)
-    pdf.cell(190, 6, " Résultats d'essais & Caractéristiques physiques", 1, 1, "L", fill=True)
+    pdf.cell(190, 5.5, " Résultats d'essais", 1, 1, "C", fill=True)
     
-    pdf.set_font("Helvetica", "B", 7)
-    pdf.cell(110, 5, "Caractéristique / Paramètre d'Essai", 1, 0, "L", fill=True)
-    pdf.cell(80, 5, "Valeur Obtenue", 1, 1, "C", fill=True)
+    # En-tête de colonne de l'échantillon
+    ech_label = data_dict.get('Ref Echantillon', 'Ech 1')
+    pdf.set_font("Helvetica", "B", 7.5)
+    pdf.cell(60, 5.5, "", 1, 0, "C", fill=True)
+    pdf.cell(130, 5.5, str(ech_label), 1, 1, "C", fill=True)
 
-    # Liste structurée des lignes du tableau avec récupération sécurisée depuis data_dict
-    rows_data = [
-        ("Masse totale M1 (g)", data_dict.get('M1 (g)', '14000.0')),
-        ("Masse sèche étuve M2 (g)", data_dict.get('M2 (g)', '13500.0')),
-        ("Masse après lavage M3 (g)", data_dict.get('M3 (g)', '11200.0')),
-        ("Prise tamisage M4 (g)", data_dict.get('M4 (g)', '2000.0')),
-        ("Diamètre Maximal Dmax (mm)", data_dict.get('Dmax (mm)', '50.0')),
-        ("Passant à 80 µm (%)", data_dict.get('Passant 80um (%)', data_dict.get('Passant 80µm (%)', '22.3'))),
-        ("Passant à 2 mm (%)", data_dict.get('Passant 2mm (%)', '66.0')),
-        ("Limite de Liquidité wL (%)", data_dict.get('wL (%)', '30.0')),
-        ("Limite de Plasticité wP (%)", data_dict.get('wP (%)', '18.0')),
-        ("Indice de Plasticité IP (%)", data_dict.get('IP (%)', '12.0')),
-        ("Valeur au Bleu de Méthylène (VBS)", data_dict.get('VBS', '0.42')),
-        ("Coefficient Los Angeles (LA)", data_dict.get('Los Angeles (LA)', '24.0')),
-        ("Coefficient Micro-Deval (MDE)", data_dict.get('Micro-Deval (MDE)', '18.0')),
-        ("Classe GTR (Classification Auto)", data_dict.get('Classe GTR (Auto)', 'B2'))
-    ]
+    # Récupération des valeurs avec formats sécurisés
+    val_80um = str(data_dict.get('Passant 80um (%)', data_dict.get('Passant 80µm (%)', '22,3')))
+    val_2mm = str(data_dict.get('Passant 2mm (%)', '66'))
+    val_50mm = str(data_dict.get('Passant 50mm (%)', '89'))
+    val_dmax = str(data_dict.get('Dmax (mm)', '50'))
+    val_vbs = str(data_dict.get('VBS', '0,42'))
+    val_wopt = str(data_dict.get('wL (%)', '14,2'))
+    val_dens = str(data_dict.get('Densité OPN', '1,73'))
+    val_gtr = str(data_dict.get('Classe GTR (Auto)', 'B5'))
 
     pdf.set_font("Helvetica", "", 7.5)
-    for label, val in rows_data:
-        pdf.cell(110, 4.5, f" {label}", 1, 0, "L")
-        pdf.cell(80, 4.5, str(val), 1, 1, "C")
+
+    # Ligne %< 80 µm
+    pdf.cell(60, 5, " %< 80 µm", 1, 0, "L")
+    pdf.cell(130, 5, val_80um, 1, 1, "C")
+
+    # Ligne %< 2 mm
+    pdf.cell(60, 5, " %< 2 mm", 1, 0, "L")
+    pdf.cell(130, 5, val_2mm, 1, 1, "C")
+
+    # Ligne %< 50 mm
+    pdf.cell(60, 5, " %< 50 mm", 1, 0, "L")
+    pdf.cell(130, 5, val_50mm, 1, 1, "C")
+
+    # Ligne D MAX
+    pdf.cell(60, 5, " D MAX", 1, 0, "L")
+    pdf.cell(130, 5, val_dmax, 1, 1, "C")
+
+    # Ligne VBS
+    pdf.cell(60, 5, " VBS", 1, 0, "L")
+    pdf.cell(130, 5, val_vbs, 1, 1, "C")
+
+    # Ligne Proctor (divisée en sous-cellules Wopt et Densité OPN comme dans l'image)
+    pdf.cell(60, 5, " Proctor", 1, 0, "L")
+    pdf.set_font("Helvetica", "B", 7)
+    pdf.cell(26, 5, " Wopt", 1, 0, "C", fill=True)
+    pdf.set_font("Helvetica", "", 7.5)
+    pdf.cell(26, 5, val_wopt, 1, 0, "C")
+    pdf.set_font("Helvetica", "B", 7)
+    pdf.cell(34, 5, " Densité OPN", 1, 0, "C", fill=True)
+    pdf.set_font("Helvetica", "", 7.5)
+    pdf.cell(44, 5, val_dens, 1, 1, "C")
+
+    # Ligne GTR
+    pdf.cell(60, 5, " GTR", 1, 0, "L")
+    pdf.set_font("Helvetica", "B", 8)
+    pdf.cell(130, 5, val_gtr, 1, 1, "C")
 
     pdf.ln(2)
 
@@ -247,7 +279,7 @@ def show(supabase_client):
             pk = f_st.text_input("PK / Section", value="PK 5+450 à PK 10+000", disabled=not user_can_edit)
             date_essai = f_st.date_input("Date Essai", value=datetime.date.today(), disabled=not user_can_edit)
         with c3:
-            ref_ech = f_st.text_input("Référence Échantillon", value="Ech N°1", disabled=not user_can_edit)
+            ref_ech = f_st.text_input("Référence Échantillon", value="Ech 1", disabled=not user_can_edit)
 
         f_st.markdown("---")
         
@@ -298,11 +330,10 @@ def show(supabase_client):
             f_st.markdown("##### ⚙️ Caractéristiques & Limites")
             re_val = f_st.number_input("Refus R_e (10mm) (g)", value=re_val_calc, disabled=True, key="re_10mm_mat")
             me_val = f_st.number_input("Prise Me (g) [M3-Re]", value=me_val_calc, disabled=True, key="me_val_mat")
-            w_l = f_st.number_input("Lim. Liquidité wL (%)", value=30.0, step=0.5, disabled=not user_can_edit)
-            w_p = f_st.number_input("Lim. Plasticité wP (%)", value=18.0, step=0.5, disabled=not user_can_edit)
+            w_l = f_st.number_input("Proctor Wopt (%)", value=14.2, step=0.5, disabled=not user_can_edit)
+            w_p = f_st.number_input("Lim. Plasticité wP (%)", value=10.0, step=0.5, disabled=not user_can_edit)
             vbs_val = f_st.number_input("VBS (Bleu de Manganèse)", value=0.42, step=0.01, disabled=not user_can_edit)
-            la_val = f_st.number_input("Los Angeles (LA)", value=24.0, step=1.0, disabled=not user_can_edit)
-            mde_val = f_st.number_input("Micro-Deval (MDE)", value=18.0, step=1.0, disabled=not user_can_edit)
+            dens_val = f_st.number_input("Proctor Densité OPN", value=1.73, step=0.01, disabled=not user_can_edit)
 
             a_factor = me_val / m4_val if m4_val > 0 else 0
             ip = max(0.0, w_l - w_p)
@@ -379,8 +410,11 @@ def show(supabase_client):
         row_2mm = result_df[result_df["Tamis (mm)"] == 2.0]
         pass_2mm_val = float(row_2mm["% Passant"].values[0]) if not row_2mm.empty else 66.0
 
+        row_50mm = result_df[result_df["Tamis (mm)"] == 50.0]
+        pass_50mm_val = float(row_50mm["% Passant"].values[0]) if not row_50mm.empty else 89.0
+
         classe_gtr_auto = classer_gtr(dmax_detected, pass_80um_val, ip, vbs_val, pass_2mm_val)
-        f_st.metric("Classe GTR (Auto - Tableau IV)", classe_gtr_auto)
+        f_st.metric("Classe GTR (Auto)", classe_gtr_auto)
 
         is_conf = pass_80um_val <= 35.0
         obs = f"Le matériau peut être utilisé pour un remblai. ({selected_mat_sub})" if is_conf else f"Non Conforme / Hors fuseau ({selected_mat_sub})"
@@ -390,9 +424,13 @@ def show(supabase_client):
             "Sous-Type Matériau": selected_mat_sub,
             "Ref Echantillon": ref_ech,
             "M1 (g)": f"{m1_val}", "M2 (g)": f"{m2_val}", "M3 (g)": f"{m3_val}", "M4 (g)": f"{m4_val}",
-            "Dmax (mm)": f"{dmax_detected}", "Passant 80um (%)": f"{pass_80um_val:.1f}", "Passant 2mm (%)": f"{pass_2mm_val:.1f}",
-            "wL (%)": f"{w_l}", "wP (%)": f"{w_p}", "IP (%)": f"{ip:.1f}", "VBS": f"{vbs_val}",
-            "Los Angeles (LA)": f"{la_val}", "Micro-Deval (MDE)": f"{mde_val}",
+            "Dmax (mm)": f"{int(dmax_detected)}", 
+            "Passant 80um (%)": f"{pass_80um_val:.1f}".replace('.', ','), 
+            "Passant 2mm (%)": f"{int(pass_2mm_val)}",
+            "Passant 50mm (%)": f"{int(pass_50mm_val)}",
+            "wL (%)": f"{w_l:.1f}".replace('.', ','), 
+            "Densité OPN": f"{dens_val:.2f}".replace('.', ','),
+            "VBS": f"{vbs_val:.2f}".replace('.', ','),
             "Classe GTR (Auto)": classe_gtr_auto,
             "Observation": obs
         }
