@@ -203,7 +203,7 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
     pdf.cell(190, 5, " Commentaires :", 1, 1, "L", fill=True)
     pdf.set_font("Helvetica", "", 7.5)
     obs_text = data_dict.get('Observation', 'Le matériau peut être utilisé pour un remblai.')
-    pdf.multi_cell(190, 4, f" - Observation : {obs_text}\n - .", 1, "L")
+    pdf.multi_cell(190, 4, f" - Observation : {obs_text}\n ", 1, "L")
     pdf.ln(4)
 
     pdf.set_font("Helvetica", "B", 7.5)
