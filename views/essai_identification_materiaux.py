@@ -114,7 +114,7 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
     pdf.cell(190, 4, " Normes : A.G: NM 00.8.082 | IP: NF P94-051 | VBS: NM 13.1.178 | LOS ANGELES: NM EN 1097-2 | MDE: NM EN 1097-1", 1, 1, "L")
     pdf.ln(1.5)
 
-    # Tableau des résultats synthétiques d'essais (Hauteurs augmentées)
+    # Tableau des résultats synthétiques d'essais
     pdf.set_font("Helvetica", "B", 7.5)
     pdf.set_fill_color(220, 230, 242)
     pdf.cell(190, 5, " Résultats d'essais", 1, 1, "L", fill=True)
@@ -138,7 +138,7 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
         str(data_dict.get('Classe GTR (Auto)', '-'))
     ]
     for v, w in zip(vals, widths):
-        pdf.cell(w, 7.5, v, 1, 0, "C")  # Hauteur augmentée à 7.5 pour agrandir le tableau
+        pdf.cell(w, 9.0, v, 1, 0, "C")  # Hauteur augmentée à 9.0 mm pour la ligne des valeurs
     pdf.ln(2)
 
     # Insertion de la Courbe Granulométrique
@@ -155,7 +155,7 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
         pdf.cell(190, 45, "[Courbe non disponible]", 1, 1, "C")
     pdf.ln(1.5)
 
-    # Commentaires et conditions d'utilisation déplacés sous la courbe
+    # Commentaires et conditions d'utilisation sous la courbe
     pdf.set_font("Helvetica", "B", 7.5)
     pdf.set_fill_color(220, 230, 242)
     pdf.cell(190, 5, " Commentaires & Conditions d'utilisation :", 1, 1, "L", fill=True)
