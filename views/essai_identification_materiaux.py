@@ -74,16 +74,19 @@ class IdentificationPDF(FPDF):
         self.set_xy(130, 8)
         self.cell(70, 4, "Laboratoire du contrôle externe", 0, 1, "R")
         
-        self.ln(2)
+        # Ligne de séparation sous l'entête institutionnel
+        self.line(10, 20, 200, 20)
+        
+        # TITRE EN 2 LIGNES DÉPLACÉ PLUS BAS
+        self.set_xy(10, 23)
         self.set_font("Helvetica", "B", 10)
         self.set_text_color(0, 51, 102)
-        self.cell(0, 5, "RAPPORT D'ESSAI D'IDENTIFICATION DES MATÉRIAUX", 0, 1, "C")
+        self.multi_cell(190, 4.5, "RAPPORT D'ESSAI D'IDENTIFICATION\nDES MATÉRIAUX", 0, "C")
         self.set_text_color(0, 0, 0)
-        self.line(10, 24, 200, 24)
         
-        # SÉPARATION NETTE APRÈS L'ENTÊTE (ligne de découpe visuelle)
-        self.ln(4)
-        self.set_xy(10, 29)
+        # Ligne de séparation après le titre
+        self.line(10, 34, 200, 34)
+        self.set_xy(10, 36)
 
     def footer(self):
         self.set_y(-12)
@@ -111,7 +114,7 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
             "Observation": "Le matériau peut être utilisé pour un remblai."
         }
     
-    # Intitulé Projet LGV Casa Sud (placé juste après la séparation de l'entête)
+    # Intitulé Projet LGV Casa Sud
     pdf.set_font("Helvetica", "B", 7)
     pdf.multi_cell(190, 3.5, "TRAVAUX D'EXECUTION DE TERRASSEMENT, OUVRAGES D'ART ET RETABLISSEMENTS DE COMMUNICATION ENTRE PK 5+450 et PK 10+000 - GARE CASA SUD", 0, "C")
     pdf.ln(2)
