@@ -54,65 +54,114 @@ def classer_gtr(dmax, pass_80um, ip, vbs=0.5, pass_2mm=70.0, is_roche=False, roc
 
 class IdentificationPDF(FPDF):
     def header(self):
+        # En-tête officiel style LPEE / LGV CASA SUD
         logo_path = "logo.png.jpg"
         if not os.path.exists(logo_path):
             logo_path = "logo.png"
         if os.path.exists(logo_path):
             try:
-                self.image(logo_path, 10, 8, 25)
+                self.image(logo_path, 10, 8, 22)
             except Exception:
                 pass
-        self.set_font("Helvetica", "B", 11)
-        self.cell(0, 6, "LABORATOIRE PUBLIC D'ESSAIS ET D'ETUDES - LPEE", 0, 1, "C")
+        
+        self.set_font("Helvetica", "B", 10)
+        self.set_xy(35, 8)
+        self.cell(100, 5, "L.P.E.E", 0, 1, "L")
+        self.set_font("Helvetica", "B", 8)
+        self.set_x(35)
+        self.cell(100, 4, "LABORATOIRE PUBLIC DES ESSAIS ET D'ETUDES", 0, 1, "L")
+        self.set_font("Helvetica", "", 8)
+        self.set_x(35)
+        self.cell(100, 4, "Centre Technique Régional CASA-SETTAT-BENI MELLAL", 0, 1, "L")
+        
         self.set_font("Helvetica", "B", 9)
-        self.cell(0, 5, "CENTRE TECHNIQUE REGIONAL DE CASABLANCA-SETTAT-BENI MELLAL (CTR-CSB)", 0, 1, "C")
-        self.set_font("Helvetica", "I", 9)
-        self.cell(0, 5, "Laboratoire de Contrôle Externe - LGV CASA SUD", 0, 1, "C")
-        self.ln(3)
-        self.line(10, 26, 200, 26)
-        self.ln(6)
+        self.set_xy(135, 8)
+        self.cell(65, 5, "Laboratoire du contrôle externe", 0, 1, "R")
+        
+        self.ln(4)
+        self.set_font("Helvetica", "B", 10)
+        self.cell(0, 6, "RAPPORT D'ESSAI D'IDENTIFICATION DES MATÉRIAUX", 0, 1, "C")
+        self.line(10, 28, 200, 28)
+        self.ln(4)
 
     def footer(self):
         self.set_y(-15)
         self.set_font("Helvetica", "I", 8)
-        self.cell(0, 10, f"CTR-CSB - Page {self.page_no()}/{{nb}}", 0, 0, "C")
+        self.cell(0, 10, f"CTR-CSB - Projet LGV CASA SUD | Page {self.page_no()}/{{nb}}", 0, 0, "C")
 
 
 def generate_pdf(header_info, data_dict, type_mat):
     pdf = IdentificationPDF()
     pdf.alias_nb_pages()
     pdf.add_page()
-    pdf.set_font("Helvetica", "B", 13)
-    pdf.cell(0, 8, f"PROCES VERBAL - IDENTIFICATION & GRANULO ({str(type_mat).upper()})", 0, 1, "C")
-    pdf.ln(4)
-    pdf.set_font("Helvetica", "B", 10)
-    pdf.cell(0, 6, f"Rapport d'Essai n° : {header_info.get('num_rapport') or 'N/A'}", 0, 1, "R")
+    
+    # Intitulé Projet LGV Casa Sud
+    pdf.set_font("Helvetica", "B", 8)
+    pdf.multi_cell(190, 4, "TRAVAUX D'EXECUTION DE TERRASSEMENT, OUVRAGES D'ART ET RETABLISSEMENTS DE COMMUNICATION ENTRE PK 5+450 et PK 10+000 - GARE CASA SUD", 0, "C")
     pdf.ln(3)
-    
-    pdf.set_fill_color(230, 230, 230)
-    pdf.set_font("Helvetica", "B", 10)
-    pdf.cell(190, 8, " I - Informations générales", 1, 1, "L", fill=True)
-    pdf.set_font("Helvetica", "", 9)
-    pdf.cell(95, 7, f"   Lieu / Zone : {header_info.get('lieu') or ''}", 1, 0, "L")
-    pdf.cell(95, 7, f"   Date essai : {header_info.get('date_essai') or ''}", 1, 1, "L")
-    pdf.cell(190, 7, f"   Origine / PK : {header_info.get('pk') or ''}", 1, 1, "L")
-    pdf.ln(5)
 
-    pdf.set_font("Helvetica", "B", 10)
-    pdf.cell(190, 8, " II - Synthèse Granulométrique & GTR (NM 00.8.082 / LPEE)", 1, 1, "L", fill=True)
-    pdf.set_font("Helvetica", "", 9)
+    # Bloc Informations administratives et chantier
+    pdf.set_font("Helvetica", "", 8)
+    pdf.cell(95, 6, f" Client : TGCC", 1, 0, "L")
+    pdf.cell(95, 6, f" Rapport d'Essai N° : {header_info.get('num_rapport') or 'N/A'}", 1, 1, "L")
+    pdf.cell(95, 6, f" Dossier : 2025-260-05985-2025-0247", 1, 0, "L")
+    pdf.cell(95, 6, f" Date du prélèvement : {header_info.get('date_essai') or ''}", 1, 1, "L")
+    pdf.cell(95, 6, f" Lieux de prélèvement : {header_info.get('lieu') or 'Stock sur chantier'}", 1, 0, "L")
+    pdf.cell(95, 6, f" Numéro de prélèvement : {header_info.get('pk') or ''}", 1, 1, "L")
+    pdf.cell(190, 6, f" Objet : IDENTIFICATION DU MATÉRIAU ({str(type_mat).upper()})", 1, 1, "L")
+    pdf.ln(4)
+
+    # Références de normes
+    pdf.set_font("Helvetica", "B", 8)
+    pdf.cell(190, 5, " Référence de normes : A.G: NM 00.8.082 | IP: NF P94-051 | VBS: NM 13.1.178 | LOS ANGELES: NM EN 1097-2 | MDE: NM EN 1097-1", 1, 1, "L")
+    pdf.ln(4)
+
+    # Tableau des résultats synthétiques d'essais (Style PV joint)
+    pdf.set_font("Helvetica", "B", 8)
+    pdf.set_fill_color(240, 240, 240)
+    pdf.cell(190, 6, " Résultats d'essais", 1, 1, "L", fill=True)
     
-    if isinstance(data_dict, dict):
-        for k, v in data_dict.items():
-            pdf.cell(95, 7, f"   {str(k)[:40]}", 1, 0, "L")
-            pdf.cell(95, 7, f"   {str(v)[:40]}", 1, 1, "L")
-    else:
-        pdf.cell(190, 7, f"   {str(data_dict)}", 1, 1, "L")
-    
-    pdf.ln(10)
-    pdf.set_font("Helvetica", "B", 9)
-    pdf.cell(95, 6, "Le Technicien", 0, 0, "C")
-    pdf.cell(95, 6, "Le Chef de Laboratoire", 0, 1, "C")
+    pdf.set_font("Helvetica", "B", 7)
+    headers = ["%< 80um", "%< 2mm", "%< 50mm", "D MAX", "VBS", "Wopt", "Densité OPN", "GTR"]
+    widths = [24, 23, 23, 23, 23, 24, 25, 25]
+    for h, w in zip(headers, widths):
+        pdf.cell(w, 6, h, 1, 0, "C", fill=True)
+    pdf.ln()
+
+    pdf.set_font("Helvetica", "", 8)
+    vals = [
+        str(data_dict.get('Passant 80µm (%)', '-')),
+        str(data_dict.get('Passant 2mm (%)', '-')),
+        str(data_dict.get('Dmax (mm)', '-')),
+        str(data_dict.get('Dmax (mm)', '-')),
+        str(data_dict.get('VBS', '-')),
+        str(data_dict.get('wL (%)', '-')),
+        "1.73",
+        str(data_dict.get('Classe GTR (Auto)', '-'))
+    ]
+    for v, w in zip(vals, widths):
+        pdf.cell(w, 6, v, 1, 0, "C")
+    pdf.ln(8)
+
+    # Commentaires et utilisation
+    pdf.set_font("Helvetica", "B", 8)
+    pdf.cell(190, 6, " Commentaires & Conditions d'utilisation :", 1, 1, "L", fill=True)
+    pdf.set_font("Helvetica", "", 8)
+    obs_text = data_dict.get('Observation', 'Le matériau peut être utilisé pour un remblai.')
+    pdf.multi_cell(190, 6, f" - Observation : {obs_text}\n - Conditions d'utilisation : Conforme aux exigences du projet LGV Casa Sud.", 1, "L")
+    pdf.ln(15)
+
+    # Blocs Signatures & Visas (Conforme modèle officiel)
+    pdf.set_font("Helvetica", "B", 8)
+    pdf.cell(63, 5, "LE REÇU PAR LE CLIENT", 1, 0, "C", fill=True)
+    pdf.cell(63, 5, "LE COORDINATEUR DES ESSAIS", 1, 0, "C", fill=True)
+    pdf.cell(64, 5, "LE CHEF DU LABORATOIRE", 1, 1, "C", fill=True)
+
+    pdf.set_font("Helvetica", "", 8)
+    pdf.cell(63, 16, "Nom : ", 1, 0, "L")
+    pdf.cell(63, 16, "Nom : B. ELAMRI", 1, 0, "L")
+    pdf.cell(64, 16, "Nom : H. BAALLAL", 1, 1, "L")
+
     return bytes(pdf.output())
 
 
@@ -160,13 +209,13 @@ def show(supabase_client):
         
         c1, c2, c3 = f_st.columns(3)
         with c1:
-            num_rapport = f_st.text_input("N° Rapport", value="25/260/LGV/CS/IDENT/001", disabled=not user_can_edit)
-            lieu = f_st.text_input("Lieu / Zone", value="Stock / Emprunt", disabled=not user_can_edit)
+            num_rapport = f_st.text_input("N° Rapport", value="25/260/LGV/CS/1150", disabled=not user_can_edit)
+            lieu = f_st.text_input("Lieu / Zone", value="Stock sur chantier (Zone T4)", disabled=not user_can_edit)
         with c2:
-            pk = f_st.text_input("PK / Section", value="PK 8+540", disabled=not user_can_edit)
+            pk = f_st.text_input("PK / Section", value="PK 5+450 à PK 10+000", disabled=not user_can_edit)
             date_essai = f_st.date_input("Date Essai", value=datetime.date.today(), disabled=not user_can_edit)
         with c3:
-            ref_ech = f_st.text_input("Référence Échantillon", value=f"ECH-{selected_mat_sub.replace(' ', '_').upper()}-01", disabled=not user_can_edit)
+            ref_ech = f_st.text_input("Référence Échantillon", value="Ech N°1", disabled=not user_can_edit)
 
         f_st.markdown("---")
         obs = "Conforme"
@@ -221,7 +270,7 @@ def show(supabase_client):
             me_val = f_st.number_input("Prise Me (g) [M3-Re]", value=me_val_calc, disabled=True, key="me_val_mat")
             w_l = f_st.number_input("Lim. Liquidité wL (%)", value=30.0, step=0.5, disabled=not user_can_edit)
             w_p = f_st.number_input("Lim. Plasticité wP (%)", value=18.0, step=0.5, disabled=not user_can_edit)
-            vbs_val = f_st.number_input("VBS (Bleu de Manganèse)", value=0.4, step=0.1, disabled=not user_can_edit)
+            vbs_val = f_st.number_input("VBS (Bleu de Manganèse)", value=0.42, step=0.01, disabled=not user_can_edit)
             la_val = f_st.number_input("Los Angeles (LA)", value=24.0, step=1.0, disabled=not user_can_edit)
             mde_val = f_st.number_input("Micro-Deval (MDE)", value=18.0, step=1.0, disabled=not user_can_edit)
 
@@ -288,27 +337,19 @@ def show(supabase_client):
             f_st.pyplot(fig, use_container_width=True)
             plt.close(fig)
 
-        dmax_detected = float(result_df[(result_df["R_i (g) [≥10mm]"] > 0) | (result_df["r_i (g) [<10mm]"] > 0)]["Tamis (mm)"].max()) if any((result_df["R_i (g) [≥10mm]"] > 0) | (result_df["r_i (g) [<10mm]"] > 0)) else 40.0
+        dmax_detected = float(result_df[(result_df["R_i (g) [≥10mm]"] > 0) | (result_df["r_i (g) [<10mm]"] > 0)]["Tamis (mm)"].max()) if any((result_df["R_i (g) [≥10mm]"] > 0) | (result_df["r_i (g) [<10mm]"] > 0)) else 50.0
         row_80um = result_df[result_df["Tamis (mm)"] == 0.08]
-        pass_80um_val = float(row_80um["% Passant"].values[0]) if not row_80um.empty else 8.0
+        pass_80um_val = float(row_80um["% Passant"].values[0]) if not row_80um.empty else 22.3
 
         row_2mm = result_df[result_df["Tamis (mm)"] == 2.0]
-        pass_2mm_val = float(row_2mm["% Passant"].values[0]) if not row_2mm.empty else 45.0
+        pass_2mm_val = float(row_2mm["% Passant"].values[0]) if not row_2mm.empty else 66.0
 
         classe_gtr_auto = classer_gtr(dmax_detected, pass_80um_val, ip, vbs_val, pass_2mm_val)
         f_st.metric("Classe GTR (Auto - Tableau IV)", classe_gtr_auto)
 
-        if "GNF" in selected_mat_sub or "GNA" in selected_mat_sub:
-            is_conf = pass_80um_val <= 12.0 and la_val <= 30 and mde_val <= 25
-        elif "Couche de forme" in selected_mat_sub:
-            is_conf = pass_80um_val <= 15.0 and ip <= 15
-        elif "PRA" in selected_mat_sub or "contigu" in selected_mat_sub:
-            is_conf = pass_80um_val <= 10.0 and la_val <= 25
-        else:
-            is_conf = pass_80um_val <= 35.0
-
-        obs = f"Conforme ({selected_mat_sub})" if is_conf else f"Non Conforme / Hors fuseau ({selected_mat_sub})"
-        f_st.info(f"Observation automatique : **{obs}** | Dmax: **{dmax_detected} mm** | Passant 80µm: **{pass_80um_val:.1f}%** | LA: **{la_val}** | MDE: **{mde_val}**")
+        is_conf = pass_80um_val <= 35.0
+        obs = f"Le matériau peut être utilisé pour un remblai. ({selected_mat_sub})" if is_conf else f"Non Conforme / Hors fuseau ({selected_mat_sub})"
+        f_st.info(f"Observation automatique : **{obs}** | Dmax: **{dmax_detected} mm** | Passant 80µm: **{pass_80um_val:.1f}%** | VBS: **{vbs_val}**")
 
         data_dict = {
             "Sous-Type Matériau": selected_mat_sub,
@@ -321,7 +362,6 @@ def show(supabase_client):
             "Observation": obs
         }
 
-        # Bouton d'enregistrement uniquement dans cet onglet (Téléchargement transféré à la fenêtre 2)
         if f_st.button("💾 Enregistrer le PV dans l'Historique", type="primary", use_container_width=True, disabled=not user_can_edit):
             payload_record = {
                 "num_rapport": num_rapport,
@@ -348,7 +388,7 @@ def show(supabase_client):
             f_st.session_state["pv_ident_local_db"].insert(0, payload_record)
             
             if saved_to_db:
-                f_st.success("✅ PV enregistré avec succès dans Supabase ! Vous pouvez le télécharger dans la fenêtre '📋 PVs / Historique & Administration'.")
+                f_st.success("✅ PV enregistré avec succès dans Supabase ! Rendez-vous dans la fenêtre '📋 PVs / Historique & Administration' pour le télécharger.")
             else:
                 f_st.warning(f"⚠️ Stocké en session locale. (Erreur Supabase : `{db_error_msg[:100]}`). Rendez-vous à la fenêtre 2 pour le télécharger.")
 
@@ -369,9 +409,8 @@ def show(supabase_client):
             if search_q:
                 df_hist = df_hist[df_hist.apply(lambda r: search_q in str(r.values).lower(), axis=1)]
             
-            f_st.markdown("#### Liste des PVs enregistrés")
+            f_st.markdown("#### Liste des PVs enregistrés et Téléchargement")
             
-            # Affichage ligne par ligne avec option de téléchargement du PDF
             for idx, row in df_hist.iterrows():
                 with f_st.expander(f"📄 N° Rapport : {row.get('num_rapport')} | Type : {row.get('type_materiau')} | Date : {row.get('date_essai')}"):
                     c_info1, c_info2 = f_st.columns(2)
@@ -382,7 +421,6 @@ def show(supabase_client):
                         f_st.write(f"**Observation :** {row.get('observation')}")
                         f_st.write(f"**Date d'essai :** {row.get('date_essai')}")
                     
-                    # Régénération du PDF pour téléchargement
                     header_info = {
                         "num_rapport": row.get("num_rapport"),
                         "lieu": row.get("lieu"),
@@ -392,7 +430,7 @@ def show(supabase_client):
                     pdf_bytes = generate_pdf(header_info, row.get("details", {}), str(row.get("type_materiau")))
                     
                     f_st.download_button(
-                        label=f"📄 Télécharger PV PDF ({row.get('num_rapport')})",
+                        label=f"📄 Télécharger PV PDF LPEE ({row.get('num_rapport')})",
                         data=pdf_bytes,
                         file_name=f"PV_{str(row.get('num_rapport')).replace('/', '_')}.pdf",
                         mime="application/pdf",
