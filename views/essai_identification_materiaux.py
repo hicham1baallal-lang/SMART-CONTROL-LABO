@@ -573,16 +573,17 @@ def show(supabase_client):
                 else:
                     df_filtered = df_s.copy()
 
+                total_essais_count = len(df_filtered)
+
                 m1, m2, m3 = f_st.columns(3)
-                m1.metric(f"Total PVs ({selected_mat_sub})", len(df_filtered))
+                m1.metric(f"Total PVs / Essais ({selected_mat_sub})", total_essais_count)
                 m2.metric("Conformes", len(df_filtered[df_filtered["observation"].str.contains("Conforme", na=False)]) if "observation" in df_filtered else 0)
                 m3.metric("Mois sélectionné", filtre_mois)
                 
                 f_st.markdown("---")
-                f_st.markdown("#### Aperçu du tableau filtré")
-                f_st.dataframe(df_filtered, use_container_width=True)
-
-                # --- CONSTRUCTION DE L'EXCEL STYLÉ PROFESSIONNEL AVEC OPENPYXL ---
+                f_st.markdown("#### Aperçu du tableau de synthèse")
+                
+                # --- PRÉPARATION DU TABLEAU DE SYNTHÈSE AVEC NOMBRE D'ESSAIS ---
                 export_rows = []
                 for _, row in df_filtered.iterrows():
                     details = row.get("details", {})
@@ -592,12 +593,17 @@ def show(supabase_client):
                     export_rows.append({
                         "N° Rapport": row.get("num_rapport"),
                         "Date de prélèvement": row.get("date_essai"),
+                        "Nombre d'essais": 1,  # Chaque ligne représente un essai/rapport unitaire
                         "Lieu / Zone": row.get("lieu"),
                         "Provenance d'échantillon": row.get("pk"),
                         "Classification GTR": details.get("Classe GTR (Auto)", "N/A"),
                         "Observation": row.get("observation")
                     })
 
+                df_display_synth = pd.DataFrame(export_rows)
+                f_st.dataframe(df_display_synth, use_container_width=True)
+
+                # --- CONSTRUCTION DE L'EXCEL STYLÉ PROFESSIONNEL AVEC OPENPYXL ---
                 excel_buf = io.BytesIO()
                 wb = openpyxl.Workbook()
                 ws = wb.active
@@ -629,21 +635,21 @@ def show(supabase_client):
                 )
 
                 # Ligne 1 : En-tête LPEE institutionnel
-                ws.merge_cells('A1:F1')
+                ws.merge_cells('A1:G1')
                 ws['A1'] = "L.P.E.E - LABORATOIRE PUBLIC DES ESSAIS ET D'ETUDES"
                 ws['A1'].font = font_main_title
                 ws['A1'].alignment = Alignment(horizontal='center', vertical='center')
                 ws.row_dimensions[1].height = 20
 
                 # Ligne 2 : Centre technique
-                ws.merge_cells('A2:F2')
+                ws.merge_cells('A2:G2')
                 ws['A2'] = "Centre Technique Régional CASA-SETTAT-BENI MELLAL"
                 ws['A2'].font = font_sub_title
                 ws['A2'].alignment = Alignment(horizontal='center', vertical='center')
                 ws.row_dimensions[2].height = 16
 
                 # Ligne 3 : Titre du document / Synthèse
-                ws.merge_cells('A3:F3')
+                ws.merge_cells('A3:G3')
                 ws['A3'] = f"SYNTHÈSE DES ESSAIS D'IDENTIFICATION — {selected_mat_sub.upper()} (Période: {filtre_mois})"
                 ws['A3'].font = font_section
                 ws['A3'].alignment = Alignment(horizontal='center', vertical='center')
@@ -652,11 +658,12 @@ def show(supabase_client):
                 # Ligne 4 : Ligne vide de séparation
                 ws.row_dimensions[4].height = 8
 
-                # Ligne 5 : En-têtes du tableau de données
+                # Ligne 5 : En-têtes du tableau de données avec "Nombre d'essais"
                 start_row = 5
                 headers = [
                     "N° Rapport", 
                     "Date de prélèvement", 
+                    "Nombre d'essais",
                     "Lieu / Zone", 
                     "Provenance d'échantillon", 
                     "Classification GTR", 
@@ -676,13 +683,14 @@ def show(supabase_client):
                 for r_idx, row_dict in enumerate(export_rows):
                     ws.cell(row=current_row, column=1, value=row_dict.get("N° Rapport")).alignment = Alignment(horizontal='center', vertical='center')
                     ws.cell(row=current_row, column=2, value=row_dict.get("Date de prélèvement")).alignment = Alignment(horizontal='center', vertical='center')
-                    ws.cell(row=current_row, column=3, value=row_dict.get("Lieu / Zone")).alignment = Alignment(horizontal='left', vertical='center')
-                    ws.cell(row=current_row, column=4, value=row_dict.get("Provenance d'échantillon")).alignment = Alignment(horizontal='left', vertical='center')
-                    ws.cell(row=current_row, column=5, value=row_dict.get("Classification GTR")).alignment = Alignment(horizontal='center', vertical='center')
-                    ws.cell(row=current_row, column=6, value=row_dict.get("Observation")).alignment = Alignment(horizontal='left', vertical='center')
+                    ws.cell(row=current_row, column=3, value=row_dict.get("Nombre d'essais")).alignment = Alignment(horizontal='center', vertical='center')
+                    ws.cell(row=current_row, column=4, value=row_dict.get("Lieu / Zone")).alignment = Alignment(horizontal='left', vertical='center')
+                    ws.cell(row=current_row, column=5, value=row_dict.get("Provenance d'échantillon")).alignment = Alignment(horizontal='left', vertical='center')
+                    ws.cell(row=current_row, column=6, value=row_dict.get("Classification GTR")).alignment = Alignment(horizontal='center', vertical='center')
+                    ws.cell(row=current_row, column=7, value=row_dict.get("Observation")).alignment = Alignment(horizontal='left', vertical='center')
 
                     row_fill = fill_zebra if r_idx % 2 == 1 else fill_white
-                    for col_num in range(1, 7):
+                    for col_num in range(1, 8):
                         c = ws.cell(row=current_row, column=col_num)
                         c.font = font_data
                         c.fill = row_fill
@@ -691,12 +699,30 @@ def show(supabase_client):
                     ws.row_dimensions[current_row].height = 20
                     current_row += 1
 
+                # Ligne de total en bas du tableau Excel
+                total_row_idx = current_row
+                ws.cell(row=total_row_idx, column=1, value="TOTAL GENERAL").font = Font(name="Helvetica", size=9, bold=True)
+                ws.cell(row=total_row_idx, column=1).alignment = Alignment(horizontal='center', vertical='center')
+                ws.merge_cells(start_row=total_row_idx, start_column=1, end_row=total_row_idx, end_column=2)
+                
+                cell_tot_val = ws.cell(row=total_row_idx, column=3, value=f"=SUM(C{start_row+1}:C{total_row_idx-1})")
+                cell_tot_val.font = Font(name="Helvetica", size=9, bold=True)
+                cell_tot_val.alignment = Alignment(horizontal='center', vertical='center')
+
+                for col_num in range(1, 8):
+                    c = ws.cell(row=total_row_idx, column=col_num)
+                    c.border = border_thin
+                    if col_num > 3:
+                        c.value = ""
+
+                ws.row_dimensions[total_row_idx].height = 22
+
                 # Ajustement automatique des largeurs de colonnes
                 for col in ws.columns:
                     max_len = 0
                     col_letter = openpyxl.utils.get_column_letter(col[0].column)
                     for cell in col:
-                        if cell.row >= start_row:
+                        if cell.row >= start_row and cell.row <= total_row_idx:
                             val_str = str(cell.value or "")
                             if len(val_str) > max_len:
                                 max_len = len(val_str)
