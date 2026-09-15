@@ -512,7 +512,7 @@ def show(supabase_client):
                     c_info1, c_info2 = f_st.columns(2)
                     with c_info1:
                         f_st.write(f"**Lieu / Zone :** {row.get('lieu')}")
-                        f_st.write(f"**PK / Section :** {row.get('pk')}")
+                        f_st.write(f"**Provenance d'échantillon :** {row.get('pk')}")
                     with c_info2:
                         f_st.write(f"**Observation :** {row.get('observation')}")
                         f_st.write(f"**Date d'essai :** {row.get('date_essai')}")
