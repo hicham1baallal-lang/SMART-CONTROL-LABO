@@ -4,6 +4,8 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import openpyxl
+from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 import streamlit as f_st
 from fpdf import FPDF
 
@@ -538,17 +540,14 @@ def show(supabase_client):
         if data_to_use:
             df_s = pd.DataFrame(data_to_use)
             
-            # Filtrer par sous-type de matériau actuel
             if "type_materiau" in df_s.columns:
                 df_s = df_s[df_s["type_materiau"].str.lower() == selected_mat_sub.lower()]
 
             if df_s.empty:
                 f_st.info(f"Aucune donnée disponible pour le matériau : **{selected_mat_sub}**.")
             else:
-                # Ajout de colonnes formatées pour les filtres et l'export
                 df_s["date_essai_dt"] = pd.to_datetime(df_s["date_essai"], errors="coerce")
                 
-                # Dictionnaire des mois en français
                 mois_fr = {
                     1: "janvier", 2: "février", 3: "mars", 4: "avril", 5: "mai", 6: "juin",
                     7: "juillet", 8: "août", 9: "septembre", 10: "octobre", 11: "novembre", 12: "décembre"
@@ -561,7 +560,6 @@ def show(supabase_client):
 
                 df_s["Mois_Annee"] = df_s["date_essai_dt"].apply(get_mois_Annee)
 
-                # --- FILTRE MENSUEL ---
                 f_st.markdown("#### 📅 Filtres de Synthèse")
                 mois_disponibles = sorted(df_s["Mois_Annee"].unique().tolist())
                 options_filtre = ["Tous les mois"] + [m for m in mois_disponibles if m != "Inconnu"]
@@ -570,7 +568,6 @@ def show(supabase_client):
                 with col_f1:
                     filtre_mois = f_st.selectbox("Filtrer par mois de prélèvement", options=options_filtre, key="select_filtre_mois")
 
-                # Appliquer le filtre mensuel
                 if filtre_mois != "Tous les mois":
                     df_filtered = df_s[df_s["Mois_Annee"] == filtre_mois]
                 else:
@@ -585,8 +582,7 @@ def show(supabase_client):
                 f_st.markdown("#### Aperçu du tableau filtré")
                 f_st.dataframe(df_filtered, use_container_width=True)
 
-                # --- CONSTRUCTION DU FICHIER EXCEL EXPLICITE ---
-                # Extraction des colonnes requises : Date de prélèvement, Lieu / Zone, Provenance, et Classification GTR
+                # --- CONSTRUCTION DE L'EXCEL STYLÉ PROFESSIONNEL AVEC OPENPYXL ---
                 export_rows = []
                 for _, row in df_filtered.iterrows():
                     details = row.get("details", {})
@@ -602,17 +598,117 @@ def show(supabase_client):
                         "Observation": row.get("observation")
                     })
 
-                df_export = pd.DataFrame(export_rows)
-
                 excel_buf = io.BytesIO()
-                with pd.ExcelWriter(excel_buf, engine='openpyxl') as w:
-                    df_export.to_excel(w, index=False, sheet_name='Synthese_Identification')
+                wb = openpyxl.Workbook()
+                ws = wb.active
+                ws.title = "Synthèse Identification"
+
+                # Configuration impression Portrait A4
+                ws.page_setup.orientation = ws.ORIENTATION_PORTRAIT
+                ws.page_setup.paperSize = ws.PAPERSIZE_A4
+                ws.sheet_properties.pageSetUpPr.fitToPage = True
+                ws.page_setup.fitToWidth = 1
+                ws.page_setup.fitToHeight = 0
+
+                # Styles graphiques professionnels
+                font_main_title = Font(name="Helvetica", size=11, bold=True, color="003366")
+                font_sub_title = Font(name="Helvetica", size=9, italic=True, color="333333")
+                font_section = Font(name="Helvetica", size=10, bold=True, color="000000")
+                font_tbl_header = Font(name="Helvetica", size=10, bold=True, color="FFFFFF")
+                font_data = Font(name="Helvetica", size=9, color="000000")
+
+                fill_tbl_header = PatternFill(start_color="003366", end_color="003366", fill_type="solid") # Bleu LPEE
+                fill_zebra = PatternFill(start_color="F2F5F9", end_color="F2F5F9", fill_type="solid")
+                fill_white = PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid")
+
+                border_thin = Border(
+                    left=Side(style='thin', color='CCCCCC'),
+                    right=Side(style='thin', color='CCCCCC'),
+                    top=Side(style='thin', color='CCCCCC'),
+                    bottom=Side(style='thin', color='CCCCCC')
+                )
+
+                # Ligne 1 : En-tête LPEE institutionnel
+                ws.merge_cells('A1:F1')
+                ws['A1'] = "L.P.E.E - LABORATOIRE PUBLIC DES ESSAIS ET D'ETUDES"
+                ws['A1'].font = font_main_title
+                ws['A1'].alignment = Alignment(horizontal='center', vertical='center')
+                ws.row_dimensions[1].height = 20
+
+                # Ligne 2 : Centre technique
+                ws.merge_cells('A2:F2')
+                ws['A2'] = "Centre Technique Régional CASA-SETTAT-BENI MELLAL"
+                ws['A2'].font = font_sub_title
+                ws['A2'].alignment = Alignment(horizontal='center', vertical='center')
+                ws.row_dimensions[2].height = 16
+
+                # Ligne 3 : Titre du document / Synthèse
+                ws.merge_cells('A3:F3')
+                ws['A3'] = f"SYNTHÈSE DES ESSAIS D'IDENTIFICATION — {selected_mat_sub.upper()} (Période: {filtre_mois})"
+                ws['A3'].font = font_section
+                ws['A3'].alignment = Alignment(horizontal='center', vertical='center')
+                ws.row_dimensions[3].height = 22
+
+                # Ligne 4 : Ligne vide de séparation
+                ws.row_dimensions[4].height = 8
+
+                # Ligne 5 : En-têtes du tableau de données
+                start_row = 5
+                headers = [
+                    "N° Rapport", 
+                    "Date de prélèvement", 
+                    "Lieu / Zone", 
+                    "Provenance d'échantillon", 
+                    "Classification GTR", 
+                    "Observation"
+                ]
+
+                for col_num, h_text in enumerate(headers, 1):
+                    cell = ws.cell(row=start_row, column=col_num, value=h_text)
+                    cell.font = font_tbl_header
+                    cell.fill = fill_tbl_header
+                    cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+                    cell.border = border_thin
+                ws.row_dimensions[start_row].height = 25
+
+                # Remplissage des données avec zébrage
+                current_row = start_row + 1
+                for r_idx, row_dict in enumerate(export_rows):
+                    ws.cell(row=current_row, column=1, value=row_dict.get("N° Rapport")).alignment = Alignment(horizontal='center', vertical='center')
+                    ws.cell(row=current_row, column=2, value=row_dict.get("Date de prélèvement")).alignment = Alignment(horizontal='center', vertical='center')
+                    ws.cell(row=current_row, column=3, value=row_dict.get("Lieu / Zone")).alignment = Alignment(horizontal='left', vertical='center')
+                    ws.cell(row=current_row, column=4, value=row_dict.get("Provenance d'échantillon")).alignment = Alignment(horizontal='left', vertical='center')
+                    ws.cell(row=current_row, column=5, value=row_dict.get("Classification GTR")).alignment = Alignment(horizontal='center', vertical='center')
+                    ws.cell(row=current_row, column=6, value=row_dict.get("Observation")).alignment = Alignment(horizontal='left', vertical='center')
+
+                    row_fill = fill_zebra if r_idx % 2 == 1 else fill_white
+                    for col_num in range(1, 7):
+                        c = ws.cell(row=current_row, column=col_num)
+                        c.font = font_data
+                        c.fill = row_fill
+                        c.border = border_thin
+                    
+                    ws.row_dimensions[current_row].height = 20
+                    current_row += 1
+
+                # Ajustement automatique des largeurs de colonnes
+                for col in ws.columns:
+                    max_len = 0
+                    col_letter = openpyxl.utils.get_column_letter(col[0].column)
+                    for cell in col:
+                        if cell.row >= start_row:
+                            val_str = str(cell.value or "")
+                            if len(val_str) > max_len:
+                                max_len = len(val_str)
+                    ws.column_dimensions[col_letter].width = max(max_len + 4, 16)
+
+                wb.save(excel_buf)
                 excel_buf.seek(0)
                 
                 f_st.download_button(
-                    label=f"📥 Télécharger la synthèse Excel ({selected_mat_sub} - {filtre_mois})",
+                    label=f"📥 Télécharger la synthèse Excel formatée (A4 Portrait) — {selected_mat_sub}",
                     data=excel_buf,
-                    file_name=f"synthese_{selected_mat_sub.replace(' ', '_')}_{filtre_mois.replace(' ', '_')}.xlsx",
+                    file_name=f"Synthese_LPEE_{selected_mat_sub.replace(' ', '_')}_{filtre_mois.replace(' ', '_')}.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     type="primary",
                     use_container_width=True
