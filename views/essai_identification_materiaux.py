@@ -226,7 +226,8 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
         pdf.cell(60, 5, f" {label}", 1, 0, "L")
         pdf.cell(130, 5, str(value), 1, 1, "C")
 
-    _row("%< 80 µm", data_dict.get('Passant 80um (%)', data_dict.get('Passant 80µm (%)', '22,3')))
+    _row("%< 80 µm" if family == "REMBLAI" else "%< 0,063 mm",
+         data_dict.get('Passant Fines (%)', data_dict.get('Passant 80um (%)', data_dict.get('Passant 80µm (%)', '22,3'))))
     _row("%< 2 mm", data_dict.get('Passant 2mm (%)', '66'))
     _row("%< 50 mm", data_dict.get('Passant 50mm (%)', '100'))
     _row("D MAX", data_dict.get('Dmax (mm)', '50'))
@@ -352,131 +353,195 @@ def show(supabase_client):
         f_st.markdown("---")
         
         f_st.markdown("### 📄 Feuille d'Analyse Granulométrique & Propriétés physiques")
-        
-        col_e1, col_e2, col_e3, col_e4 = f_st.columns(4)
-        with col_e1:
-            m1_val = f_st.number_input("Masse totale M1 (g)", value=14000.0, step=0.1, disabled=not user_can_edit)
-        with col_e2:
-            m2_val = f_st.number_input("Masse sèche étuve M2 (g)", value=13500.0, step=0.1, disabled=not user_can_edit)
-        with col_e3:
-            m3_val = f_st.number_input("Masse après lavage M3 (g)", value=11200.0, step=0.1, disabled=not user_can_edit)
-        with col_e4:
-            m4_val = f_st.number_input("Prise tamisage M4 (g)", value=2000.0, step=1.0, disabled=not user_can_edit)
 
-        f_st.markdown("#### Tableau de Tamisage & Refus")
-        default_sieves_desc = [
-            (80, 0.0, 0.0), (63, 0.0, 0.0), (50, 0.0, 0.0), (40, 2500.0, 0.0),
-            (31.5, 3800.0, 0.0), (25, 4500.0, 0.0), (20, 5200.0, 0.0), (16, 5800.0, 0.0),
-            (12.5, 6200.0, 0.0), (10, 6500.0, 0.0),
-            (8, 0.0, 80.0), (6.3, 0.0, 160.0), (5, 0.0, 210.0), (4, 0.0, 260.0),
-            (3.15, 0.0, 310.0), (2.5, 0.0, 350.0), (2, 0.0, 400.0), (1.6, 0.0, 450.0),
-            (1.25, 0.0, 500.0), (1, 0.0, 550.0), (0.8, 0.0, 600.0), (0.63, 0.0, 650.0),
-            (0.5, 0.0, 700.0), (0.4, 0.0, 780.0), (0.315, 0.0, 900.0), (0.25, 0.0, 1100.0),
-            (0.2, 0.0, 1300.0), (0.16, 0.0, 1500.0), (0.1, 0.0, 1700.0), (0.08, 0.0, 1850.0)
-        ]
-        df_template = pd.DataFrame(default_sieves_desc, columns=["Tamis (mm)", "R_i (g) [≥10mm]", "r_i (g) [<10mm]"])
-        
-        col_main_tbl, col_params_right = f_st.columns([1.3, 0.9])
-        
-        with col_main_tbl:
-            edited_sieve_df = f_st.data_editor(
-                df_template,
-                disabled=["Tamis (mm)"] if not user_can_edit else [],
-                use_container_width=True,
-                height=500,
-                key=f"sieve_editor_{mat_code}"
-            )
+        ecart_tamisage_txt = ""
 
-        try:
-            row_10 = edited_sieve_df[np.isclose(edited_sieve_df["Tamis (mm)"].astype(float), 10.0, atol=1e-3)]
-            re_val_calc = float(row_10["R_i (g) [≥10mm]"].values[0]) if not row_10.empty else 6500.0
-        except Exception:
-            re_val_calc = 6500.0
-        me_val_calc = m3_val - re_val_calc
+        if mat_config["family"] == "REMBLAI":
+            # =====================================================================
+            # MOTEUR 1 : NM 00.8.082 (sols) — tamisage/sédimentation avec prise
+            # réduite Me pour la fraction fine, contrôle de bilan massique M6.
+            # =====================================================================
+            f_st.caption("Méthode NM 00.8.082 (sols) — tamisage + sédimentation, prise réduite Me pour la fraction fine")
 
-        with col_params_right:
-            f_st.markdown("##### ⚙️ Caractéristiques, Limites & Paramètres Spécifiques")
-            re_val = f_st.number_input("Refus R_e (10mm) (g)", value=re_val_calc, disabled=True, key=f"re_10mm_mat_{mat_code}")
-            me_val = f_st.number_input("Prise Me (g) [M3-Re]", value=me_val_calc, disabled=True, key=f"me_val_mat_{mat_code}")
-            
-            fond_tamis_val = f_st.number_input("Fond de tamis (g)", value=1.4, step=0.1, disabled=not user_can_edit, key=f"fond_tamis_{mat_code}")
-            
-            # Calcul automatique de M5 (Refus du tamis 0.08 mm + Fond de tamis)
+            col_e1, col_e2, col_e3, col_e4 = f_st.columns(4)
+            with col_e1:
+                m1_val = f_st.number_input("Masse totale M1 (g)", value=14000.0, step=0.1, disabled=not user_can_edit, key=f"m1_{mat_code}")
+            with col_e2:
+                m2_val = f_st.number_input("Masse sèche étuve M2 (g)", value=13500.0, step=0.1, disabled=not user_can_edit, key=f"m2_{mat_code}")
+            with col_e3:
+                m3_val = f_st.number_input("Masse après lavage M3 (g)", value=11200.0, step=0.1, disabled=not user_can_edit, key=f"m3_{mat_code}")
+            with col_e4:
+                m4_val = f_st.number_input("Prise tamisage M4 (g)", value=2000.0, step=1.0, disabled=not user_can_edit, key=f"m4_{mat_code}")
+
+            f_st.markdown("#### Tableau de Tamisage & Refus")
+            default_sieves_desc = [
+                (80, 0.0, 0.0), (63, 0.0, 0.0), (50, 0.0, 0.0), (40, 2500.0, 0.0),
+                (31.5, 3800.0, 0.0), (25, 4500.0, 0.0), (20, 5200.0, 0.0), (16, 5800.0, 0.0),
+                (12.5, 6200.0, 0.0), (10, 6500.0, 0.0),
+                (8, 0.0, 80.0), (6.3, 0.0, 160.0), (5, 0.0, 210.0), (4, 0.0, 260.0),
+                (3.15, 0.0, 310.0), (2.5, 0.0, 350.0), (2, 0.0, 400.0), (1.6, 0.0, 450.0),
+                (1.25, 0.0, 500.0), (1, 0.0, 550.0), (0.8, 0.0, 600.0), (0.63, 0.0, 650.0),
+                (0.5, 0.0, 700.0), (0.4, 0.0, 780.0), (0.315, 0.0, 900.0), (0.25, 0.0, 1100.0),
+                (0.2, 0.0, 1300.0), (0.16, 0.0, 1500.0), (0.1, 0.0, 1700.0), (0.08, 0.0, 1850.0)
+            ]
+            df_template = pd.DataFrame(default_sieves_desc, columns=["Tamis (mm)", "R_i (g) [≥10mm]", "r_i (g) [<10mm]"])
+
+            col_main_tbl, col_params_right = f_st.columns([1.3, 0.9])
+
+            with col_main_tbl:
+                edited_sieve_df = f_st.data_editor(
+                    df_template,
+                    disabled=["Tamis (mm)"] if not user_can_edit else [],
+                    use_container_width=True,
+                    height=500,
+                    key=f"sieve_editor_{mat_code}"
+                )
+
             try:
-                row_008 = edited_sieve_df[np.isclose(edited_sieve_df["Tamis (mm)"].astype(float), 0.08, atol=1e-3)]
-                r_008_val = float(row_008["r_i (g) [<10mm]"].values[0]) if not row_008.empty else 1850.0
+                row_10 = edited_sieve_df[np.isclose(edited_sieve_df["Tamis (mm)"].astype(float), 10.0, atol=1e-3)]
+                re_val_calc = float(row_10["R_i (g) [≥10mm]"].values[0]) if not row_10.empty else 6500.0
             except Exception:
-                r_008_val = 1850.0
-            
-            m5_calc = r_008_val + fond_tamis_val
-            
-            m5_val = f_st.number_input("M5 (Total refus et passant sur 80µm)", value=m5_calc, disabled=True, key=f"m5_auto_val_{mat_code}")
-            
-            w_opt = f_st.number_input("Proctor Wopt (%)", value=13.2, step=0.5, disabled=not user_can_edit, key=f"wopt_{mat_code}")
-            dens_val = f_st.number_input("Proctor Densité OPN", value=1.73, step=0.01, disabled=not user_can_edit, key=f"dens_{mat_code}")
+                re_val_calc = 6500.0
+            me_val_calc = m3_val - re_val_calc
 
-            # --- Essais spécifiques : dépendent de la famille du matériau ---
-            ip = 0.0
-            vbs_val = 0.0
-            la_val = 0.0
-            mde_val = 0.0
-            coeff_apl_val = 0.0
-            es_val = 0.0
+            with col_params_right:
+                f_st.markdown("##### ⚙️ Caractéristiques, Limites & Paramètres Spécifiques")
+                re_val = f_st.number_input("Refus R_e (10mm) (g)", value=re_val_calc, disabled=True, key=f"re_10mm_mat_{mat_code}")
+                me_val = f_st.number_input("Prise Me (g) [M3-Re]", value=me_val_calc, disabled=True, key=f"me_val_mat_{mat_code}")
 
-            if mat_config["family"] == "REMBLAI":
-                f_st.markdown(f"###### Essais spécifiques — {mat_code} (Remblai / GTR)")
+                fond_tamis_val = f_st.number_input("Fond de tamis (g)", value=1.4, step=0.1, disabled=not user_can_edit, key=f"fond_tamis_{mat_code}")
+
+                try:
+                    row_008 = edited_sieve_df[np.isclose(edited_sieve_df["Tamis (mm)"].astype(float), 0.08, atol=1e-3)]
+                    r_008_val = float(row_008["r_i (g) [<10mm]"].values[0]) if not row_008.empty else 1850.0
+                except Exception:
+                    r_008_val = 1850.0
+
+                m5_calc = r_008_val + fond_tamis_val
+                m5_val = f_st.number_input("M5 (Total refus et passant sur 80µm)", value=m5_calc, disabled=True, key=f"m5_auto_val_{mat_code}")
+
+                w_opt = f_st.number_input("Proctor Wopt (%)", value=13.2, step=0.5, disabled=not user_can_edit, key=f"wopt_{mat_code}")
+                dens_val = f_st.number_input("Proctor Densité OPN", value=1.73, step=0.01, disabled=not user_can_edit, key=f"dens_{mat_code}")
+
                 ip = f_st.number_input("Indice de Plasticité (IP)", value=12.0, step=0.5, disabled=not user_can_edit, key=f"ip_{mat_code}")
                 vbs_val = f_st.number_input("VBS (Bleu de Méthylène)", value=1.45, step=0.01, format="%.2f", disabled=not user_can_edit, key=f"vbs_{mat_code}")
-            else:
+                la_val = mde_val = coeff_apl_val = es_val = 0.0
+
+                a_factor = me_val / m4_val if m4_val > 0 else 0
+                m6_val = (a_factor * m5_val) + re_val
+                validation_m6 = 100.0 * (m3_val - m6_val) / m3_val if m3_val > 0 else 0.0
+
+                f_st.markdown(
+                    f"""
+                    <div style="background-color: #f0f2f6; padding: 10px; border-radius: 6px; font-size: 0.85em;">
+                        <b>Facteur a (Me/M4)</b> : {a_factor:.4f}<br>
+                        <b>M6 (Masse tamisat)</b> : {m6_val:.2f} g<br>
+                        <b>Contrôle 100(M3-M6)/M3</b> : {validation_m6:.2f}% (doit être &lt;2%)<br>
+                        <b>Proctor Wopt</b> : {w_opt:.1f}%<br>
+                        <b>Indice de Plasticité (IP)</b> : {ip:.1f}%<br>
+                        <b>VBS</b> : {vbs_val:.2f}<br>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+
+            work_df = edited_sieve_df.sort_values(by="Tamis (mm)", ascending=False).reset_index(drop=True)
+            cum_refus_list = []
+            for idx, row in work_df.iterrows():
+                sz = row["Tamis (mm)"]
+                r_i_val = row["R_i (g) [≥10mm]"]
+                r_fine_val = row["r_i (g) [<10mm]"]
+                if sz >= 10:
+                    cum_val = r_i_val
+                else:
+                    cum_val = (r_fine_val * a_factor) + re_val
+                cum_refus_list.append(cum_val)
+
+            work_df["Refus Cumulé R (g)"] = np.round(cum_refus_list, 1)
+            work_df["% Refus Cumulé"] = np.round((work_df["Refus Cumulé R (g)"] / m2_val) * 100.0, 1) if m2_val > 0 else 0.0
+            work_df["% Passant"] = np.round(100.0 - work_df["% Refus Cumulé"], 1)
+            result_df = work_df.copy()
+
+            fine_sieve_ref = 0.08
+            fine_sieve_label = "80 µm"
+
+        else:
+            # =====================================================================
+            # MOTEUR 2 : NM EN 933-1 (granulats) — tamisage à sec après un seul
+            # lavage sur le tamis 0,063 mm, sans prise réduite ni sédimentation.
+            # =====================================================================
+            f_st.caption("Méthode NM EN 933-1 (granulats) — tamisage à sec après lavage sur le tamis 0,063 mm")
+
+            col_e1, col_e2 = f_st.columns(2)
+            with col_e1:
+                m1_val = f_st.number_input("Masse sèche avant lavage M1 (g)", value=5000.0, step=0.1, disabled=not user_can_edit, key=f"m1g_{mat_code}")
+            with col_e2:
+                m2_val = f_st.number_input("Masse sèche après lavage 0,063mm M2 (g)", value=4850.0, step=0.1, disabled=not user_can_edit, key=f"m2g_{mat_code}")
+
+            f_st.markdown("#### Tableau de Tamisage à sec — Refus partiels")
+            TAMIS_GRAVE_MM = [63, 50, 40, 31.5, 20, 10, 6.3, 4, 2, 1, 0.5, 0.25, 0.125, 0.063]
+            df_template_grave = pd.DataFrame({
+                "Tamis (mm)": TAMIS_GRAVE_MM,
+                "Refus partiel Ri (g)": [0.0] * len(TAMIS_GRAVE_MM)
+            })
+
+            col_main_tbl, col_params_right = f_st.columns([1.3, 0.9])
+            with col_main_tbl:
+                edited_sieve_df = f_st.data_editor(
+                    df_template_grave,
+                    disabled=["Tamis (mm)"] if not user_can_edit else [],
+                    use_container_width=True,
+                    height=500,
+                    key=f"sieve_editor_{mat_code}"
+                )
+
+            with col_params_right:
+                f_st.markdown("##### ⚙️ Caractéristiques, Limites & Paramètres Spécifiques")
+                fines_lavage_g = m1_val - m2_val
+                pct_fines_lavage = 100.0 * fines_lavage_g / m1_val if m1_val > 0 else 0.0
+                f_st.metric("Fines < 0,063mm (par lavage)", f"{pct_fines_lavage:.1f} %")
+
+                w_opt = f_st.number_input("Proctor Wopt (%)", value=6.0, step=0.5, disabled=not user_can_edit, key=f"wopt_{mat_code}")
+                dens_val = f_st.number_input("Proctor Densité OPN", value=2.10, step=0.01, disabled=not user_can_edit, key=f"dens_{mat_code}")
+
                 f_st.markdown(f"###### Essais spécifiques — {mat_code} (Grave non traitée)")
                 la_val = f_st.number_input("Los Angeles LA (%)", value=22.0, step=0.5, disabled=not user_can_edit, key=f"la_{mat_code}")
                 mde_val = f_st.number_input("Micro-Deval MDE (%)", value=15.0, step=0.5, disabled=not user_can_edit, key=f"mde_{mat_code}")
                 coeff_apl_val = f_st.number_input("Coefficient d'aplatissement (%)", value=18.0, step=0.5, disabled=not user_can_edit, key=f"apl_{mat_code}")
                 es_val = f_st.number_input("Équivalent de Sable ES (%)", value=45.0, step=0.5, disabled=not user_can_edit, key=f"es_{mat_code}")
                 ip = f_st.number_input("Indice de Plasticité (IP)", value=0.0, step=0.5, disabled=not user_can_edit, key=f"ip_{mat_code}")
+                vbs_val = 0.0
                 if mat_config["has_vbs"]:
                     vbs_val = f_st.number_input("VBS (Bleu de Méthylène)", value=0.5, step=0.01, format="%.2f", disabled=not user_can_edit, key=f"vbs_{mat_code}")
 
-            a_factor = me_val / m4_val if m4_val > 0 else 0
-            m6_val = (a_factor * m5_val) + re_val
-            validation_m6 = 100.0 * (m3_val - m6_val) / m3_val if m3_val > 0 else 0.0
+            work_df = edited_sieve_df.sort_values(by="Tamis (mm)", ascending=False).reset_index(drop=True)
+            work_df["Refus Cumulé R (g)"] = np.round(work_df["Refus partiel Ri (g)"].cumsum(), 1)
+            work_df["% Refus Cumulé"] = np.round((work_df["Refus Cumulé R (g)"] / m1_val) * 100.0, 1) if m1_val > 0 else 0.0
+            work_df["% Passant"] = np.round(100.0 - work_df["% Refus Cumulé"], 1)
+            result_df = work_df.copy()
 
-            info_html = f"""
+            somme_ri = float(edited_sieve_df["Refus partiel Ri (g)"].sum())
+            ecart_tamisage = 100.0 * abs(m2_val - somme_ri) / m2_val if m2_val > 0 else 0.0
+            ecart_ok = "OK (<1%)" if ecart_tamisage <= 1.0 else "Hors tolérance (>1%)"
+            ecart_tamisage_txt = f" | Écart tamisage (ΣRi vs M2) : **{ecart_tamisage:.2f}%** {ecart_ok}"
+
+            f_st.markdown(
+                f"""
                 <div style="background-color: #f0f2f6; padding: 10px; border-radius: 6px; font-size: 0.85em;">
-                    <b>Facteur a (Me/M4)</b> : {a_factor:.4f}<br>
-                    <b>M6 (Masse tamisat)</b> : {m6_val:.2f} g<br>
-                    <b>Contrôle 100(M3-M6)/M3</b> : {validation_m6:.2f}% (doit être &lt;2%)<br>
+                    <b>Fines &lt; 0,063mm (lavage)</b> : {pct_fines_lavage:.1f}%<br>
+                    <b>Σ Refus partiels (tamisage à sec)</b> : {somme_ri:.1f} g (à comparer à M2 = {m2_val:.1f} g)<br>
+                    <b>Écart de tamisage</b> : {ecart_tamisage:.2f}% (doit être &lt;1%)<br>
                     <b>Proctor Wopt</b> : {w_opt:.1f}%<br>
-            """
-            if mat_config["family"] == "REMBLAI":
-                info_html += f"<b>Indice de Plasticité (IP)</b> : {ip:.1f}%<br><b>VBS</b> : {vbs_val:.2f}<br>"
-            else:
-                info_html += f"<b>LA</b> : {la_val:.1f}% &nbsp; | &nbsp; <b>MDE</b> : {mde_val:.1f}%<br>"
-                info_html += f"<b>Coef. Aplatissement</b> : {coeff_apl_val:.1f}% &nbsp; | &nbsp; <b>ES</b> : {es_val:.1f}%<br>"
-                if mat_config["has_vbs"]:
-                    info_html += f"<b>VBS</b> : {vbs_val:.2f}<br>"
-            info_html += "</div>"
+                    <b>LA</b> : {la_val:.1f}% &nbsp; | &nbsp; <b>MDE</b> : {mde_val:.1f}%<br>
+                    <b>Coef. Aplatissement</b> : {coeff_apl_val:.1f}% &nbsp; | &nbsp; <b>ES</b> : {es_val:.1f}%
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
 
-            f_st.markdown(info_html, unsafe_allow_html=True)
-
-        work_df = edited_sieve_df.sort_values(by="Tamis (mm)", ascending=False).reset_index(drop=True)
-        cum_refus_list = []
-        
-        for idx, row in work_df.iterrows():
-            sz = row["Tamis (mm)"]
-            r_i_val = row["R_i (g) [≥10mm]"]
-            r_fine_val = row["r_i (g) [<10mm]"]
-            if sz >= 10:
-                cum_val = r_i_val
-            else:
-                cum_val = (r_fine_val * a_factor) + re_val
-            cum_refus_list.append(cum_val)
-        
-        work_df["Refus Cumulé R (g)"] = np.round(cum_refus_list, 1)
-        work_df["% Refus Cumulé"] = np.round((work_df["Refus Cumulé R (g)"] / m2_val) * 100.0, 1) if m2_val > 0 else 0.0
-        work_df["% Passant"] = np.round(100.0 - work_df["% Refus Cumulé"], 1)
-
-        result_df = work_df.copy()
+            m3_val = m4_val = m5_val = m6_val = fond_tamis_val = 0.0
+            fine_sieve_ref = 0.063
+            fine_sieve_label = "0,063 mm"
 
         f_st.markdown("#### Courbe Granulométrique & Résultats")
         col_tbl_res, col_plt = f_st.columns([1.1, 0.9])
@@ -485,10 +550,10 @@ def show(supabase_client):
         with col_plt:
             fig, ax = plt.subplots(figsize=(7.0, 6.2))
             plot_curve_df = result_df.sort_values(by="Tamis (mm)", ascending=True).reset_index(drop=True)
-            
+
             x_indices = np.arange(len(plot_curve_df))
             sieve_values = plot_curve_df["Tamis (mm)"].values
-            
+
             ticks_positions = []
             ticks_labels = []
             for idx, (x_pos, t_val) in enumerate(zip(x_indices, sieve_values)):
@@ -508,42 +573,46 @@ def show(supabase_client):
             ax.grid(True, which="both", linestyle=":", alpha=0.6)
             ax.legend(loc="lower right")
             fig.tight_layout()
-            
+
             temp_curve_path = "temp_granulometrie.png"
             fig.savefig(temp_curve_path, dpi=200)
-            
+
             f_st.pyplot(fig, use_container_width=True)
             plt.close(fig)
 
-        dmax_detected = float(result_df[(result_df["R_i (g) [≥10mm]"] > 0) | (result_df["r_i (g) [<10mm]"] > 0)]["Tamis (mm)"].max()) if any((result_df["R_i (g) [≥10mm]"] > 0) | (result_df["r_i (g) [<10mm]"] > 0)) else 50.0
-        row_80um = result_df[result_df["Tamis (mm)"] == 0.08]
-        pass_80um_val = float(row_80um["% Passant"].values[0]) if not row_80um.empty else 22.3
+        if mat_config["family"] == "REMBLAI":
+            dmax_detected = float(result_df[(result_df["R_i (g) [≥10mm]"] > 0) | (result_df["r_i (g) [<10mm]"] > 0)]["Tamis (mm)"].max()) if any((result_df["R_i (g) [≥10mm]"] > 0) | (result_df["r_i (g) [<10mm]"] > 0)) else 50.0
+        else:
+            dmax_detected = float(result_df[result_df["Refus partiel Ri (g)"] > 0]["Tamis (mm)"].max()) if any(result_df["Refus partiel Ri (g)"] > 0) else 40.0
 
-        row_2mm = result_df[result_df["Tamis (mm)"] == 2.0]
+        row_fine = result_df[np.isclose(result_df["Tamis (mm)"].astype(float), fine_sieve_ref, atol=1e-3)]
+        pass_fines_val = float(row_fine["% Passant"].values[0]) if not row_fine.empty else 22.3
+
+        row_2mm = result_df[np.isclose(result_df["Tamis (mm)"].astype(float), 2.0, atol=1e-3)]
         pass_2mm_val = float(row_2mm["% Passant"].values[0]) if not row_2mm.empty else 66.0
 
         row_50mm = result_df[np.isclose(result_df["Tamis (mm)"].astype(float), 50.0, atol=1e-3)]
         pass_50mm_val = float(row_50mm["% Passant"].values[0]) if not row_50mm.empty else 100.0
 
         if mat_config["family"] == "REMBLAI":
-            classe_auto = classer_gtr(dmax_detected, pass_80um_val, ip, vbs_val, pass_2mm_val)
+            classe_auto = classer_gtr(dmax_detected, pass_fines_val, ip, vbs_val, pass_2mm_val)
             f_st.metric(f"Classe GTR (Auto) — {mat_code}", classe_auto)
+            is_conf = pass_fines_val <= 35.0
         else:
-            classe_auto = classer_grave(la_val, mde_val, coeff_apl_val, es_val, pass_80um_val)
+            classe_auto = classer_grave(la_val, mde_val, coeff_apl_val, es_val, pass_fines_val)
             f_st.metric(f"Classification GNT (Auto) — {mat_code}", classe_auto)
+            is_conf = ("Hors classe" not in classe_auto) and ("à vérifier" not in classe_auto)
 
-        is_conf = pass_80um_val <= 35.0
         obs = f"Le matériau peut être utilisé. ({mat_code} - {selected_mat_sub})" if is_conf else f"Non Conforme / Hors fuseau ({mat_code} - {selected_mat_sub})"
-        f_st.info(f"Observation automatique : **{obs}** | Dmax: **{dmax_detected} mm** | Passant 50mm: **{pass_50mm_val:.1f}%** | Passant 80um: **{pass_80um_val:.1f}%**")
+        f_st.info(f"Observation automatique : **{obs}** | Dmax: **{dmax_detected} mm** | Passant 50mm: **{pass_50mm_val:.1f}%** | Passant {fine_sieve_label}: **{pass_fines_val:.1f}%**{ecart_tamisage_txt}")
 
         data_dict = {
             "Code Materiau": mat_code,
             "Sous-Type Matériau": selected_mat_sub,
             "Ref Echantillon": ref_ech,
-            "M1 (g)": f"{m1_val}", "M2 (g)": f"{m2_val}", "M3 (g)": f"{m3_val}", "M4 (g)": f"{m4_val}",
-            "M5 (g)": f"{m5_val:.2f}", "Fond de tamis (g)": f"{fond_tamis_val}", "M6 (g)": f"{m6_val:.2f}",
+            "M1 (g)": f"{m1_val}", "M2 (g)": f"{m2_val}",
             "Dmax (mm)": f"{int(dmax_detected)}", 
-            "Passant 80um (%)": f"{pass_80um_val:.1f}".replace('.', ','), 
+            "Passant Fines (%)": f"{pass_fines_val:.1f}".replace('.', ','), 
             "Passant 2mm (%)": f"{int(pass_2mm_val)}",
             "Passant 50mm (%)": f"{pass_50mm_val:.1f}".replace('.', ','),
             "wL (%)": f"{w_opt:.1f}".replace('.', ','), 
@@ -553,9 +622,15 @@ def show(supabase_client):
         }
 
         if mat_config["family"] == "REMBLAI":
+            data_dict["M3 (g)"] = f"{m3_val}"
+            data_dict["M4 (g)"] = f"{m4_val}"
+            data_dict["M5 (g)"] = f"{m5_val:.2f}"
+            data_dict["Fond de tamis (g)"] = f"{fond_tamis_val}"
+            data_dict["M6 (g)"] = f"{m6_val:.2f}"
             data_dict["IP (%)"] = f"{ip:.1f}".replace('.', ',')
             data_dict["VBS"] = f"{vbs_val:.2f}".replace('.', ',')
         else:
+            data_dict["Ecart Tamisage (%)"] = f"{ecart_tamisage:.2f}".replace('.', ',')
             data_dict["LA (%)"] = f"{la_val:.1f}".replace('.', ',')
             data_dict["MDE (%)"] = f"{mde_val:.1f}".replace('.', ',')
             data_dict["Coefficient Aplatissement (%)"] = f"{coeff_apl_val:.1f}".replace('.', ',')
