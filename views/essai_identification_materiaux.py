@@ -324,18 +324,20 @@ def show(supabase_client):
             
             fond_tamis_val = f_st.number_input("Fond de tamis (g)", value=1.4, step=0.1, disabled=not user_can_edit)
             
-            # Calcul automatique de M5 (Somme des r_i [<10mm] + Fond de tamis)
+            # Calcul automatique de M5 (Refus du tamis 0.08 mm + Fond de tamis)
             try:
-                sum_ri = float(edited_sieve_df["r_i (g) [<10mm]"].sum())
+                row_008 = edited_sieve_df[np.isclose(edited_sieve_df["Tamis (mm)"].astype(float), 0.08, atol=1e-3)]
+                r_008_val = float(row_008["r_i (g) [<10mm]"].values[0]) if not row_008.empty else 1850.0
             except Exception:
-                sum_ri = 0.0
-            m5_calc = sum_ri + fond_tamis_val
+                r_008_val = 1850.0
+            
+            m5_calc = r_008_val + fond_tamis_val
             
             m5_val = f_st.number_input("M5 (Total refus et passant sur 80µm)", value=m5_calc, disabled=True, key="m5_auto_val")
             
-            w_opt = f_st.number_input("Proctor Wopt (%)", value=14.2, step=0.5, disabled=not user_can_edit)
-            ip = f_st.number_input("Indice de Plasticité (IP)", value=4.2, step=0.5, disabled=not user_can_edit)
-            vbs_val = f_st.number_input("VBS (Bleu de Manganèse)", value=0.42, step=0.01, format="%.2f", disabled=not user_can_edit)
+            w_opt = f_st.number_input("Proctor Wopt (%)", value=13.2, step=0.5, disabled=not user_can_edit)
+            ip = f_st.number_input("Indice de Plasticité (IP)", value=12.0, step=0.5, disabled=not user_can_edit)
+            vbs_val = f_st.number_input("VBS (Bleu de Manganèse)", value=1.45, step=0.01, format="%.2f", disabled=not user_can_edit)
             dens_val = f_st.number_input("Proctor Densité OPN", value=1.73, step=0.01, disabled=not user_can_edit)
 
             a_factor = me_val / m4_val if m4_val > 0 else 0
@@ -447,7 +449,6 @@ def show(supabase_client):
         }
 
         if f_st.button("💾 Enregistrer le PV dans l'Historique", type="primary", use_container_width=True, disabled=not user_can_edit):
-            # --- VÉRIFICATION ANTI-DOUBLON DU N° DE RAPPORT ---
             existing_records = _safe_supabase_fetch(supabase_client)
             if not existing_records:
                 existing_records = f_st.session_state["pv_ident_local_db"]
