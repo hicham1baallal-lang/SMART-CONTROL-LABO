@@ -54,24 +54,24 @@ def classer_gtr(dmax, pass_80um, ip, vbs=0.5, pass_2mm=70.0, is_roche=False, roc
 
 class IdentificationPDF(FPDF):
     def header(self):
-        # LOGO PLACÉ SUR LA MÊME LIGNE QUE L'ENTÊTE INSTITUTIONNEL
+        # LOGO PLACÉ SUR LA MÊME LIGNE
         logo_path = "logo.png.jpg"
         if not os.path.exists(logo_path):
             logo_path = "logo.png"
         if os.path.exists(logo_path):
             try:
-                # x=10, y=6 avec une hauteur adaptée pour rester aligné avec le texte
-                self.image(logo_path, 10, 6, 18)
+                self.image(logo_path, 10, 5, 18)
             except Exception:
                 pass
         
-        # ENTÊTE INSTITUTIONNEL (MENTION "LABORATOIRE DU CONTRÔLE EXTERNE" SUPPRIMÉE)
-        self.set_font("Helvetica", "B", 9)
-        self.set_xy(30, 6)
-        self.cell(165, 4, "L.P.E.E - LABORATOIRE PUBLIC DES ESSAIS ET D'ETUDES", 0, 1, "L")
-        self.set_font("Helvetica", "", 7)
-        self.set_x(30)
-        self.cell(165, 3, "Centre Technique Régional CASA-SETTAT-BENI MELLAL", 0, 1, "L")
+        # ENTÊTE INSTITUTIONNEL : TAILLE AUGMENTÉE ET CENTRÉ (x=10, largeur=190)
+        self.set_font("Helvetica", "B", 11)
+        self.set_xy(10, 5)
+        self.cell(190, 4.5, "L.P.E.E - LABORATOIRE PUBLIC DES ESSAIS ET D'ETUDES", 0, 1, "C")
+        
+        self.set_font("Helvetica", "", 8.5)
+        self.set_x(10)
+        self.cell(190, 4, "Centre Technique Régional CASA-SETTAT-BENI MELLAL", 0, 1, "C")
         
         # Ligne de séparation sous l'entête institutionnel
         self.line(10, 18, 200, 18)
