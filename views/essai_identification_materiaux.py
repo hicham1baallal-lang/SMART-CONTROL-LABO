@@ -353,11 +353,13 @@ def show(supabase_client):
         
         col_e1, col_e2, col_e3, col_e4 = f_st.columns(4)
         with col_e1:
-            m1_val = f_st.number_input("Masse totale M1 (g)", value=cfg["m1"], step=0.1, disabled=not user_can_edit)
+            m1_val = f_st.number_input("Masse sèche totale M1 (g)", value=cfg["m1"], step=0.1, disabled=not user_can_edit)
         with col_e2:
-            m2_val = f_st.number_input("Masse sèche étuve M2 (g)", value=cfg["m2"], step=0.1, disabled=not user_can_edit)
+            m2_val = f_st.number_input("Masse sèche après lavage M2 (g)", value=cfg["m2"], step=0.1, disabled=not user_can_edit)
         with col_e3:
-            m3_val = f_st.number_input("Masse après lavage M3 (g)", value=cfg["m3"], step=0.1, disabled=not user_can_edit)
+            m1_m2_diff = m1_val - m2_val
+            f_st.number_input("Mines retirées (M1 - M2) (g)", value=m1_m2_diff, disabled=True, format="%.1f")
+            m3_val = m2_val # Utilise M2 comme masse de référence après lavage pour M3
         with col_e4:
             m4_val = f_st.number_input("Prise tamisage M4 (g)", value=cfg["m4"], step=1.0, disabled=not user_can_edit)
 
@@ -411,9 +413,9 @@ def show(supabase_client):
                 f"""
                 <div style="background-color: #f0f2f6; padding: 10px; border-radius: 6px; font-size: 0.85em;">
                     <b>Matériau</b> : {selected_mat_sub}<br>
+                    <b>M1 - M2 (Fines)</b> : {m1_m2_diff:.1f} g<br>
                     <b>Facteur a (Me/M4)</b> : {a_factor:.4f}<br>
                     <b>M6 (Masse tamisat)</b> : {m6_val:.2f} g<br>
-                    <b>Contrôle 100(M3-M6)/M3</b> : {validation_m6:.2f}%<br>
                     <b>Proctor Wopt</b> : {w_opt:.1f}% | <b>IP</b> : {ip:.1f}% | <b>VBS</b> : {vbs_val:.2f}
                 </div>
                 """,
@@ -496,7 +498,7 @@ def show(supabase_client):
         data_dict = {
             "Sous-Type Matériau": selected_mat_sub,
             "Ref Echantillon": ref_ech,
-            "M1 (g)": f"{m1_val}", "M2 (g)": f"{m2_val}", "M3 (g)": f"{m3_val}", "M4 (g)": f"{m4_val}",
+            "M1 (g)": f"{m1_val}", "M2 (g)": f"{m2_val}", "M1-M2 (g)": f"{m1_m2_diff:.1f}", "M4 (g)": f"{m4_val}",
             "M5 (g)": f"{m5_val:.2f}", "Fond de tamis (g)": f"{fond_tamis_val}", "M6 (g)": f"{m6_val:.2f}",
             "Dmax (mm)": f"{int(dmax_detected)}", 
             "Passant 80um (%)": f"{pass_80um_val:.1f}".replace('.', ','), 
