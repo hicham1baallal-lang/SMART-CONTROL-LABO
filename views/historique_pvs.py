@@ -8,7 +8,7 @@ import streamlit as st
 def generer_document_synthese(dict_dfs_filtres, mois_annee_str):
   """Génère un fichier Word en mémoire contenant un rapport structuré
 
-  avec un tableau de synthèse propre pour chaque type d'essai du mois.
+  avec des tableaux propres et bien mis en page pour chaque type d'essai.
   """
   doc = Document()
 
@@ -30,17 +30,33 @@ def generer_document_synthese(dict_dfs_filtres, mois_annee_str):
       doc.add_heading(f"Type d'essai : {nom_type}", level=2)
       doc.add_paragraph(f"Nombre d'enregistrements : {len(df)}")
 
-      # Création du tableau Word pour ce type d'essai spécifique
-      table = doc.add_table(rows=1, cols=len(df.columns))
+      # Nettoyage des colonnes pour ne garder que les informations pertinentes
+      colonnes_a_afficher = [
+          c
+          for c in df.columns
+          if not c.startswith("_") and c.lower() not in ["user_id"]
+      ]
+      if not colonnes_a_afficher:
+        colonnes_a_afficher = list(df.columns)
+
+      df_to_show = df[colonnes_a_afficher]
+
+      # Création du tableau Word avec un style de grille propre
+      table = doc.add_table(rows=1, cols=len(df_to_show.columns))
+      table.style = "Table Grid"
+
       hdr_cells = table.rows[0].cells
-      for i, column_name in enumerate(df.columns):
+      for i, column_name in enumerate(df_to_show.columns):
         hdr_cells[i].text = str(column_name)
 
-      # Remplissage des lignes
-      for _, row in df.iterrows():
+      # Remplissage des lignes avec protection contre les textes trop longs
+      for _, row in df_to_show.iterrows():
         row_cells = table.add_row().cells
         for i, val in enumerate(row):
-          row_cells[i].text = "" if pd.isna(val) else str(val)
+          val_str = "" if pd.isna(val) else str(val)
+          if len(val_str) > 40:
+            val_str = val_str[:37] + "..."
+          row_cells[i].text = val_str
 
       doc.add_paragraph("")  # Espacement entre les tableaux
 
@@ -169,7 +185,6 @@ def afficher_vue(supabase_client=None):
     dict_dfs_filtres[nom_type] = df_f
     total_essais_mois += len(df_f)
 
-    # Affichage par section extensible (expander) pour chaque type d'essai
     with st.expander(f"📌 {nom_type} ({len(df_f)} essai(s))", expanded=len(df_f) > 0):
       if not df_f.empty:
         st.dataframe(df_f, use_container_width=True)
