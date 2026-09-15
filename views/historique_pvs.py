@@ -39,10 +39,10 @@ def generer_document_synthese(df_essais):
   return buffer
 
 
-def afficher_vue():
+def afficher_vue(supabase_client=None):
   st.subheader("📜 Historique & Audit des Essais")
 
-  # Simulation ou Récupération des données (À adapter selon vos requêtes Supabase)
+  # Récupération ou simulation des données
   data = {
       "ID_Essai": [1, 2, 3],
       "Type_Essai": ["Compacité", "Teneur en Eau", "Essai à la Plaque"],
@@ -51,6 +51,12 @@ def afficher_vue():
       "Statut": ["Validé", "Validé", "En attente"],
   }
   df_essais = pd.DataFrame(data)
+
+  # Si vous souhaitez lier à Supabase plus tard :
+  # if supabase_client:
+  #     res = supabase_client.table("votre_table").select("*").execute()
+  #     if res.data:
+  #         df_essais = pd.DataFrame(res.data)
 
   # Affichage du tableau dans l'interface Streamlit
   st.dataframe(df_essais, use_container_width=True)
@@ -79,9 +85,9 @@ def afficher_vue():
     st.warning("Aucune donnée à exporter.")
 
 
-# Alias pour assurer la compatibilité si votre app.py appelle show()
-def show():
-  afficher_vue()
+# Point d'entrée standard appelé par app.py
+def show(supabase_client=None):
+  afficher_vue(supabase_client)
 
 
 if __name__ == "__main__":
