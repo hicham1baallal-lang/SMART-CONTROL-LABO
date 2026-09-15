@@ -65,17 +65,13 @@ class IdentificationPDF(FPDF):
             except Exception:
                 pass
         
-        # ENTÊTE INSTITUTIONNEL DÉCALÉ POUR ÊTRE SUR LA MÊME LIGNE QUE LE LOGO
+        # ENTÊTE INSTITUTIONNEL (MENTION "LABORATOIRE DU CONTRÔLE EXTERNE" SUPPRIMÉE)
         self.set_font("Helvetica", "B", 9)
         self.set_xy(30, 6)
-        self.cell(95, 4, "L.P.E.E - LABORATOIRE PUBLIC DES ESSAIS ET D'ETUDES", 0, 1, "L")
+        self.cell(165, 4, "L.P.E.E - LABORATOIRE PUBLIC DES ESSAIS ET D'ETUDES", 0, 1, "L")
         self.set_font("Helvetica", "", 7)
         self.set_x(30)
-        self.cell(95, 3, "Centre Technique Régional CASA-SETTAT-BENI MELLAL", 0, 1, "L")
-        
-        self.set_font("Helvetica", "B", 8)
-        self.set_xy(130, 6)
-        self.cell(70, 4, "Laboratoire du contrôle externe", 0, 1, "R")
+        self.cell(165, 3, "Centre Technique Régional CASA-SETTAT-BENI MELLAL", 0, 1, "L")
         
         # Ligne de séparation sous l'entête institutionnel
         self.line(10, 18, 200, 18)
