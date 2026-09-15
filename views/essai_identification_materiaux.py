@@ -121,7 +121,7 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
     pdf.cell(95, 5.5, f" Dossier : 2025-260-05985-2025-0247", 1, 0, "L")
     pdf.cell(95, 5.5, f" Date du prélèvement : {header_info.get('date_essai') or ''}", 1, 1, "L")
     pdf.cell(95, 5.5, f" Lieux de prélèvement : {header_info.get('lieu') or 'Stock sur chantier'}", 1, 0, "L")
-    pdf.cell(95, 5.5, f" Numéro de prélèvement : {header_info.get('pk') or ''}", 1, 1, "L")
+    pdf.cell(95, 5.5, f" Provenance d'échantillon : {header_info.get('pk') or ''}", 1, 1, "L")
     pdf.cell(190, 5.5, f" Objet : IDENTIFICATION DU MATÉRIAU ({str(type_mat).upper()})", 1, 1, "L")
     pdf.ln(2)
 
