@@ -303,9 +303,9 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
     if family == "REMBLAI":
         normes_txt = " Normes : A.G: NM 00.8.082 | IP: NF P94-051 | VBS: NM 13.1.178"
     else:
-        normes_txt = " Normes : A.G: NM 00.8.082 | LA: NM EN 1097-2 | MDE: NM EN 1097-1 | Coef. Aplatissement: NM EN 933-3 | ES: NM EN 933-8"
+        normes_txt = " Normes : A.G: NM EN 933-1 | LA: NM EN 1097-2 | MDE: NM EN 1097-1 | Coef. Aplatissement: NM EN 933-3 | ES: NM EN 933-8"
         if mat_config["has_vbs"]:
-            normes_txt += " | VB: NM 13.1.178"
+            normes_txt += " | VB: NM EN 933-9"
     pdf.cell(190, 4.5, normes_txt, 1, 1, "L")
     pdf.ln(2)
 
@@ -326,7 +326,7 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
         def _row(label, value):
             pdf.set_font("Helvetica", "", 7.5)
             pdf.cell(60, 5, f" {label}", 1, 0, "L")
-            pdf.cell(130, 5, str(value), 1, 1, "C")
+            pdf.cell(130, 5, str(_zero_to_star(value)), 1, 1, "C")
 
         _row("%< 80 µm", data_dict.get('Passant Fines (%)', data_dict.get('Passant 80um (%)', data_dict.get('Passant 80µm (%)', '22,3'))))
         _row("%< 2 mm", data_dict.get('Passant 2mm (%)', '66'))
@@ -358,7 +358,7 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
         def _row3(label, value, exigence="-"):
             pdf.set_font("Helvetica", "", 7.5)
             pdf.cell(60, 5, f" {label}", 1, 0, "L")
-            pdf.cell(65, 5, str(value), 1, 0, "C")
+            pdf.cell(65, 5, str(_zero_to_star(value)), 1, 0, "C")
             pdf.cell(65, 5, str(exigence), 1, 1, "C")
 
         _row3("%< 0,063 mm", data_dict.get('Passant Fines (%)', data_dict.get('Passant 80um (%)', '22,3')))
@@ -371,6 +371,7 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
         _row3("Équivalent de Sable ES (%)", data_dict.get('ES (%)', '-'), "> 45")
         if mat_config["has_vbs"]:
             _row3("VB", data_dict.get('VB', data_dict.get('VBS', '-')), "< 1,2")
+            _row3("Indice de Plasticité (IP)", data_dict.get('IP (%)', '-'), "-")
         else:
             _row3("Indice de Plasticité (IP)", data_dict.get('IP (%)', '-'), "< 12")
 
