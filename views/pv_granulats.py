@@ -203,6 +203,48 @@ def compute_MF(sieves, passings):
             sum_refus_cum += (100.0 - passant)
     return round(sum_refus_cum / 100.0, 2)
 
+def _parse_synthesis_date(value):
+    """Convertit les formats de date utilisés par les PV en objet datetime."""
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        return value
+
+    value_text = str(value).strip()
+    for date_format in (
+        '%d/%m/%Y',
+        '%d-%m-%Y',
+        '%Y-%m-%d %H:%M:%S',
+        '%Y-%m-%d',
+        '%d/%m/%Y %H:%M:%S',
+    ):
+        try:
+            return datetime.strptime(value_text, date_format)
+        except ValueError:
+            continue
+    return None
+
+def _synthesis_month_info(pv_item):
+    """Retourne la clé et le libellé du mois de prélèvement d'un PV."""
+    pv_info = pv_item.get('pv_info', {}) or {}
+    info_prelevement = pv_item.get('info_prelevement', {}) or {}
+    date_value = (
+        pv_info.get('date')
+        or info_prelevement.get('date_prelevement')
+        or pv_item.get('date_creation')
+    )
+    parsed_date = _parse_synthesis_date(date_value)
+    if parsed_date is None:
+        return None, None, date_value
+
+    months_fr = (
+        'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+        'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'
+    )
+    month_key = (parsed_date.year, parsed_date.month)
+    month_label = f"{months_fr[parsed_date.month - 1]} {parsed_date.year}"
+    return month_key, month_label, date_value
+
 def _find_lpee_logo_path():
     """Cherche le logo LPEE à quelques emplacements usuels du dépôt.
     Retourne le chemin trouvé, ou None si absent (aucun logo n'est requis
@@ -1295,7 +1337,8 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
     tabs = st.tabs([
         "1️⃣ Feuilles d'Essais Complets",
         "2️⃣ PV d'Identification / Synthèse",
-        "3️⃣ Historique & Téléchargement de PV"
+        "3️⃣ Historique & Téléchargement de PV",
+        "4️⃣ Synthèse mensuelle"
     ])
 
     # ------------------------------------------------------------------------------
@@ -1890,3 +1933,86 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                     st.markdown(f"**Référence Rapport :** `{ref_pv_disp}`")
         else:
             st.info("Aucun PV n'est enregistré dans l'historique pour le moment. Réalisez un essai et validez-le en Phase 1.")
+
+    # ------------------------------------------------------------------------------
+    # FENÊTRE 4 : SYNTHÈSE DES PV PAR MOIS
+    # ------------------------------------------------------------------------------
+    with tabs[3]:
+        st.header("📊 Synthèse des rapports d'essais")
+        st.caption(
+            "Filtrez les PV enregistrés par mois de prélèvement. "
+            "La date de création est utilisée uniquement si la date de prélèvement est absente."
+        )
+
+        historique_synthese = st.session_state.get('historique_pv', [])
+        month_groups = {}
+        invalid_date_count = 0
+
+        for pv_item in historique_synthese:
+            month_key, month_label, _ = _synthesis_month_info(pv_item)
+            if month_key is None:
+                invalid_date_count += 1
+                continue
+            month_groups[month_key] = month_label
+
+        ordered_months = [
+            month_groups[key]
+            for key in sorted(month_groups)
+        ]
+
+        if not historique_synthese:
+            st.info("Aucun PV disponible pour effectuer une synthèse.")
+        elif not ordered_months:
+            st.warning("Aucune date exploitable n'a été trouvée dans les PV enregistrés.")
+        else:
+            selected_month = st.selectbox(
+                "📅 Mois à afficher",
+                ["Tous les mois"] + ordered_months,
+                key=f"{prefix}_synth_month_filter"
+            )
+
+            filtered_pvs = []
+            for pv_item in historique_synthese:
+                _, month_label, _ = _synthesis_month_info(pv_item)
+                if selected_month == "Tous les mois" or month_label == selected_month:
+                    filtered_pvs.append(pv_item)
+
+            clients = {
+                str(item.get('client') or (item.get('pv_info', {}) or {}).get('client') or '').strip()
+                for item in filtered_pvs
+            }
+            clients.discard('')
+
+            col_s1, col_s2, col_s3 = st.columns(3)
+            col_s1.metric("Nombre de PV", len(filtered_pvs))
+            col_s2.metric("Clients concernés", len(clients))
+            col_s3.metric("Mois sélectionné", selected_month)
+
+            synthesis_rows = []
+            for pv_item in filtered_pvs:
+                pv_info_synth = pv_item.get('pv_info', {}) or {}
+                info_synth = pv_item.get('info_prelevement', {}) or {}
+                _, _, date_value = _synthesis_month_info(pv_item)
+                synthesis_rows.append({
+                    "N° Rapport": pv_item.get('ref_pv') or pv_info_synth.get('ref_pv') or '-',
+                    "Date prélèvement": date_value or '-',
+                    "Client": pv_item.get('client') or pv_info_synth.get('client') or '-',
+                    "Chantier / Projet": pv_item.get('projet') or pv_info_synth.get('projet') or '-',
+                    "Provenance": info_synth.get('provenance') or '-',
+                    "Lieu de prélèvement": info_synth.get('lieu_prelevement') or '-',
+                })
+
+            df_synthesis = pd.DataFrame(synthesis_rows)
+            st.dataframe(df_synthesis, use_container_width=True, hide_index=True)
+            st.download_button(
+                label=f"📥 Télécharger la synthèse ({selected_month}) au format CSV",
+                data=df_synthesis.to_csv(index=False).encode('utf-8-sig'),
+                file_name=f"Synthese_PV_{selected_month.replace(' ', '_')}.csv",
+                mime="text/csv",
+                key=f"{prefix}_dl_csv_synthese"
+            )
+
+            if invalid_date_count:
+                st.caption(
+                    f"{invalid_date_count} PV sans date exploitable ne sont pas inclus dans le filtre mensuel."
+                )
