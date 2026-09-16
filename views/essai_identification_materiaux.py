@@ -314,57 +314,75 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
     pdf.cell(190, 5.5, " Résultats d'essais", 1, 1, "C", fill=True)
     
     ech_label = data_dict.get('Ref Echantillon', 'Ech 1')
-    pdf.set_font("Helvetica", "B", 7.5)
-    pdf.cell(60, 5.5, "", 1, 0, "C", fill=True)
-    pdf.cell(130, 5.5, str(ech_label), 1, 1, "C", fill=True)
-
     val_wopt = str(data_dict.get('wL (%)', '14,2'))
     val_dens = str(data_dict.get('Densité OPN', '1,73'))
     val_class = str(data_dict.get('Classification (Auto)', data_dict.get('Classe GTR (Auto)', 'B5')))
 
-    def _row(label, value):
-        pdf.set_font("Helvetica", "", 7.5)
-        pdf.cell(60, 5, f" {label}", 1, 0, "L")
-        pdf.cell(130, 5, str(value), 1, 1, "C")
-
-    _row("%< 80 µm" if family == "REMBLAI" else "%< 0,063 mm",
-         data_dict.get('Passant Fines (%)', data_dict.get('Passant 80um (%)', data_dict.get('Passant 80µm (%)', '22,3'))))
-    _row("%< 2 mm", data_dict.get('Passant 2mm (%)', '66'))
-    _row("%< 50 mm", data_dict.get('Passant 50mm (%)', '100'))
-    _row("D MAX", data_dict.get('Dmax (mm)', '50'))
-
     if family == "REMBLAI":
+        pdf.set_font("Helvetica", "B", 7.5)
+        pdf.cell(60, 5.5, "", 1, 0, "C", fill=True)
+        pdf.cell(130, 5.5, str(ech_label), 1, 1, "C", fill=True)
+
+        def _row(label, value):
+            pdf.set_font("Helvetica", "", 7.5)
+            pdf.cell(60, 5, f" {label}", 1, 0, "L")
+            pdf.cell(130, 5, str(value), 1, 1, "C")
+
+        _row("%< 80 µm", data_dict.get('Passant Fines (%)', data_dict.get('Passant 80um (%)', data_dict.get('Passant 80µm (%)', '22,3'))))
+        _row("%< 2 mm", data_dict.get('Passant 2mm (%)', '66'))
+        _row("%< 50 mm", data_dict.get('Passant 50mm (%)', '100'))
+        _row("D MAX", data_dict.get('Dmax (mm)', '50'))
         _row("VBS", data_dict.get('VBS', '0,42'))
         _row("Indice de Plasticité (IP)", data_dict.get('IP (%)', '4,2'))
-    else:
-        _row("Los Angeles LA (%)", data_dict.get('LA (%)', '-'))
-        _row("Micro-Deval MDE (%)", data_dict.get('MDE (%)', '-'))
-        _row("Coefficient d'aplatissement (%)", data_dict.get('Coefficient Aplatissement (%)', '-'))
-        _row("Équivalent de Sable ES (%)", data_dict.get('ES (%)', '-'))
-        if mat_config["has_vbs"]:
-            _row("VB", data_dict.get('VB', data_dict.get('VBS', '-')))
-        _row("Indice de Plasticité (IP)", data_dict.get('IP (%)', '-'))
 
-    pdf.cell(60, 5, " Proctor", 1, 0, "L")
-    pdf.set_font("Helvetica", "B", 7)
-    pdf.cell(26, 5, " Wopt", 1, 0, "C", fill=True)
-    pdf.set_font("Helvetica", "", 7.5)
-    pdf.cell(26, 5, val_wopt, 1, 0, "C")
-    pdf.set_font("Helvetica", "B", 7)
-    pdf.cell(34, 5, " Densité OPN", 1, 0, "C", fill=True)
-    pdf.set_font("Helvetica", "", 7.5)
-    pdf.cell(44, 5, val_dens, 1, 1, "C")
-
-    class_label = "GTR" if family == "REMBLAI" else "Classification GNT"
-    pdf.cell(60, 5, f" {class_label}", 1, 0, "L")
-    pdf.set_font("Helvetica", "B", 8)
-    pdf.cell(130, 5, val_class, 1, 1, "C")
-
-    if family == "GRAVE" and data_dict.get("Conforme CPC") is not None:
+        pdf.cell(60, 5, " Proctor", 1, 0, "L")
+        pdf.set_font("Helvetica", "B", 7)
+        pdf.cell(26, 5, " Wopt", 1, 0, "C", fill=True)
         pdf.set_font("Helvetica", "", 7.5)
-        pdf.cell(60, 5, " Exigence CPC", 1, 0, "L")
+        pdf.cell(26, 5, val_wopt, 1, 0, "C")
+        pdf.set_font("Helvetica", "B", 7)
+        pdf.cell(34, 5, " Densité OPN", 1, 0, "C", fill=True)
+        pdf.set_font("Helvetica", "", 7.5)
+        pdf.cell(44, 5, val_dens, 1, 1, "C")
+
+        pdf.cell(60, 5, " GTR", 1, 0, "L")
         pdf.set_font("Helvetica", "B", 8)
-        pdf.cell(130, 5, str(data_dict.get("Conforme CPC")), 1, 1, "C")
+        pdf.cell(130, 5, val_class, 1, 1, "C")
+
+    else:
+        pdf.set_font("Helvetica", "B", 7.5)
+        pdf.cell(60, 5.5, "", 1, 0, "C", fill=True)
+        pdf.cell(65, 5.5, str(ech_label), 1, 0, "C", fill=True)
+        pdf.cell(65, 5.5, "Exigence marché et CPC", 1, 1, "C", fill=True)
+
+        def _row3(label, value, exigence="-"):
+            pdf.set_font("Helvetica", "", 7.5)
+            pdf.cell(60, 5, f" {label}", 1, 0, "L")
+            pdf.cell(65, 5, str(value), 1, 0, "C")
+            pdf.cell(65, 5, str(exigence), 1, 1, "C")
+
+        _row3("%< 0,063 mm", data_dict.get('Passant Fines (%)', data_dict.get('Passant 80um (%)', '22,3')))
+        _row3("%< 2 mm", data_dict.get('Passant 2mm (%)', '66'))
+        _row3("%< 50 mm", data_dict.get('Passant 50mm (%)', '100'))
+        _row3("D MAX", data_dict.get('Dmax (mm)', '50'))
+        _row3("Los Angeles LA (%)", data_dict.get('LA (%)', '-'), "< 30")
+        _row3("Micro-Deval MDE (%)", data_dict.get('MDE (%)', '-'), "< 25")
+        _row3("Coefficient d'aplatissement (%)", data_dict.get('Coefficient Aplatissement (%)', '-'))
+        _row3("Équivalent de Sable ES (%)", data_dict.get('ES (%)', '-'), "> 45")
+        if mat_config["has_vbs"]:
+            _row3("VB", data_dict.get('VB', data_dict.get('VBS', '-')), "< 1,2")
+        else:
+            _row3("Indice de Plasticité (IP)", data_dict.get('IP (%)', '-'), "< 12")
+
+        pdf.cell(60, 5, " Proctor", 1, 0, "L")
+        pdf.set_font("Helvetica", "B", 7)
+        pdf.cell(26, 5, " Wopt", 1, 0, "C", fill=True)
+        pdf.set_font("Helvetica", "", 7.5)
+        pdf.cell(26, 5, val_wopt, 1, 0, "C")
+        pdf.set_font("Helvetica", "B", 7)
+        pdf.cell(34, 5, " Densité OPN", 1, 0, "C", fill=True)
+        pdf.set_font("Helvetica", "", 7.5)
+        pdf.cell(44, 5, val_dens, 1, 1, "C")
 
     pdf.ln(2)
 
@@ -612,6 +630,8 @@ def show(supabase_client):
                 pct_fines_lavage = 100.0 * fines_lavage_g / m1_val if m1_val > 0 else 0.0
                 f_st.metric("Fines < 0,063mm (par lavage)", f"{pct_fines_lavage:.1f} %")
 
+                fond_tamis_val = f_st.number_input("Fond de tamis (g)", value=0.0, step=0.1, disabled=not user_can_edit, key=f"fond_tamis_g_{mat_code}")
+
                 w_opt = f_st.number_input("Proctor Wopt (%)", value=6.0, step=0.5, disabled=not user_can_edit, key=f"wopt_{mat_code}")
                 dens_val = f_st.number_input("Proctor Densité OPN", value=2.10, step=0.01, disabled=not user_can_edit, key=f"dens_{mat_code}")
 
@@ -632,9 +652,10 @@ def show(supabase_client):
             result_df = work_df.copy()
 
             somme_ri = float(edited_sieve_df["Refus partiel Ri (g)"].sum())
-            ecart_tamisage = 100.0 * abs(m2_val - somme_ri) / m2_val if m2_val > 0 else 0.0
+            somme_ri_avec_fond = somme_ri + fond_tamis_val
+            ecart_tamisage = 100.0 * abs(m2_val - somme_ri_avec_fond) / m2_val if m2_val > 0 else 0.0
             ecart_ok = "OK (<1%)" if ecart_tamisage <= 1.0 else "Hors tolérance (>1%)"
-            ecart_tamisage_txt = f" | Écart tamisage (ΣRi vs M2) : **{ecart_tamisage:.2f}%** {ecart_ok}"
+            ecart_tamisage_txt = f" | Écart tamisage (ΣRi+Fond vs M2) : **{ecart_tamisage:.2f}%** {ecart_ok}"
 
             fines_label_grave = "VB" if mat_config["has_vbs"] else "IP"
             fines_display_grave = f"{vbs_val:.2f}" if mat_config["has_vbs"] else f"{ip:.1f}%"
@@ -643,7 +664,7 @@ def show(supabase_client):
                 f"""
                 <div style="background-color: #f0f2f6; padding: 10px; border-radius: 6px; font-size: 0.85em;">
                     <b>Fines &lt; 0,063mm (lavage)</b> : {pct_fines_lavage:.1f}%<br>
-                    <b>Σ Refus partiels (tamisage à sec)</b> : {somme_ri:.1f} g (à comparer à M2 = {m2_val:.1f} g)<br>
+                    <b>Σ Refus partiels (tamisage à sec)</b> : {somme_ri:.1f} g + Fond de tamis {fond_tamis_val:.1f} g = {somme_ri_avec_fond:.1f} g (à comparer à M2 = {m2_val:.1f} g)<br>
                     <b>Écart de tamisage</b> : {ecart_tamisage:.2f}% (doit être &lt;1%)<br>
                     <b>Proctor Wopt</b> : {w_opt:.1f}%<br>
                     <b>LA</b> : {la_val:.1f}% &nbsp; | &nbsp; <b>MDE</b> : {mde_val:.1f}%<br>
@@ -654,7 +675,7 @@ def show(supabase_client):
                 unsafe_allow_html=True
             )
 
-            m3_val = m4_val = m5_val = m6_val = fond_tamis_val = 0.0
+            m3_val = m4_val = m5_val = m6_val = 0.0
             fine_sieve_ref = 0.063
             fine_sieve_label = "0,063 mm"
 
@@ -725,26 +746,27 @@ def show(supabase_client):
         row_50mm = result_df[np.isclose(result_df["Tamis (mm)"].astype(float), 50.0, atol=1e-3)]
         pass_50mm_val = float(row_50mm["% Passant"].values[0]) if not row_50mm.empty else 100.0
 
-        cpc_txt = ""
         if mat_config["family"] == "REMBLAI":
             classe_auto = classer_gtr(dmax_detected, pass_fines_val, ip, vbs_val, pass_2mm_val)
             f_st.metric(f"Classe GTR (Auto) — {mat_code}", classe_auto)
             is_conf = pass_fines_val <= 35.0
             cpc_conforme, cpc_detail = None, None
+            obs = f"Le matériau peut être utilisé. ({mat_code} - {selected_mat_sub})" if is_conf else f"Non Conforme / Hors fuseau ({mat_code} - {selected_mat_sub})"
         else:
             classe_auto = classer_grave(la_val, mde_val, coeff_apl_val, es_val, pass_fines_val)
-            f_st.metric(f"Classification GNT (Auto) — {mat_code}", classe_auto)
 
             cpc_conforme, cpc_detail = verifier_cpc_grave(la_val, mde_val, es_val, ip, vbs_val, mat_config["has_vbs"])
             cpc_badge = "✅ Conforme CPC" if cpc_conforme else "❌ Non Conforme CPC"
-            f_st.metric(f"Exigence CPC — {mat_code}", cpc_badge)
-            f_st.caption(f"Détail CPC : {cpc_detail}")
-            cpc_txt = f" | **Exigence CPC : {cpc_badge}**"
+            f_st.metric(f"Exigence marché et CPC — {mat_code}", cpc_badge)
+            f_st.caption(f"Détail : {cpc_detail}")
 
-            is_conf = ("Hors classe" not in classe_auto) and ("à vérifier" not in classe_auto) and cpc_conforme
+            is_conf = cpc_conforme
+            if is_conf:
+                obs = f"Les résultats d'identification de la {selected_mat_sub} sont conformes aux spécifications du marché."
+            else:
+                obs = f"Les résultats d'identification de la {selected_mat_sub} ne sont pas conformes aux spécifications du marché."
 
-        obs = f"Le matériau peut être utilisé. ({mat_code} - {selected_mat_sub})" if is_conf else f"Non Conforme / Hors fuseau ({mat_code} - {selected_mat_sub})"
-        f_st.info(f"Observation automatique : **{obs}** | Dmax: **{dmax_detected} mm** | Passant 50mm: **{pass_50mm_val:.1f}%** | Passant {fine_sieve_label}: **{pass_fines_val:.1f}%**{ecart_tamisage_txt}{cpc_txt}")
+        f_st.info(f"Observation automatique : **{obs}** | Dmax: **{dmax_detected} mm** | Passant 50mm: **{pass_50mm_val:.1f}%** | Passant {fine_sieve_label}: **{pass_fines_val:.1f}%**{ecart_tamisage_txt}")
 
 
         data_dict = {
@@ -771,6 +793,7 @@ def show(supabase_client):
             data_dict["IP (%)"] = f"{ip:.1f}".replace('.', ',')
             data_dict["VBS"] = f"{vbs_val:.2f}".replace('.', ',')
         else:
+            data_dict["Fond de tamis (g)"] = f"{fond_tamis_val}"
             data_dict["Ecart Tamisage (%)"] = f"{ecart_tamisage:.2f}".replace('.', ',')
             data_dict["LA (%)"] = f"{la_val:.1f}".replace('.', ',')
             data_dict["MDE (%)"] = f"{mde_val:.1f}".replace('.', ',')
