@@ -102,6 +102,63 @@ def get_material_config(selected_label):
     return code, MATERIAL_TYPES[code]
 
 
+def _zero_to_star(value):
+    """Remplace une valeur d'essai égale à 0 (numérique, '0', '0,0'...) par '*'."""
+    if value is None:
+        return value
+    txt = str(value).strip()
+    if txt in ("", "-", "N/A"):
+        return value
+    try:
+        num = float(txt.replace(',', '.'))
+        if num == 0:
+            return "*"
+    except (ValueError, TypeError):
+        pass
+    return value
+
+
+def build_flat_hist_df(combined_records):
+    """Construit un tableau lisible (une ligne par PV) à partir des enregistrements
+    historiques, en aplatissant le dict 'details' et en remplaçant les valeurs
+    d'essai égales à 0 par '*'."""
+    rows = []
+    for r in combined_records:
+        details = r.get("details", {}) or {}
+        code = r.get("code_materiau") or get_material_code(r.get("type_materiau"))
+        flat = {
+            "N° Rapport": r.get("num_rapport"),
+            "Code": code,
+            "Type": r.get("type_materiau"),
+            "Date": r.get("date_essai"),
+            "Lieu": r.get("lieu"),
+            "Ref Ech.": details.get("Ref Echantillon", "-"),
+            "Dmax (mm)": details.get("Dmax (mm)", "-"),
+            "Passant Fines (%)": details.get("Passant Fines (%)", details.get("Passant 80um (%)", "-")),
+            "Passant 2mm (%)": details.get("Passant 2mm (%)", "-"),
+            "Passant 50mm (%)": details.get("Passant 50mm (%)", "-"),
+            "LA (%)": details.get("LA (%)", "-"),
+            "MDE (%)": details.get("MDE (%)", "-"),
+            "Coef. Aplat. (%)": details.get("Coefficient Aplatissement (%)", "-"),
+            "ES (%)": details.get("ES (%)", "-"),
+            "VB / VBS": details.get("VB", details.get("VBS", "-")),
+            "IP (%)": details.get("IP (%)", "-"),
+            "Wopt (%)": details.get("wL (%)", "-"),
+            "Densité OPN": details.get("Densité OPN", "-"),
+            "Classification": details.get("Classification (Auto)", details.get("Classe GTR (Auto)", "-")),
+            "CPC": details.get("Conforme CPC", "-"),
+            "Observation": r.get("observation", "-"),
+        }
+        rows.append(flat)
+
+    df = pd.DataFrame(rows)
+    skip_cols = {"N° Rapport", "Code", "Type", "Date", "Lieu", "Ref Ech.", "Classification", "CPC", "Observation"}
+    for col in df.columns:
+        if col not in skip_cols:
+            df[col] = df[col].apply(_zero_to_star)
+    return df
+
+
 # =====================================================================
 # FUSEAUX GRANULOMÉTRIQUES DE SPÉCIFICATION (par code matériau)
 # Chaque entrée : (Tamis mm, VSI = Valeur Seuil Inférieure %, VSS = Valeur Seuil Supérieure %)
@@ -118,6 +175,32 @@ FUSEAUX_GRANULO = {
         (40, 85, 100),
     ],
 }
+
+
+def verifier_cpc_grave(la, mde, es, ip, vb, has_vb):
+    """
+    Vérifie l'exigence CPC pour les graves non traitées :
+    LA < 30, MDE < 25, ES > 45, et IP < 12 — sauf pour les matériaux qui utilisent
+    le VB (Valeur au Bleu) au lieu de l'IP (ex: GNF, GNA), auquel cas VB < 1,2.
+    """
+    ok_la = la < 30
+    ok_mde = mde < 25
+    ok_es = es > 45
+    if has_vb:
+        ok_fines = vb < 1.2
+        fines_txt = f"VB {'<' if ok_fines else '>='} 1,2 ({vb:.2f})"
+    else:
+        ok_fines = ip < 12
+        fines_txt = f"IP {'<' if ok_fines else '>='} 12 ({ip:.1f}%)"
+
+    conforme = ok_la and ok_mde and ok_es and ok_fines
+    detail = (
+        f"LA {'<' if ok_la else '>='} 30 ({la:.1f}%) | "
+        f"MDE {'<' if ok_mde else '>='} 25 ({mde:.1f}%) | "
+        f"ES {'>' if ok_es else '<='} 45 ({es:.1f}%) | "
+        f"{fines_txt}"
+    )
+    return conforme, detail
 
 
 def classer_grave(la, mde, coeff_apl, es, pass_80um):
@@ -222,7 +305,7 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
     else:
         normes_txt = " Normes : A.G: NM 00.8.082 | LA: NM EN 1097-2 | MDE: NM EN 1097-1 | Coef. Aplatissement: NM EN 933-3 | ES: NM EN 933-8"
         if mat_config["has_vbs"]:
-            normes_txt += " | VBS: NM 13.1.178"
+            normes_txt += " | VB: NM 13.1.178"
     pdf.cell(190, 4.5, normes_txt, 1, 1, "L")
     pdf.ln(2)
 
@@ -259,7 +342,7 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
         _row("Coefficient d'aplatissement (%)", data_dict.get('Coefficient Aplatissement (%)', '-'))
         _row("Équivalent de Sable ES (%)", data_dict.get('ES (%)', '-'))
         if mat_config["has_vbs"]:
-            _row("VBS", data_dict.get('VBS', '-'))
+            _row("VB", data_dict.get('VB', data_dict.get('VBS', '-')))
         _row("Indice de Plasticité (IP)", data_dict.get('IP (%)', '-'))
 
     pdf.cell(60, 5, " Proctor", 1, 0, "L")
@@ -276,6 +359,12 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
     pdf.cell(60, 5, f" {class_label}", 1, 0, "L")
     pdf.set_font("Helvetica", "B", 8)
     pdf.cell(130, 5, val_class, 1, 1, "C")
+
+    if family == "GRAVE" and data_dict.get("Conforme CPC") is not None:
+        pdf.set_font("Helvetica", "", 7.5)
+        pdf.cell(60, 5, " Exigence CPC", 1, 0, "L")
+        pdf.set_font("Helvetica", "B", 8)
+        pdf.cell(130, 5, str(data_dict.get("Conforme CPC")), 1, 1, "C")
 
     pdf.ln(2)
 
@@ -534,7 +623,7 @@ def show(supabase_client):
                 ip = f_st.number_input("Indice de Plasticité (IP)", value=0.0, step=0.5, disabled=not user_can_edit, key=f"ip_{mat_code}")
                 vbs_val = 0.0
                 if mat_config["has_vbs"]:
-                    vbs_val = f_st.number_input("VBS (Bleu de Méthylène)", value=0.5, step=0.01, format="%.2f", disabled=not user_can_edit, key=f"vbs_{mat_code}")
+                    vbs_val = f_st.number_input("VB (Valeur au Bleu)", value=0.5, step=0.01, format="%.2f", disabled=not user_can_edit, key=f"vbs_{mat_code}")
 
             work_df = edited_sieve_df.sort_values(by="Tamis (mm)", ascending=False).reset_index(drop=True)
             work_df["Refus Cumulé R (g)"] = np.round(work_df["Refus partiel Ri (g)"].cumsum(), 1)
@@ -547,6 +636,9 @@ def show(supabase_client):
             ecart_ok = "OK (<1%)" if ecart_tamisage <= 1.0 else "Hors tolérance (>1%)"
             ecart_tamisage_txt = f" | Écart tamisage (ΣRi vs M2) : **{ecart_tamisage:.2f}%** {ecart_ok}"
 
+            fines_label_grave = "VB" if mat_config["has_vbs"] else "IP"
+            fines_display_grave = f"{vbs_val:.2f}" if mat_config["has_vbs"] else f"{ip:.1f}%"
+
             f_st.markdown(
                 f"""
                 <div style="background-color: #f0f2f6; padding: 10px; border-radius: 6px; font-size: 0.85em;">
@@ -555,7 +647,8 @@ def show(supabase_client):
                     <b>Écart de tamisage</b> : {ecart_tamisage:.2f}% (doit être &lt;1%)<br>
                     <b>Proctor Wopt</b> : {w_opt:.1f}%<br>
                     <b>LA</b> : {la_val:.1f}% &nbsp; | &nbsp; <b>MDE</b> : {mde_val:.1f}%<br>
-                    <b>Coef. Aplatissement</b> : {coeff_apl_val:.1f}% &nbsp; | &nbsp; <b>ES</b> : {es_val:.1f}%
+                    <b>Coef. Aplatissement</b> : {coeff_apl_val:.1f}% &nbsp; | &nbsp; <b>ES</b> : {es_val:.1f}%<br>
+                    <b>{fines_label_grave}</b> : {fines_display_grave}
                 </div>
                 """,
                 unsafe_allow_html=True
@@ -632,17 +725,27 @@ def show(supabase_client):
         row_50mm = result_df[np.isclose(result_df["Tamis (mm)"].astype(float), 50.0, atol=1e-3)]
         pass_50mm_val = float(row_50mm["% Passant"].values[0]) if not row_50mm.empty else 100.0
 
+        cpc_txt = ""
         if mat_config["family"] == "REMBLAI":
             classe_auto = classer_gtr(dmax_detected, pass_fines_val, ip, vbs_val, pass_2mm_val)
             f_st.metric(f"Classe GTR (Auto) — {mat_code}", classe_auto)
             is_conf = pass_fines_val <= 35.0
+            cpc_conforme, cpc_detail = None, None
         else:
             classe_auto = classer_grave(la_val, mde_val, coeff_apl_val, es_val, pass_fines_val)
             f_st.metric(f"Classification GNT (Auto) — {mat_code}", classe_auto)
-            is_conf = ("Hors classe" not in classe_auto) and ("à vérifier" not in classe_auto)
+
+            cpc_conforme, cpc_detail = verifier_cpc_grave(la_val, mde_val, es_val, ip, vbs_val, mat_config["has_vbs"])
+            cpc_badge = "✅ Conforme CPC" if cpc_conforme else "❌ Non Conforme CPC"
+            f_st.metric(f"Exigence CPC — {mat_code}", cpc_badge)
+            f_st.caption(f"Détail CPC : {cpc_detail}")
+            cpc_txt = f" | **Exigence CPC : {cpc_badge}**"
+
+            is_conf = ("Hors classe" not in classe_auto) and ("à vérifier" not in classe_auto) and cpc_conforme
 
         obs = f"Le matériau peut être utilisé. ({mat_code} - {selected_mat_sub})" if is_conf else f"Non Conforme / Hors fuseau ({mat_code} - {selected_mat_sub})"
-        f_st.info(f"Observation automatique : **{obs}** | Dmax: **{dmax_detected} mm** | Passant 50mm: **{pass_50mm_val:.1f}%** | Passant {fine_sieve_label}: **{pass_fines_val:.1f}%**{ecart_tamisage_txt}")
+        f_st.info(f"Observation automatique : **{obs}** | Dmax: **{dmax_detected} mm** | Passant 50mm: **{pass_50mm_val:.1f}%** | Passant {fine_sieve_label}: **{pass_fines_val:.1f}%**{ecart_tamisage_txt}{cpc_txt}")
+
 
         data_dict = {
             "Code Materiau": mat_code,
@@ -675,7 +778,9 @@ def show(supabase_client):
             data_dict["ES (%)"] = f"{es_val:.1f}".replace('.', ',')
             data_dict["IP (%)"] = f"{ip:.1f}".replace('.', ',')
             if mat_config["has_vbs"]:
-                data_dict["VBS"] = f"{vbs_val:.2f}".replace('.', ',')
+                data_dict["VB"] = f"{vbs_val:.2f}".replace('.', ',')
+            data_dict["Conforme CPC"] = "OUI" if cpc_conforme else "NON"
+            data_dict["Detail CPC"] = cpc_detail
 
         if f_st.button("💾 Enregistrer le PV dans l'Historique", type="primary", use_container_width=True, disabled=not user_can_edit):
             existing_records = _safe_supabase_fetch(supabase_client)
@@ -783,7 +888,9 @@ def show(supabase_client):
                     )
 
             f_st.markdown("---")
-            f_st.dataframe(df_hist, use_container_width=True)
+            f_st.markdown("#### 📊 Tableau des résultats d'essai (valeurs à 0 affichées comme « * »)")
+            df_flat_hist = build_flat_hist_df(df_hist.to_dict("records"))
+            f_st.dataframe(df_flat_hist, use_container_width=True)
 
             selected_del = f_st.selectbox("Sélectionner un PV à supprimer (Admin/Labo)", options=[""] + df_hist["num_rapport"].tolist() if "num_rapport" in df_hist else [], key="del_pv_select")
             if selected_del and f_st.button("🗑️ Supprimer ce PV", disabled=not user_can_edit, key="del_pv_btn"):
