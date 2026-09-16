@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
-from datetime import datetime
+from datetime import date, datetime
 import json
 import copy
 import io
@@ -210,20 +210,49 @@ def compute_MF(sieves, passings):
             sum_refus_cum += (100.0 - passant)
     return round(sum_refus_cum / 100.0, 2)
 
+def _as_synthesis_mapping(value):
+    """Convertit un dictionnaire ou un JSON stocké en texte en dictionnaire."""
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str):
+        try:
+            decoded = json.loads(value)
+            return decoded if isinstance(decoded, dict) else {}
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return {}
+    return {}
+
 def _parse_synthesis_date(value):
     """Convertit les formats de date utilisés par les PV en objet datetime."""
     if not value:
         return None
+    if isinstance(value, date) and not isinstance(value, datetime):
+        return datetime(value.year, value.month, value.day)
     if isinstance(value, datetime):
         return value
 
     value_text = str(value).strip()
+    if not value_text:
+        return None
+
+    # Les dates Supabase sont souvent renvoyées en ISO 8601, par exemple
+    # 2026-07-23T00:00:00+00:00 ou 2026-07-23T00:00:00Z.
+    iso_text = value_text.replace('Z', '+00:00')
+    try:
+        return datetime.fromisoformat(iso_text).replace(tzinfo=None)
+    except ValueError:
+        pass
+
     for date_format in (
         '%d/%m/%Y',
         '%d-%m-%Y',
         '%Y-%m-%d %H:%M:%S',
         '%Y-%m-%d',
         '%d/%m/%Y %H:%M:%S',
+        '%d/%m/%Y %H:%M',
+        '%d-%m-%Y %H:%M:%S',
+        '%d-%m-%Y %H:%M',
+        '%Y/%m/%d',
     ):
         try:
             return datetime.strptime(value_text, date_format)
@@ -231,14 +260,32 @@ def _parse_synthesis_date(value):
             continue
     return None
 
+def _synthesis_context(pv_item):
+    """Normalise la structure d'un PV venant de la session ou de Supabase."""
+    item = _as_synthesis_mapping(pv_item)
+    payload = _as_synthesis_mapping(item.get('data') or item.get('pv_data'))
+    pv_info = _as_synthesis_mapping(item.get('pv_info'))
+    info_prelevement = _as_synthesis_mapping(item.get('info_prelevement'))
+
+    if not pv_info:
+        pv_info = _as_synthesis_mapping(payload.get('pv_info'))
+    if not info_prelevement:
+        info_prelevement = _as_synthesis_mapping(payload.get('info_prelevement'))
+
+    return item, payload, pv_info, info_prelevement
+
 def _synthesis_month_info(pv_item):
     """Retourne la clé et le libellé du mois de prélèvement d'un PV."""
-    pv_info = pv_item.get('pv_info', {}) or {}
-    info_prelevement = pv_item.get('info_prelevement', {}) or {}
+    item, payload, pv_info, info_prelevement = _synthesis_context(pv_item)
     date_value = (
         pv_info.get('date')
         or info_prelevement.get('date_prelevement')
-        or pv_item.get('date_creation')
+        or item.get('date_prelevement')
+        or item.get('date')
+        or payload.get('date_prelevement')
+        or payload.get('date')
+        or item.get('date_creation')
+        or payload.get('date_creation')
     )
     parsed_date = _parse_synthesis_date(date_value)
     if parsed_date is None:
@@ -380,19 +427,33 @@ def generate_synthesis_excel(filtered_pvs, selected_month):
 
     rows = []
     for pv_item in filtered_pvs:
-        pv_info_synth = pv_item.get('pv_info', {}) or {}
-        info_synth = pv_item.get('info_prelevement', {}) or {}
-        reference = pv_item.get('ref_pv') or pv_info_synth.get('ref_pv') or '-'
+        item_synth, payload_synth, pv_info_synth, info_synth = _synthesis_context(pv_item)
+        reference = (
+            item_synth.get('ref_pv')
+            or pv_info_synth.get('ref_pv')
+            or payload_synth.get('ref_pv')
+            or '-'
+        )
         date_value = (
             pv_info_synth.get('date')
             or info_synth.get('date_prelevement')
-            or pv_item.get('date_creation')
+            or item_synth.get('date_prelevement')
+            or item_synth.get('date')
+            or payload_synth.get('date_prelevement')
+            or payload_synth.get('date')
+            or item_synth.get('date_creation')
+            or payload_synth.get('date_creation')
             or '-'
         )
         lieu = info_synth.get('lieu_prelevement') or '-'
         provenance = info_synth.get('provenance') or '-'
         commentaire = pv_info_synth.get('commentaires') or '-'
-        materials = pv_item.get('data_granulats', {}) or {}
+        materials = (
+            item_synth.get('data_granulats')
+            or payload_synth.get('data_granulats')
+            or {}
+        )
+        materials = _as_synthesis_mapping(materials)
 
         if materials:
             for fraction_key, material in materials.items():
@@ -2167,7 +2228,12 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                     filtered_pvs.append(pv_item)
 
             clients = {
-                str(item.get('client') or (item.get('pv_info', {}) or {}).get('client') or '').strip()
+                str(
+                    _synthesis_context(item)[0].get('client')
+                    or _synthesis_context(item)[2].get('client')
+                    or _synthesis_context(item)[1].get('client')
+                    or ''
+                ).strip()
                 for item in filtered_pvs
             }
             clients.discard('')
@@ -2179,19 +2245,33 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
 
             synthesis_rows = []
             for pv_item in filtered_pvs:
-                pv_info_synth = pv_item.get('pv_info', {}) or {}
-                info_synth = pv_item.get('info_prelevement', {}) or {}
-                reference = pv_item.get('ref_pv') or pv_info_synth.get('ref_pv') or '-'
+                item_synth, payload_synth, pv_info_synth, info_synth = _synthesis_context(pv_item)
+                reference = (
+                    item_synth.get('ref_pv')
+                    or pv_info_synth.get('ref_pv')
+                    or payload_synth.get('ref_pv')
+                    or '-'
+                )
                 date_value = (
                     pv_info_synth.get('date')
                     or info_synth.get('date_prelevement')
-                    or pv_item.get('date_creation')
+                    or item_synth.get('date_prelevement')
+                    or item_synth.get('date')
+                    or payload_synth.get('date_prelevement')
+                    or payload_synth.get('date')
+                    or item_synth.get('date_creation')
+                    or payload_synth.get('date_creation')
                     or '-'
                 )
                 lieu = info_synth.get('lieu_prelevement') or '-'
                 provenance = info_synth.get('provenance') or '-'
                 commentaire = pv_info_synth.get('commentaires') or '-'
-                materials = pv_item.get('data_granulats', {}) or {}
+                materials = (
+                    item_synth.get('data_granulats')
+                    or payload_synth.get('data_granulats')
+                    or {}
+                )
+                materials = _as_synthesis_mapping(materials)
 
                 if materials:
                     for fraction_key, material in materials.items():
