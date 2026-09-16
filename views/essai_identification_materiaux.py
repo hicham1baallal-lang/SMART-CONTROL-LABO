@@ -70,7 +70,7 @@ MATERIAL_TYPES = {
     "SC-031": {"label": "Sous couche 0/31.5", "family": "GRAVE", "has_vbs": False},
     "GNF-040": {"label": "GNF 0/40", "family": "GRAVE", "has_vbs": True},
     "GNA-031": {"label": "GNA 0/31.5", "family": "GRAVE", "has_vbs": True},
-    "GNT-060": {"label": "GNT 0/60", "family": "GRAVE", "has_vbs": False},
+    "GNT-060": {"label": "GNT 0/60", "family": "GRAVE", "has_vbs": False, "show_gtr_extra": True, "show_rt_extra": True},
     "GNT-PRA": {"label": "GNT Bloc technique PRA", "family": "GRAVE", "has_vbs": False},
 }
 
@@ -206,6 +206,18 @@ def verifier_cpc_grave(la, mde, es, ip, vb, has_vb):
         f"Propreté : {proprete_txt}"
     )
     return conforme, detail
+
+
+def classer_qualite_rt(la, mde):
+    """
+    Classification de qualité des granulats selon la somme LA+MDE (usage routier) :
+    RT2 si LA+MDE < 80. Seuil indicatif — à ajuster si d'autres catégories (RT1, RT3...)
+    sont définies au CCTP du projet.
+    """
+    somme = la + mde
+    if somme < 80:
+        return "RT2", somme
+    return "Hors classe RT2", somme
 
 
 def classer_grave(la, mde, coeff_apl, es, pass_80um):
@@ -430,6 +442,8 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
         _row3("D MAX", data_dict.get('Dmax (mm)', '50'))
         _row3("Los Angeles LA (%)", data_dict.get('LA (%)', '-'), "< 30")
         _row3("Micro-Deval MDE (%)", data_dict.get('MDE (%)', '-'), "< 25")
+        if "LA+MDE (%)" in data_dict:
+            _row3("LA + MDE (%)", data_dict.get('LA+MDE (%)', '-'), "< 80")
         _row3("Coefficient d'aplatissement (%)", data_dict.get('Coefficient Aplatissement (%)', '-'))
         _row3("Équivalent de Sable ES (%)", data_dict.get('ES (%)', '-'), "-" if mat_config["has_vbs"] else ">= 45")
         if mat_config["has_vbs"]:
@@ -447,6 +461,18 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
         pdf.cell(34, 5, " Densité OPN", 1, 0, "C", fill=True)
         pdf.set_font("Helvetica", "", 7.5)
         pdf.cell(44, 5, val_dens, 1, 1, "C")
+
+        if "Classification GTR (Extra)" in data_dict:
+            pdf.set_font("Helvetica", "", 7.5)
+            pdf.cell(60, 5, " Classification GTR", 1, 0, "L")
+            pdf.set_font("Helvetica", "B", 8)
+            pdf.cell(130, 5, str(data_dict.get("Classification GTR (Extra)")), 1, 1, "C")
+
+        if "Qualite RT" in data_dict:
+            pdf.set_font("Helvetica", "", 7.5)
+            pdf.cell(60, 5, " Qualité (LA+MDE)", 1, 0, "L")
+            pdf.set_font("Helvetica", "B", 8)
+            pdf.cell(130, 5, str(data_dict.get("Qualite RT")), 1, 1, "C")
 
     pdf.ln(2)
 
@@ -842,6 +868,16 @@ def show(supabase_client):
             f_st.metric(f"Exigence marché et CPC — {mat_code}", cpc_badge)
             f_st.caption(f"Détail : {cpc_detail}")
 
+            classe_gtr_extra = None
+            qualite_rt = None
+            somme_la_mde = None
+            if mat_config.get("show_gtr_extra"):
+                classe_gtr_extra = classer_gtr(dmax_detected, pass_fines_val, ip, vbs_val, pass_2mm_val)
+                f_st.metric(f"Classification GTR — {mat_code}", classe_gtr_extra)
+            if mat_config.get("show_rt_extra"):
+                qualite_rt, somme_la_mde = classer_qualite_rt(la_val, mde_val)
+                f_st.metric(f"Qualité RT (LA+MDE) — {mat_code}", qualite_rt, delta=f"LA+MDE = {somme_la_mde:.1f}")
+
             is_conf = cpc_conforme
             if is_conf:
                 obs = f"Les résultats d'identification de la {selected_mat_sub} sont conformes aux spécifications du marché."
@@ -891,6 +927,11 @@ def show(supabase_client):
                 data_dict["VB"] = f"{vbs_val:.2f}".replace('.', ',')
             data_dict["Conforme CPC"] = "OUI" if cpc_conforme else "NON"
             data_dict["Detail CPC"] = cpc_detail
+            if classe_gtr_extra is not None:
+                data_dict["Classification GTR (Extra)"] = classe_gtr_extra
+            if qualite_rt is not None:
+                data_dict["LA+MDE (%)"] = f"{somme_la_mde:.1f}".replace('.', ',')
+                data_dict["Qualite RT"] = qualite_rt
 
         if f_st.button("💾 Enregistrer le PV dans l'Historique", type="primary", use_container_width=True, disabled=not user_can_edit):
             existing_records = _safe_supabase_fetch(supabase_client)
