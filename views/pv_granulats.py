@@ -9,6 +9,13 @@ import io
 import os
 import base64
 
+try:
+    import xlsxwriter
+    XLSXWRITER_AVAILABLE = True
+except ImportError:
+    xlsxwriter = None
+    XLSXWRITER_AVAILABLE = False
+
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -244,6 +251,188 @@ def _synthesis_month_info(pv_item):
     month_key = (parsed_date.year, parsed_date.month)
     month_label = f"{months_fr[parsed_date.month - 1]} {parsed_date.year}"
     return month_key, month_label, date_value
+
+def _find_synthesis_logo_path():
+    """Recherche le logo utilisé pour l'en-tête du fichier Excel de synthèse."""
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    candidates = [
+        os.path.join(base_dir, 'logo.png'),
+        os.path.join(base_dir, 'logo.jpg'),
+        os.path.join(base_dir, 'logo.jpeg'),
+        os.path.join(base_dir, 'logo.png.jpg'),
+        os.path.join(base_dir, 'assets', 'logo.png'),
+        os.path.join(base_dir, 'assets', 'logo.jpg'),
+    ]
+    return next((path for path in candidates if os.path.isfile(path)), None)
+
+def generate_synthesis_excel(filtered_pvs, selected_month):
+    """Génère le classeur Excel coloré et imprimable de la synthèse mensuelle."""
+    if not XLSXWRITER_AVAILABLE:
+        raise ImportError(
+            "Le module xlsxwriter est nécessaire pour générer le fichier Excel."
+        )
+
+    output = io.BytesIO()
+    workbook = xlsxwriter.Workbook(output, {'in_memory': True})
+    worksheet = workbook.add_worksheet("Synthèse mensuelle")
+
+    # Mise en page A4 portrait, couleur, ajustée à une page en largeur.
+    worksheet.set_portrait()
+    worksheet.set_paper(9)  # A4
+    worksheet.fit_to_pages(1, 0)
+    worksheet.set_margins(left=0.25, right=0.25, top=0.35, bottom=0.45)
+    worksheet.hide_gridlines(2)
+    worksheet.repeat_rows(5, 5)
+    worksheet.set_header('&C&"Arial,Bold"&10 Synthèse mensuelle des PV')
+    worksheet.set_footer('&L LPEE&CPage &P sur &N&R&D')
+
+    navy = '#1E3A8A'
+    blue = '#2563EB'
+    light_blue = '#DBEAFE'
+    pale_blue = '#EFF6FF'
+    border = '#CBD5E1'
+    dark = '#0F172A'
+
+    title_format = workbook.add_format({
+        'bold': True, 'font_name': 'Arial', 'font_size': 13,
+        'font_color': navy, 'align': 'center', 'valign': 'vcenter',
+    })
+    subtitle_format = workbook.add_format({
+        'bold': True, 'font_name': 'Arial', 'font_size': 9,
+        'font_color': navy, 'align': 'center', 'valign': 'vcenter',
+    })
+    period_format = workbook.add_format({
+        'bold': True, 'font_name': 'Arial', 'font_size': 9,
+        'font_color': dark, 'bg_color': pale_blue, 'border': 1,
+        'border_color': border, 'align': 'left', 'valign': 'vcenter',
+    })
+    header_format = workbook.add_format({
+        'bold': True, 'font_name': 'Arial', 'font_size': 8,
+        'font_color': '#FFFFFF', 'bg_color': blue, 'border': 1,
+        'border_color': '#1D4ED8', 'align': 'center',
+        'valign': 'vcenter', 'text_wrap': True,
+    })
+    cell_format = workbook.add_format({
+        'font_name': 'Arial', 'font_size': 8, 'font_color': dark,
+        'border': 1, 'border_color': border, 'valign': 'top',
+        'text_wrap': True,
+    })
+    cell_center_format = workbook.add_format({
+        'font_name': 'Arial', 'font_size': 8, 'font_color': dark,
+        'border': 1, 'border_color': border, 'align': 'center',
+        'valign': 'top', 'text_wrap': True,
+    })
+    alternate_format = workbook.add_format({
+        'font_name': 'Arial', 'font_size': 8, 'font_color': dark,
+        'bg_color': '#F8FAFC', 'border': 1, 'border_color': border,
+        'valign': 'top', 'text_wrap': True,
+    })
+    alternate_center_format = workbook.add_format({
+        'font_name': 'Arial', 'font_size': 8, 'font_color': dark,
+        'bg_color': '#F8FAFC', 'border': 1, 'border_color': border,
+        'align': 'center', 'valign': 'top', 'text_wrap': True,
+    })
+
+    worksheet.set_column('A:A', 18)
+    worksheet.set_column('B:B', 15)
+    worksheet.set_column('C:C', 24)
+    worksheet.set_column('D:D', 25)
+    worksheet.set_column('E:E', 25)
+    worksheet.set_column('F:F', 38)
+
+    logo_path = _find_synthesis_logo_path()
+    if logo_path:
+        worksheet.insert_image(
+            'A1',
+            logo_path,
+            {'x_scale': 0.20, 'y_scale': 0.20, 'x_offset': 4, 'y_offset': 4}
+        )
+    else:
+        worksheet.write('A1', 'L.P.E.E', title_format)
+
+    worksheet.merge_range('B1:F1', "LABORATOIRE PUBLIC D'ESSAIS ET D'ÉTUDES (LPEE)", title_format)
+    worksheet.merge_range(
+        'B2:F2',
+        'CENTRE TECHNIQUE REGIONAL DE CASABLANCA-SETTAT BENI MELLAL',
+        subtitle_format
+    )
+    worksheet.merge_range(
+        'A4:F4',
+        f"SYNTHÈSE DES PV — PÉRIODE : {selected_month}",
+        period_format
+    )
+    worksheet.set_row(0, 30)
+    worksheet.set_row(1, 22)
+    worksheet.set_row(3, 22)
+
+    headers = [
+        "Référence PV",
+        "Date de prélèvement",
+        "Lieu de prélèvement",
+        "Provenance échantillon",
+        "Fraction des échantillons",
+        "Commentaire",
+    ]
+    header_row = 5
+    for column, header in enumerate(headers):
+        worksheet.write(header_row, column, header, header_format)
+    worksheet.set_row(header_row, 30)
+
+    rows = []
+    for pv_item in filtered_pvs:
+        pv_info_synth = pv_item.get('pv_info', {}) or {}
+        info_synth = pv_item.get('info_prelevement', {}) or {}
+        reference = pv_item.get('ref_pv') or pv_info_synth.get('ref_pv') or '-'
+        date_value = (
+            pv_info_synth.get('date')
+            or info_synth.get('date_prelevement')
+            or pv_item.get('date_creation')
+            or '-'
+        )
+        lieu = info_synth.get('lieu_prelevement') or '-'
+        provenance = info_synth.get('provenance') or '-'
+        commentaire = pv_info_synth.get('commentaires') or '-'
+        materials = pv_item.get('data_granulats', {}) or {}
+
+        if materials:
+            for fraction_key, material in materials.items():
+                material = material or {}
+                fraction_label = material.get('nom') or fraction_key
+                classe = material.get('classe')
+                if classe:
+                    fraction_label = f"{fraction_key} — {fraction_label} ({classe})"
+                else:
+                    fraction_label = f"{fraction_key} — {fraction_label}"
+                rows.append([
+                    reference, date_value, lieu, provenance,
+                    fraction_label, commentaire
+                ])
+        else:
+            rows.append([reference, date_value, lieu, provenance, '-', commentaire])
+
+    for row_index, row_values in enumerate(rows, start=header_row + 1):
+        is_alternate = (row_index - header_row) % 2 == 0
+        formats = (
+            [alternate_center_format, alternate_center_format,
+             alternate_format, alternate_format,
+             alternate_format, alternate_format]
+            if is_alternate else
+            [cell_center_format, cell_center_format,
+             cell_format, cell_format,
+             cell_format, cell_format]
+        )
+        for column, value in enumerate(row_values):
+            worksheet.write(row_index, column, value, formats[column])
+        worksheet.set_row(row_index, 34)
+
+    last_row = header_row + max(len(rows), 1)
+    worksheet.autofilter(header_row, 0, last_row, len(headers) - 1)
+    worksheet.freeze_panes(header_row + 1, 0)
+    worksheet.print_area(0, 0, last_row, len(headers) - 1)
+
+    workbook.close()
+    output.seek(0)
+    return output.getvalue()
 
 def _find_lpee_logo_path():
     """Cherche le logo LPEE à quelques emplacements usuels du dépôt.
@@ -1992,25 +2181,64 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
             for pv_item in filtered_pvs:
                 pv_info_synth = pv_item.get('pv_info', {}) or {}
                 info_synth = pv_item.get('info_prelevement', {}) or {}
-                _, _, date_value = _synthesis_month_info(pv_item)
-                synthesis_rows.append({
-                    "N° Rapport": pv_item.get('ref_pv') or pv_info_synth.get('ref_pv') or '-',
-                    "Date prélèvement": date_value or '-',
-                    "Client": pv_item.get('client') or pv_info_synth.get('client') or '-',
-                    "Chantier / Projet": pv_item.get('projet') or pv_info_synth.get('projet') or '-',
-                    "Provenance": info_synth.get('provenance') or '-',
-                    "Lieu de prélèvement": info_synth.get('lieu_prelevement') or '-',
-                })
+                reference = pv_item.get('ref_pv') or pv_info_synth.get('ref_pv') or '-'
+                date_value = (
+                    pv_info_synth.get('date')
+                    or info_synth.get('date_prelevement')
+                    or pv_item.get('date_creation')
+                    or '-'
+                )
+                lieu = info_synth.get('lieu_prelevement') or '-'
+                provenance = info_synth.get('provenance') or '-'
+                commentaire = pv_info_synth.get('commentaires') or '-'
+                materials = pv_item.get('data_granulats', {}) or {}
+
+                if materials:
+                    for fraction_key, material in materials.items():
+                        material = material or {}
+                        fraction_label = material.get('nom') or fraction_key
+                        classe = material.get('classe')
+                        if classe:
+                            fraction_label = f"{fraction_key} — {fraction_label} ({classe})"
+                        else:
+                            fraction_label = f"{fraction_key} — {fraction_label}"
+                        synthesis_rows.append({
+                            "Référence PV": reference,
+                            "Date de prélèvement": date_value,
+                            "Lieu de prélèvement": lieu,
+                            "Provenance échantillon": provenance,
+                            "Fraction des échantillons": fraction_label,
+                            "Commentaire": commentaire,
+                        })
+                else:
+                    synthesis_rows.append({
+                        "Référence PV": reference,
+                        "Date de prélèvement": date_value,
+                        "Lieu de prélèvement": lieu,
+                        "Provenance échantillon": provenance,
+                        "Fraction des échantillons": '-',
+                        "Commentaire": commentaire,
+                    })
 
             df_synthesis = pd.DataFrame(synthesis_rows)
             st.dataframe(df_synthesis, use_container_width=True, hide_index=True)
-            st.download_button(
-                label=f"📥 Télécharger la synthèse ({selected_month}) au format CSV",
-                data=df_synthesis.to_csv(index=False).encode('utf-8-sig'),
-                file_name=f"Synthese_PV_{selected_month.replace(' ', '_')}.csv",
-                mime="text/csv",
-                key=f"{prefix}_dl_csv_synthese"
-            )
+
+            if XLSXWRITER_AVAILABLE:
+                excel_synthesis = generate_synthesis_excel(
+                    filtered_pvs,
+                    selected_month
+                )
+                st.download_button(
+                    label=f"📥 Télécharger la synthèse ({selected_month}) en fichier Excel",
+                    data=excel_synthesis,
+                    file_name=f"Synthese_PV_{selected_month.replace(' ', '_')}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key=f"{prefix}_dl_excel_synthese"
+                )
+            else:
+                st.error(
+                    "Le module xlsxwriter n'est pas installé : l'export Excel est indisponible."
+                )
 
             if invalid_date_count:
                 st.caption(
