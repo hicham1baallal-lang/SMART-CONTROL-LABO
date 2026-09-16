@@ -2,19 +2,12 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
-from datetime import date, datetime
+from datetime import datetime
 import json
 import copy
 import io
 import os
 import base64
-
-try:
-    import xlsxwriter
-    XLSXWRITER_AVAILABLE = True
-except ImportError:
-    xlsxwriter = None
-    XLSXWRITER_AVAILABLE = False
 
 import matplotlib
 matplotlib.use('Agg')
@@ -210,289 +203,10 @@ def compute_MF(sieves, passings):
             sum_refus_cum += (100.0 - passant)
     return round(sum_refus_cum / 100.0, 2)
 
-def _as_synthesis_mapping(value):
-    """Convertit un dictionnaire ou un JSON stocké en texte en dictionnaire."""
-    if isinstance(value, dict):
-        return value
-    if isinstance(value, str):
-        try:
-            decoded = json.loads(value)
-            return decoded if isinstance(decoded, dict) else {}
-        except (TypeError, ValueError, json.JSONDecodeError):
-            return {}
-    return {}
-
-def _parse_synthesis_date(value):
-    """Convertit les formats de date utilisés par les PV en objet datetime."""
-    if not value:
-        return None
-    if isinstance(value, date) and not isinstance(value, datetime):
-        return datetime(value.year, value.month, value.day)
-    if isinstance(value, datetime):
-        return value
-
-    value_text = str(value).strip()
-    if not value_text:
-        return None
-
-    iso_text = value_text.replace('Z', '+00:00')
-    try:
-        return datetime.fromisoformat(iso_text).replace(tzinfo=None)
-    except ValueError:
-        pass
-
-    for date_format in (
-        '%d/%m/%Y',
-        '%d-%m-%Y',
-        '%Y-%m-%d %H:%M:%S',
-        '%Y-%m-%d',
-        '%d/%m/%Y %H:%M:%S',
-        '%d/%m/%Y %H:%M',
-        '%d-%m-%Y %H:%M:%S',
-        '%d-%m-%Y %H:%M',
-        '%Y/%m/%d',
-    ):
-        try:
-            return datetime.strptime(value_text, date_format)
-        except ValueError:
-            continue
-    return None
-
-def _synthesis_context(pv_item):
-    """Normalise la structure d'un PV venant de la session ou de Supabase."""
-    item = _as_synthesis_mapping(pv_item)
-    payload = _as_synthesis_mapping(item.get('data') or item.get('pv_data'))
-    pv_info = _as_synthesis_mapping(item.get('pv_info'))
-    info_prelevement = _as_synthesis_mapping(item.get('info_prelevement'))
-
-    if not pv_info:
-        pv_info = _as_synthesis_mapping(payload.get('pv_info'))
-    if not info_prelevement:
-        info_prelevement = _as_synthesis_mapping(payload.get('info_prelevement'))
-
-    return item, payload, pv_info, info_prelevement
-
-def _synthesis_month_info(pv_item):
-    """Retourne la clé et le libellé du mois de prélèvement d'un PV."""
-    item, payload, pv_info, info_prelevement = _synthesis_context(pv_item)
-    date_value = (
-        pv_info.get('date')
-        or info_prelevement.get('date_prelevement')
-        or item.get('date_prelevement')
-        or item.get('date')
-        or payload.get('date_prelevement')
-        or payload.get('date')
-        or item.get('date_creation')
-        or payload.get('date_creation')
-    )
-    parsed_date = _parse_synthesis_date(date_value)
-    if parsed_date is None:
-        return None, None, date_value
-
-    months_fr = (
-        'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
-        'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'
-    )
-    month_key = (parsed_date.year, parsed_date.month)
-    month_label = f"{months_fr[parsed_date.month - 1]} {parsed_date.year}"
-    return month_key, month_label, date_value
-
-def _find_synthesis_logo_path():
-    """Recherche le logo utilisé pour l'en-tête du fichier Excel de synthèse."""
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    candidates = [
-        os.path.join(base_dir, 'logo.png'),
-        os.path.join(base_dir, 'logo.jpg'),
-        os.path.join(base_dir, 'logo.jpeg'),
-        os.path.join(base_dir, 'logo.png.jpg'),
-        os.path.join(base_dir, 'assets', 'logo.png'),
-        os.path.join(base_dir, 'assets', 'logo.jpg'),
-    ]
-    return next((path for path in candidates if os.path.isfile(path)), None)
-
-def generate_synthesis_excel(filtered_pvs, selected_month):
-    """Génère le classeur Excel coloré et imprimable de la synthèse mensuelle."""
-    if not XLSXWRITER_AVAILABLE:
-        raise ImportError(
-            "Le module xlsxwriter est nécessaire pour générer le fichier Excel."
-        )
-
-    output = io.BytesIO()
-    workbook = xlsxwriter.Workbook(output, {'in_memory': True})
-    worksheet = workbook.add_worksheet("Synthèse mensuelle")
-
-    worksheet.set_portrait()
-    worksheet.set_paper(9)  # A4
-    worksheet.fit_to_pages(1, 0)
-    worksheet.set_margins(left=0.25, right=0.25, top=0.35, bottom=0.45)
-    worksheet.hide_gridlines(2)
-    worksheet.repeat_rows(5, 5)
-    worksheet.set_header('&C&"Arial,Bold"&10 Synthèse mensuelle des PV')
-    worksheet.set_footer('&L LPEE&CPage &P sur &N&R&D')
-
-    navy = '#1E3A8A'
-    blue = '#2563EB'
-    light_blue = '#DBEAFE'
-    pale_blue = '#EFF6FF'
-    border = '#CBD5E1'
-    dark = '#0F172A'
-
-    title_format = workbook.add_format({
-        'bold': True, 'font_name': 'Arial', 'font_size': 13,
-        'font_color': navy, 'align': 'center', 'valign': 'vcenter',
-    })
-    subtitle_format = workbook.add_format({
-        'bold': True, 'font_name': 'Arial', 'font_size': 9,
-        'font_color': navy, 'align': 'center', 'valign': 'vcenter',
-    })
-    period_format = workbook.add_format({
-        'bold': True, 'font_name': 'Arial', 'font_size': 9,
-        'font_color': dark, 'bg_color': pale_blue, 'border': 1,
-        'border_color': border, 'align': 'left', 'valign': 'vcenter',
-    })
-    header_format = workbook.add_format({
-        'bold': True, 'font_name': 'Arial', 'font_size': 8,
-        'font_color': '#FFFFFF', 'bg_color': blue, 'border': 1,
-        'border_color': '#1D4ED8', 'align': 'center',
-        'valign': 'vcenter', 'text_wrap': True,
-    })
-    cell_format = workbook.add_format({
-        'font_name': 'Arial', 'font_size': 8, 'font_color': dark,
-        'border': 1, 'border_color': border, 'valign': 'top',
-        'text_wrap': True,
-    })
-    cell_center_format = workbook.add_format({
-        'font_name': 'Arial', 'font_size': 8, 'font_color': dark,
-        'border': 1, 'border_color': border, 'align': 'center',
-        'valign': 'top', 'text_wrap': True,
-    })
-    alternate_format = workbook.add_format({
-        'font_name': 'Arial', 'font_size': 8, 'font_color': dark,
-        'bg_color': '#F8FAFC', 'border': 1, 'border_color': border,
-        'valign': 'top', 'text_wrap': True,
-    })
-    alternate_center_format = workbook.add_format({
-        'font_name': 'Arial', 'font_size': 8, 'font_color': dark,
-        'bg_color': '#F8FAFC', 'border': 1, 'border_color': border,
-        'align': 'center', 'valign': 'top', 'text_wrap': True,
-    })
-
-    worksheet.set_column('A:A', 18)
-    worksheet.set_column('B:B', 15)
-    worksheet.set_column('C:C', 24)
-    worksheet.set_column('D:D', 25)
-    worksheet.set_column('E:E', 25)
-    worksheet.set_column('F:F', 38)
-
-    logo_path = _find_synthesis_logo_path()
-    if logo_path:
-        worksheet.insert_image(
-            'A1',
-            logo_path,
-            {'x_scale': 0.20, 'y_scale': 0.20, 'x_offset': 4, 'y_offset': 4}
-        )
-    else:
-        worksheet.write('A1', 'L.P.E.E', title_format)
-
-    worksheet.merge_range('B1:F1', "LABORATOIRE PUBLIC D'ESSAIS ET D'ÉTUDES (LPEE)", title_format)
-    worksheet.merge_range(
-        'B2:F2',
-        'CENTRE TECHNIQUE REGIONAL DE CASABLANCA-SETTAT BENI MELLAL',
-        subtitle_format
-    )
-    worksheet.merge_range(
-        'A4:F4',
-        f"SYNTHÈSE DES PV — PÉRIODE : {selected_month}",
-        period_format
-    )
-    worksheet.set_row(0, 30)
-    worksheet.set_row(1, 22)
-    worksheet.set_row(3, 22)
-
-    headers = [
-        "Référence PV",
-        "Date de prélèvement",
-        "Lieu de prélèvement",
-        "Provenance échantillon",
-        "Fraction des échantillons",
-        "Commentaire",
-    ]
-    header_row = 5
-    for column, header in enumerate(headers):
-        worksheet.write(header_row, column, header, header_format)
-    worksheet.set_row(header_row, 30)
-
-    rows = []
-    for pv_item in filtered_pvs:
-        item_synth, payload_synth, pv_info_synth, info_synth = _synthesis_context(pv_item)
-        reference = (
-            item_synth.get('ref_pv')
-            or pv_info_synth.get('ref_pv')
-            or payload_synth.get('ref_pv')
-            or '-'
-        )
-        date_value = (
-            pv_info_synth.get('date')
-            or info_synth.get('date_prelevement')
-            or item_synth.get('date_prelevement')
-            or item_synth.get('date')
-            or payload_synth.get('date_prelevement')
-            or payload_synth.get('date')
-            or item_synth.get('date_creation')
-            or payload_synth.get('date_creation')
-            or '-'
-        )
-        lieu = info_synth.get('lieu_prelevement') or '-'
-        provenance = info_synth.get('provenance') or '-'
-        commentaire = pv_info_synth.get('commentaires') or '-'
-        materials = (
-            item_synth.get('data_granulats')
-            or payload_synth.get('data_granulats')
-            or {}
-        )
-        materials = _as_synthesis_mapping(materials)
-
-        if materials:
-            for fraction_key, material in materials.items():
-                material = material or {}
-                fraction_label = material.get('nom') or fraction_key
-                classe = material.get('classe')
-                if classe:
-                    fraction_label = f"{fraction_key} — {fraction_label} ({classe})"
-                else:
-                    fraction_label = f"{fraction_key} — {fraction_label}"
-                rows.append([
-                    reference, date_value, lieu, provenance,
-                    fraction_label, commentaire
-                ])
-        else:
-            rows.append([reference, date_value, lieu, provenance, '-', commentaire])
-
-    for row_index, row_values in enumerate(rows, start=header_row + 1):
-        is_alternate = (row_index - header_row) % 2 == 0
-        formats = (
-            [alternate_center_format, alternate_center_format,
-             alternate_format, alternate_format,
-             alternate_format, alternate_format]
-            if is_alternate else
-            [cell_center_format, cell_center_format,
-             cell_format, cell_format,
-             cell_format, cell_format]
-        )
-        for column, value in enumerate(row_values):
-            worksheet.write(row_index, column, value, formats[column])
-        worksheet.set_row(row_index, 34)
-
-    last_row = header_row + max(len(rows), 1)
-    worksheet.autofilter(header_row, 0, last_row, len(headers) - 1)
-    worksheet.freeze_panes(header_row + 1, 0)
-    worksheet.print_area(0, 0, last_row, len(headers) - 1)
-
-    workbook.close()
-    output.seek(0)
-    return output.getvalue()
-
 def _find_lpee_logo_path():
+    """Cherche le logo LPEE à quelques emplacements usuels du dépôt.
+    Retourne le chemin trouvé, ou None si absent (aucun logo n'est requis
+    pour que les PV se génèrent correctement)."""
     _candidates = [
         os.path.join(os.path.dirname(os.path.abspath(__file__)), 'assets', 'lpee_logo.png'),
         os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lpee_logo.png'),
@@ -502,6 +216,7 @@ def _find_lpee_logo_path():
     return next((p for p in _candidates if os.path.isfile(p)), None)
 
 def generate_pv_html(pv_info, info_p, data_granulats):
+    """Génère le document HTML complet et autonome du PV pour impression / téléchargement."""
     gii_data = data_granulats.get('GII', {})
     gi_data  = data_granulats.get('GI', {})
     sc_data  = data_granulats.get('SC', {})
@@ -883,6 +598,7 @@ def generate_pv_html(pv_info, info_p, data_granulats):
     return html
 
 def create_curve_image_buffer(data_granulats, ref_b, fig_width=8, fig_height=3.2):
+    """Génère un buffer image PNG haute définition de la courbe granulométrique pour le PDF."""
     fig, ax = plt.subplots(figsize=(fig_width, fig_height), dpi=200)
     colors_map = {'GII': '#1e40af', 'GI': '#0284c7', 'SC': '#16a34a', 'SD': '#ea580c'}
     
@@ -905,6 +621,8 @@ def create_curve_image_buffer(data_granulats, ref_b, fig_width=8, fig_height=3.2
     ax.tick_params(axis='both', which='major', labelsize=7)
     ax.set_title("COURBE GRANULOMETRIQUE GLOBALE", fontsize=9, fontweight='bold', pad=6)
 
+    # Légende compacte, placée SOUS le graphique (hors de la zone de tracé)
+    # pour ne jamais coller/chevaucher les courbes, quelle que soit leur forme.
     ax.legend(
         loc='upper center',
         bbox_to_anchor=(0.5, -0.22),
@@ -919,6 +637,9 @@ def create_curve_image_buffer(data_granulats, ref_b, fig_width=8, fig_height=3.2
         framealpha=0.95
     )
 
+    # Marges fixes (au lieu de tight_layout) pour réserver l'espace du titre
+    # en haut et de la légende en bas, et garder un rendu prévisible quelle
+    # que soit la hauteur demandée pour le graphique.
     fig.subplots_adjust(top=0.88, bottom=0.30, left=0.09, right=0.97)
 
     buf = io.BytesIO()
@@ -928,6 +649,7 @@ def create_curve_image_buffer(data_granulats, ref_b, fig_width=8, fig_height=3.2
     return buf
 
 def generate_pv_pdf(pv_info, info_p, data_granulats):
+    """Génère le fichier PDF structuré du PV d'identification avec courbe intégrée."""
     if not REPORTLAB_AVAILABLE:
         raise ImportError("La bibliothèque ReportLab n'est pas installée. Veuillez lancer 'pip install reportlab'.")
 
@@ -955,6 +677,12 @@ def generate_pv_pdf(pv_info, info_p, data_granulats):
     
     ref_b = info_p.get('num_rapport', info_p.get('ref_base', '26/260/LGV/CS/1237'))
 
+    # --------------------------------------------------------------------
+    # EN-TÊTE INSTITUTIONNEL (LPEE) — logo + raison sociale du laboratoire,
+    # affiché au-dessus du bandeau bleu "RAPPORT D'ESSAI N°...".
+    # Le logo est recherché dans quelques emplacements usuels du dépôt ;
+    # s'il est absent, l'en-tête reste affiché en texte seul (pas d'erreur).
+    # --------------------------------------------------------------------
     _logo_path = _find_lpee_logo_path()
 
     org_style = ParagraphStyle(
@@ -1226,7 +954,11 @@ def generate_pv_pdf(pv_info, info_p, data_granulats):
     buffer.seek(0)
     return buffer.getvalue()
 
+# ------------------------------------------------------------------------------
+# FONCTIONS DE PERSISTANCE BD / SUPABASE (Restauration permanente après déconnexion)
+# ------------------------------------------------------------------------------
 def fetch_pvs_from_supabase(supabase_client):
+    """Charge l'historique complet des PV depuis la base de données Supabase."""
     debug = {'client_present': bool(supabase_client), 'attempts': []}
     if not supabase_client:
         try:
@@ -1269,6 +1001,7 @@ def fetch_pvs_from_supabase(supabase_client):
     return None
 
 def save_pv_to_supabase(supabase_client, pv_snapshot):
+    """Sauvegarde ou met à jour de façon permanente un PV sur la base de données Supabase."""
     debug = {'client_present': bool(supabase_client), 'attempts': [], 'saved': False}
     if not supabase_client:
         try:
@@ -1303,6 +1036,7 @@ def save_pv_to_supabase(supabase_client, pv_snapshot):
         pass
 
 def delete_pv_from_supabase(supabase_client, pv_ref):
+    """Supprime un PV de la base de données Supabase."""
     debug = {'client_present': bool(supabase_client), 'attempts': [], 'deleted': False}
     if not supabase_client or not pv_ref:
         try:
@@ -1329,9 +1063,18 @@ def delete_pv_from_supabase(supabase_client, pv_ref):
     except Exception:
         pass
 
+# ------------------------------------------------------------------------------
+# FONCTION PRINCIPALE STREAMLIT
+# ------------------------------------------------------------------------------
 def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
     prefix = kwargs.get('key_prefix', 'pvg')
 
+    # ------------------------------------------------------------------------
+    # APPLICATION D'UN CHARGEMENT DE PV EN ATTENTE (depuis l'historique) —
+    # DOIT s'exécuter tout en haut de show(), AVANT la création de tout widget,
+    # pour pouvoir écrire dans st.session_state[f"{prefix}_..."] sans provoquer
+    # de StreamlitWidgetAlreadyInstantiatedError.
+    # ------------------------------------------------------------------------
     if '_pending_pv_load' in st.session_state:
         _pending = st.session_state.pop('_pending_pv_load')
         st.session_state['info_prelevement'] = _pending.get('info_prelevement', {})
@@ -1357,8 +1100,16 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         st.session_state[f"{prefix}_pv_comm_input"] = _pv_info_ld.get('commentaires', '')
 
         st.session_state['success_msg'] = _pending.get('success_msg', "✅ PV chargé.")
+        # Active le mode modification uniquement si ce chargement provient bien
+        # du bouton "✏️ Modifier ce PV" (edit_ref renseigné) — sert à autoriser
+        # la re-validation sous le même N° Rapport sans être bloqué comme doublon.
         st.session_state['_pv_edit_mode'] = _pending.get('edit_ref')
 
+    # ------------------------------------------------------------------------
+    # RÉINITIALISATION POUR UN NOUVEAU PRÉLÈVEMENT (bouton "➕ Ajouter un autre
+    # prélèvement") — même contrainte que ci-dessus : DOIT s'exécuter avant la
+    # création de tout widget.
+    # ------------------------------------------------------------------------
     if st.session_state.pop('_pending_pv_reset', False):
         _kept_chantier = st.session_state.get('info_prelevement', {}).get('chantier', '')
         _kept_client = st.session_state.get('info_prelevement', {}).get('client', '')
@@ -1385,8 +1136,16 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
             'chef_labo': _kept_chef
         }
         st.session_state['data_granulats'] = _blank_data_granulats()
+
+        # Quitte le mode modification : ce nouveau prélèvement n'est PAS une
+        # édition d'un PV existant, donc un N° Rapport en double doit être
+        # bloqué normalement (voir vérification is_blocked_duplicate).
         st.session_state['_pv_edit_mode'] = None
 
+        # Purge de tous les widgets de saisie de CE module (préfixés par
+        # `prefix`) pour qu'ils se réinitialisent proprement à partir des
+        # données vierges ci-dessus au lieu de garder d'anciennes valeurs
+        # tapées par l'utilisateur.
         for _wk in list(st.session_state.keys()):
             if _wk.startswith(f"{prefix}_"):
                 del st.session_state[_wk]
@@ -1466,6 +1225,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
     if 'historique_pv' not in st.session_state:
         st.session_state['historique_pv'] = []
 
+    # Chargement initial automatique depuis Supabase si reconnecté / déconnecté au préalable
     if supabase_client and not st.session_state.get('pvs_loaded_from_db', False):
         db_pvs = fetch_pvs_from_supabase(supabase_client)
         if db_pvs is not None:
@@ -1491,6 +1251,9 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         st.success(st.session_state['success_msg'])
         del st.session_state['success_msg']
 
+    # --------------------------------------------------------------------------
+    # IDENTIFICATION DE L'UTILISATEUR
+    # --------------------------------------------------------------------------
     user_tokens = []
     for _uk in ('username', 'user', 'user_name', 'current_user', 'user_email', 'email', 'nom_utilisateur', 'role'):
         _uv = kwargs.get(_uk) or st.session_state.get(_uk)
@@ -1504,6 +1267,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
     is_baallal_admin = bool(is_admin) or ('baallal' in combined_user_str) or st.session_state.get('is_admin', False) or (st.session_state.get('role') == 'admin')
 
     def _build_pv_snapshot():
+        """Construit un instantané complet du PV courant pour l'historique."""
         existing_ids = [p.get('id', 0) for p in st.session_state['historique_pv']]
         next_id = (max(existing_ids) + 1) if existing_ids else 1
         return {
@@ -1531,10 +1295,12 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
     tabs = st.tabs([
         "1️⃣ Feuilles d'Essais Complets",
         "2️⃣ PV d'Identification / Synthèse",
-        "3️⃣ Historique & Téléchargement de PV",
-        "4️⃣ Synthèse mensuelle"
+        "3️⃣ Historique & Téléchargement de PV"
     ])
 
+    # ------------------------------------------------------------------------------
+    # FENÊTRE 1 : FEUILLES D'ESSAIS COMPLETS
+    # ------------------------------------------------------------------------------
     with tabs[0]:
         st.header("Feuilles d'Analyse Granulométrique et Caractéristiques")
 
@@ -1542,6 +1308,11 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
             col_new1, col_new2 = st.columns([1, 3])
             with col_new1:
                 if st.button("➕ Ajouter un autre prélèvement", use_container_width=True, key=f"{prefix}_btn_new_prelevement"):
+                    # Même contrainte que pour le chargement d'un PV : on ne peut
+                    # pas réassigner ici les clés de session_state déjà liées à
+                    # des widgets déjà instanciés dans ce run. On stocke donc la
+                    # demande de réinitialisation et on la traite tout en haut de
+                    # show(), avant la création des widgets, au prochain run.
                     st.session_state['_pending_pv_reset'] = True
                     st.rerun()
             with col_new2:
@@ -1565,6 +1336,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         
         new_num_rapport  = st.text_input("N° RAPPORT D'ESSAI N°", value=info_p.get('num_rapport', default_num_rapport), disabled=not can_edit, key=f"{prefix}_common_num_rapport")
         new_ref_base     = new_num_rapport.strip()
+
 
         st.text_input(
             "Référence labo (Base) - Identique au N° Rapport", 
@@ -1752,289 +1524,369 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                     "Grandeur": ["2D", "1.4D", "D", "d", "d/2"],
                     "Tamis (mm)": [char_sieves['2D'], char_sieves['1.4D'], char_sieves['D'], char_sieves['d'], char_sieves['d/2']],
                     "% Passant": [
-                        f"{char_passants['2D']:.1f}",
-                        f"{char_passants['1.4D']:.1f}",
-                        f"{char_passants['D']:.1f}",
-                        f"{char_passants['d']:.1f}",
-                        f"{char_passants['d/2']:.1f}"
+                        f"{char_passants['2D']:.1f} %",
+                        f"{char_passants['1.4D']:.1f} %",
+                        f"{char_passants['D']:.1f} %",
+                        f"{char_passants['d']:.1f} %",
+                        f"{char_passants['d/2']:.1f} %"
                     ]
                 })
+                st.markdown(f"**Tamis normatifs : {mat_data['nom']}**")
                 st.dataframe(df_char_mat, hide_index=True, use_container_width=True)
 
             st.markdown("---")
-            st.markdown("##### 📈 Courbe Granulométrique de la fraction")
-            fig_sub, ax_sub = plt.subplots(figsize=(6, 3), dpi=150)
-            if mat_data.get('sieves') and mat_data.get('passants') and len(mat_data['sieves']) == len(mat_data['passants']):
-                s_s, p_s = zip(*sorted(zip(mat_data['sieves'], mat_data['passants'])))
-                ax_sub.plot(s_s, p_s, marker='o', markersize=4, color='#1e40af', linewidth=1.5)
-            ax_sub.set_xscale('log')
-            ax_sub.set_xlim(0.063, 63)
-            ax_sub.xaxis.set_major_locator(FixedLocator(SIEVE_TICKVALS))
-            ax_sub.xaxis.set_major_formatter(FixedFormatter(SIEVE_TICKTEXT))
-            ax_sub.xaxis.set_minor_locator(NullLocator())
-            ax_sub.set_xlabel("Tamis (mm)", fontsize=8, fontweight='bold')
-            ax_sub.set_ylabel("% Passants", fontsize=8, fontweight='bold')
-            ax_sub.set_ylim(-2, 105)
-            ax_sub.grid(True, which="both", ls="--", lw=0.4, alpha=0.7)
-            ax_sub.tick_params(axis='both', which='major', labelsize=7)
-            ax_sub.set_title(f"Courbe - {mat_data.get('nom', key)}", fontsize=8, fontweight='bold')
-            fig_sub.tight_layout()
-            st.pyplot(fig_sub)
-            plt.close(fig_sub)
+            st.subheader("Courbe Granulométrique Globale")
 
-    with tabs[1]:
-        st.header("Visualisation et Validation du PV d'Identification Global")
-        st.caption("Vérifiez l'ensemble des 4 fractions sur le PV consolidé avant signature et export.")
+            fig = go.Figure()
+            colors = {'GII': 'navy', 'GI': '#0284c7', 'SC': '#16a34a', 'SD': '#ea580c'}
+            
+            for k, d in st.session_state['data_granulats'].items():
+                if d.get('sieves') and d.get('passants') and len(d['sieves']) == len(d['passants']):
+                    s_s, p_s = zip(*sorted(zip(d['sieves'], d['passants'])))
+                    line_width = 2.5 if k == key else 1.5
+                    opacity = 1.0 if k == key else 0.4
+                    
+                    fig.add_trace(go.Scatter(
+                        x=s_s, y=p_s,
+                        mode="lines+markers",
+                        name=f"{d['nom']} ({new_ref_base}{SUFFIX_MAP[k]})" if new_ref_base else d['nom'],
+                        line=dict(color=colors[k], width=line_width),
+                        marker=dict(size=6),
+                        opacity=opacity
+                    ))
 
-        pv_info = st.session_state['pv_info']
-        info_p = st.session_state['info_prelevement']
-        data_granulats = st.session_state['data_granulats']
-
-        col_inf1, col_inf2, col_inf3 = st.columns(3)
-        with col_inf1:
-            pv_info['projet'] = st.text_input("Projet / Chantier", value=pv_info.get('projet', ''), disabled=not can_edit, key=f"{prefix}_pv_proj")
-            pv_info['ref_pv'] = st.text_input("Référence Rapport (N° PV)", value=pv_info.get('ref_pv', ''), disabled=not can_edit, key=f"{prefix}_pv_ref")
-        with col_inf2:
-            pv_info['client'] = st.text_input("Client", value=pv_info.get('client', ''), disabled=not can_edit, key=f"{prefix}_pv_cli")
-            pv_info['date'] = st.text_input("Date du PV", value=pv_info.get('date', ''), disabled=not can_edit, key=f"{prefix}_pv_dt")
-        with col_inf3:
-            pv_info['coord_essais'] = st.text_input("Coordinateur des essais", value=pv_info.get('coord_essais', 'O.IKEN'), disabled=not can_edit, key=f"{prefix}_pv_coo")
-            pv_info['chef_labo'] = st.text_input("Chef du laboratoire", value=pv_info.get('chef_labo', 'H.BAALLAL'), disabled=not can_edit, key=f"{prefix}_pv_che")
-
-        pv_info['commentaires'] = st.text_area("Commentaires / Conclusions", value=pv_info.get('commentaires', ''), disabled=not can_edit, key=f"{prefix}_pv_comm_input")
-
-        st.markdown("---")
-        st.subheader("Aperçu HTML interactif du PV")
-        preview_html = generate_pv_html(pv_info, info_p, data_granulats)
-        st.components.v1.html(f'<div style="transform: scale(0.9); transform-origin: top left; width: 110%;">{preview_html}</div>', height=850, scrolling=True)
-
-        st.markdown("---")
-        col_act1, col_act2, col_act3, col_act4 = st.columns(4)
-
-        with col_act1:
-            pdf_bytes = generate_pv_pdf(pv_info, info_p, data_granulats)
-            st.download_button(
-                label="📥 Télécharger le PV (PDF)",
-                data=pdf_bytes,
-                file_name=f"PV_Identification_{pv_info.get('ref_pv', 'granulats').replace('/', '_')}.pdf",
-                mime="application/pdf",
-                use_container_width=True,
-                key=f"{prefix}_dl_pdf"
+            fig.update_layout(
+                xaxis=dict(
+                    title="Tamis (mm)",
+                    type="log",
+                    tickmode="array",
+                    tickvals=SIEVE_TICKVALS,
+                    ticktext=SIEVE_TICKTEXT
+                ),
+                yaxis=dict(
+                    title="% Passants Cumulés",
+                    range=[0, 105]
+                ),
+                margin=dict(l=20, r=20, t=30, b=20),
+                height=380,
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
             )
 
-        with col_act2:
-            html_bytes = preview_html.encode('utf-8')
+            st.plotly_chart(fig, use_container_width=True)
+
+        st.markdown("---")
+        st.subheader("📋 Validation et Enregistrement Global des Essais")
+
+        if not supabase_client:
+            st.warning(
+                "⚠️ Aucune base de données n'est connectée à ce module : la validation ci-dessous "
+                "enregistrera bien le PV dans l'historique de **cette session**, mais il sera **perdu** "
+                "au prochain redémarrage/reconnexion. Voir l'onglet 3️⃣ Historique pour le diagnostic complet."
+            )
+
+        if can_edit:
+            if st.button("✅ Valider et enregistrer l'ensemble des essais", type="primary", use_container_width=True, key=f"{prefix}_btn_validate_all", disabled=is_blocked_duplicate):
+                for mat_k in st.session_state['data_granulats'].keys():
+                    update_passants(st.session_state['data_granulats'][mat_k])
+                    if mat_k in ["SC", "SD"]:
+                        st.session_state['data_granulats'][mat_k]['mf'] = compute_MF(
+                            st.session_state['data_granulats'][mat_k]['sieves'],
+                            st.session_state['data_granulats'][mat_k]['passants']
+                        )
+
+                # Mettre à jour les informations du PV d'Identification courant
+                st.session_state['pv_info']['ref_pv'] = new_num_rapport
+                st.session_state['pv_info']['projet'] = new_chantier
+                st.session_state['pv_info']['client'] = new_client
+                st.session_state['pv_info']['date'] = new_date_prelev
+
+                snapshot = _build_pv_snapshot()
+                
+                # Mise à jour ou ajout dans la liste locale de session
+                existing_idx = None
+                for idx_pv, p_item in enumerate(st.session_state['historique_pv']):
+                    if p_item.get('ref_pv', '').strip().lower() == new_num_rapport.strip().lower():
+                        existing_idx = idx_pv
+                        break
+
+                if existing_idx is not None:
+                    st.session_state['historique_pv'][existing_idx] = snapshot
+                else:
+                    st.session_state['historique_pv'].append(snapshot)
+                
+                # Persistance permanente dans Supabase
+                save_pv_to_supabase(supabase_client, snapshot)
+
+                st.session_state['success_msg'] = f"✅ L'ensemble des essais pour le Rapport N° '{new_num_rapport}' a été validé ! Le PV est disponible sous la phase 2️⃣ et enregistré sous la phase 3️⃣."
+                st.rerun()
+
+    # ------------------------------------------------------------------------------
+    # FENÊTRE 2 : PV D'IDENTIFICATION / SYNTHÈSE
+    # ------------------------------------------------------------------------------
+    with tabs[1]:
+        st.header("PV d'Identification des Granulats pour Béton")
+        
+        pv_info_dict = st.session_state['pv_info']
+
+        with st.expander("⚙️ Modifier les entêtes et signataires du PV", expanded=False):
+            c1, c2, c3 = st.columns(3)
+            c4, c5, c6 = st.columns(3)
+            
+            projet_val   = c1.text_input("Chantier / Projet", pv_info_dict.get('projet', ''), disabled=not can_edit, key=f"{prefix}_pv_proj")
+            client_val   = c2.text_input("Client", pv_info_dict.get('client', ''), disabled=not can_edit, key=f"{prefix}_pv_cli")
+            ref_val      = c3.text_input(
+                "N° RAPPORT D'ESSAI N°",
+                st.session_state['info_prelevement'].get('num_rapport', default_num_rapport),
+                disabled=True,
+                key=f"{prefix}_pv_ref",
+                help="Identique au N° Rapport d'essai de la feuille d'essais."
+            )
+            date_val     = c4.text_input("Date du prélèvement", pv_info_dict.get('date', ''), disabled=not can_edit, key=f"{prefix}_pv_dt")
+            coord_val    = c5.text_input("Coordinateur des essais", pv_info_dict.get('coord_essais', 'O.IKEN'), disabled=not can_edit, key=f"{prefix}_pv_coo")
+            chef_val     = c6.text_input("Chef du laboratoire", pv_info_dict.get('chef_labo', 'H.BAALLAL'), disabled=not can_edit, key=f"{prefix}_pv_che")
+
+            st.session_state['pv_info']['ref_pv'] = st.session_state['info_prelevement'].get('num_rapport', default_num_rapport)
+
+            if can_edit:
+                st.session_state['pv_info']['projet'] = projet_val
+                st.session_state['pv_info']['client'] = client_val
+                st.session_state['pv_info']['date'] = date_val
+                st.session_state['pv_info']['coord_essais'] = coord_val
+                st.session_state['pv_info']['chef_labo'] = chef_val
+
+        current_pv_html = generate_pv_html(
+            st.session_state['pv_info'],
+            st.session_state['info_prelevement'],
+            st.session_state['data_granulats']
+        )
+
+        st.markdown(clean_html(current_pv_html), unsafe_allow_html=True)
+        st.markdown("<br>", unsafe_allow_html=True)
+        
+        col_dl_pdf1, col_dl_pdf2 = st.columns(2)
+        
+        with col_dl_pdf1:
             st.download_button(
-                label="🌐 Télécharger le PV (HTML)",
-                data=html_bytes,
-                file_name=f"PV_Identification_{pv_info.get('ref_pv', 'granulats').replace('/', '_')}.html",
+                label="📄 Télécharger le Rapport PV (Format HTML Imprimable)",
+                data=current_pv_html,
+                file_name=f"PV_Granulats_{st.session_state['pv_info'].get('ref_pv', 'rapport').replace('/', '_')}.html",
                 mime="text/html",
                 use_container_width=True,
-                key=f"{prefix}_dl_html"
+                type="secondary",
+                key=f"{prefix}_dl_html_tab2"
             )
 
-        with col_act3:
+        with col_dl_pdf2:
+            if REPORTLAB_AVAILABLE:
+                try:
+                    pdf_bytes = generate_pv_pdf(
+                        st.session_state['pv_info'],
+                        st.session_state['info_prelevement'],
+                        st.session_state['data_granulats']
+                    )
+                    st.download_button(
+                        label="🔴 Télécharger le Rapport PV avec Courbe (Format PDF)",
+                        data=pdf_bytes,
+                        file_name=f"PV_Granulats_{st.session_state['pv_info'].get('ref_pv', 'rapport').replace('/', '_')}.pdf",
+                        mime="application/pdf",
+                        use_container_width=True,
+                        type="primary",
+                        key=f"{prefix}_dl_pdf_tab2"
+                    )
+                except Exception as e:
+                    st.error(f"Erreur lors de la création du PDF : {e}")
+            else:
+                st.warning("⚠️ Pour activer le téléchargement PDF, installez ReportLab : `pip install reportlab`")
+
+        st.markdown("---")
+        st.subheader("COURBE GRANULOMETRIQUE GLOBALE DU PV")
+        fig_global_tab2 = go.Figure()
+        
+        colors = {'GII': '#1e40af', 'GI': '#0284c7', 'SC': '#16a34a', 'SD': '#ea580c'}
+        ref_b = st.session_state['info_prelevement'].get('num_rapport', default_num_rapport)
+        
+        for k, d in st.session_state['data_granulats'].items():
+            if d.get('sieves') and d.get('passants') and len(d['sieves']) == len(d['passants']):
+                s_s, p_s = zip(*sorted(zip(d['sieves'], d['passants'])))
+                fig_global_tab2.add_trace(go.Scatter(
+                    x=s_s, y=p_s,
+                    mode='lines+markers',
+                    name=f"{d['nom']} ({ref_b}{SUFFIX_MAP[k]})" if ref_b else d['nom'],
+                    line=dict(color=colors[k], width=2)
+                ))
+            
+        fig_global_tab2.update_layout(
+            xaxis=dict(type="log", title="Tamis (mm)", tickmode="array", tickvals=SIEVE_TICKVALS, ticktext=SIEVE_TICKTEXT),
+            yaxis=dict(title="% Passants Cumulés", range=[0, 105]),
+            height=440,
+            margin=dict(l=30, r=30, t=30, b=30),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+        )
+        st.plotly_chart(fig_global_tab2, use_container_width=True)
+
+        comm_input = st.text_area("COMMENTAIRES :", value=st.session_state['pv_info'].get('commentaires', ''), disabled=not can_edit, height=80, key=f"{prefix}_pv_comm_input")
+        if can_edit:
+            st.session_state['pv_info']['commentaires'] = comm_input
+
+    # ------------------------------------------------------------------------------
+    # FENÊTRE 3 : HISTORIQUE & TÉLÉCHARGEMENT DE PV (RUBRIQUE DE RECHERCHE)
+    # ------------------------------------------------------------------------------
+    with tabs[2]:
+        st.header("Historique et Sauvegarde des PV")
+
+        # Diagnostic : le message d'alerte reste visible pour tout le monde
+        # UNIQUEMENT s'il y a un vrai problème (ça affecte la sécurité de leurs
+        # données). Le détail technique brut (JSON), lui, est réservé à
+        # l'admin baallal pour ne plus encombrer l'écran des autres
+        # utilisateurs maintenant que la connexion fonctionne.
+        _dbg_fetch = st.session_state.get('_pv_db_debug_fetch')
+        _dbg_save = st.session_state.get('_pv_db_debug_save')
+
+        _fetch_failed = bool(_dbg_fetch and _dbg_fetch.get('attempts') and not any(a.get('ok') for a in _dbg_fetch['attempts']))
+        _save_failed = bool(_dbg_save and not _dbg_save.get('saved') and _dbg_save.get('attempts'))
+
+        if not supabase_client:
+            st.error(
+                "❌ **Aucun client Supabase n'est transmis à ce module** (`supabase_client=None`). "
+                "C'est pour cela que l'historique des PV est perdu à chaque redémarrage/reconnexion : "
+                "il n'existe alors qu'en mémoire de la session en cours. "
+                "Ce paramètre est fourni par l'application qui appelle `show(...)` — vérifiez l'endroit où "
+                "ce module est invoqué (le routeur principal de l'app) pour vous assurer qu'un client "
+                "Supabase valide y est bien passé en argument `supabase_client`."
+            )
+        elif _fetch_failed:
+            st.error(
+                "❌ **Le client Supabase est bien transmis, mais la lecture de l'historique a échoué** "
+                "sur les deux tables testées (`pv_granulats` et `historique_pv`)."
+            )
+        elif _save_failed:
+            st.warning(
+                "⚠️ La dernière tentative d'enregistrement d'un PV en base a échoué sur les deux tables testées."
+            )
+        elif is_baallal_admin and supabase_client and _dbg_fetch and _dbg_fetch.get('loaded_from'):
+            st.caption(f"✅ Connexion base de données OK — historique chargé depuis `{_dbg_fetch['loaded_from']}` ({_dbg_fetch.get('loaded_count', 0)} PV).")
+
+
+        if st.session_state['historique_pv']:
+            st.write("### 🔎 Recherche & Sélection de PV")
+
+            # Rubrique de sélection / recherche selon le format présenté
+            pv_options = {}
+            for idx, pv_item in enumerate(reversed(st.session_state['historique_pv'])):
+                ref_pv_item = pv_item.get('ref_pv', f"PV-{idx+1}")
+                client_item = pv_item.get('client', '-')
+                projet_item = pv_item.get('projet', '-')
+                date_item   = pv_item.get('date_creation', pv_item.get('date', '-'))
+                
+                # Format d'affichage : Référence | Client | Chantier | Date
+                option_label = f"Référence : {ref_pv_item} | Client : {client_item} | Chantier : {projet_item} | Date : {date_item}"
+                pv_options[option_label] = pv_item
+
+            selected_pv_label = st.selectbox(
+                "Sélectionnez le PV à consulter :",
+                options=list(pv_options.keys()),
+                key=f"{prefix}_select_pv_dropdown_search"
+            )
+
+            selected_pv = pv_options[selected_pv_label]
+            pv_ref_selected = selected_pv.get('ref_pv', '-')
+
+            st.markdown(f"#### 📄 PV Sélectionné : `{pv_ref_selected}`")
+            col_sel1, col_sel2, col_sel3 = st.columns(3)
+            col_sel1.markdown(f"**Client :** {selected_pv.get('client', '-')}")
+            col_sel2.markdown(f"**Chantier :** {selected_pv.get('projet', '-')}")
+            col_sel3.markdown(f"**Date d'enregistrement :** {selected_pv.get('date_creation', '-')}")
+
+            pv_info_hist = selected_pv.get('pv_info', {})
+            info_p_hist  = selected_pv.get('info_prelevement', {})
+            data_g_hist  = selected_pv.get('data_granulats', {})
+
+            if REPORTLAB_AVAILABLE:
+                try:
+                    pdf_hist_bytes = generate_pv_pdf(pv_info_hist, info_p_hist, data_g_hist)
+                    st.download_button(
+                        label="🔴 Télécharger PV en PDF avec Courbe",
+                        data=pdf_hist_bytes,
+                        file_name=f"PV_Granulats_{str(pv_ref_selected).replace('/', '_')}.pdf",
+                        mime="application/pdf",
+                        key=f"{prefix}_dl_pdf_sel_pv_main",
+                        type="primary",
+                        use_container_width=True
+                    )
+                except Exception as e:
+                    st.error(f"Erreur lors de la génération du PDF : {e}")
+
+            # ------------------------------------------------------------------
+            # SECTION MODIFICATION — rubrique dédiée, visible dans l'historique
+            # ------------------------------------------------------------------
             if can_edit:
-                if st.button("💾 Enregistrer dans l'historique", use_container_width=True, key=f"{prefix}_btn_save_pv"):
-                    ref_current = pv_info.get('ref_pv', '').strip()
-                    if not ref_current:
-                        st.error("⚠️ Veuillez renseigner le N° de rapport (Référence PV).")
-                    elif is_blocked_duplicate and not is_authorized_edit:
-                        st.error(f"⛔ Impossible d'enregistrer : le N° de rapport '{ref_current}' existe déjà dans l'historique.")
-                    else:
-                        snapshot = _build_pv_snapshot()
-                        if _edit_mode_ref:
-                            st.session_state['historique_pv'] = [
-                                p for p in st.session_state['historique_pv']
-                                if p.get('ref_pv', '').strip().lower() != _edit_mode_ref
-                            ]
+                st.markdown("---")
+                st.markdown("##### ✏️ Modification du PV")
+                st.caption(
+                    "Charge ce PV dans les onglets 1️⃣ et 2️⃣ pour en modifier les valeurs. "
+                    "Une fois vos modifications faites, retournez dans l'onglet 1️⃣ et cliquez sur "
+                    "« ✅ Valider et enregistrer l'ensemble des essais » : comme le N° Rapport est "
+                    "identique, la fiche existante sera mise à jour (pas de doublon créé)."
+                )
+                if st.button("✏️ Modifier ce PV", use_container_width=True, key=f"{prefix}_btn_load_pv_active_main"):
+                    # IMPORTANT : on ne peut pas réassigner ici les clés de
+                    # session_state déjà liées à des widgets (ex: {prefix}_common_client)
+                    # car ces widgets ont déjà été instanciés plus haut dans CE MÊME
+                    # run (l'onglet 1 s'exécute avant l'onglet 3, même s'il n'est pas
+                    # affiché). Cela déclenche StreamlitWidgetAlreadyInstantiatedError.
+                    # On stocke donc la demande de chargement et on la traite tout en
+                    # haut de show(), AVANT la création de ces widgets, au prochain run.
+                    st.session_state['_pending_pv_load'] = {
+                        'info_prelevement': copy.deepcopy(selected_pv.get('info_prelevement', {})),
+                        'pv_info': copy.deepcopy(selected_pv.get('pv_info', {})),
+                        'data_granulats': copy.deepcopy(selected_pv.get('data_granulats', {})),
+                        'edit_ref': pv_ref_selected,
+                        'success_msg': f"✅ Le PV N° '{pv_ref_selected}' a été chargé dans les onglets 1️⃣ et 2️⃣ pour modification. Éditez les valeurs puis validez à nouveau pour enregistrer."
+                    }
+                    st.rerun()
+
+            # ------------------------------------------------------------------
+            # SECTION SUPPRESSION — Accessible aux administrateurs
+            # ------------------------------------------------------------------
+            if is_baallal_admin:
+                st.markdown("---")
+                st.markdown("##### 🔐 Suppression sécurisée (Administration)")
+                del_col1, del_col2 = st.columns([3, 1])
+                
+                with del_col1:
+                    confirm_delete = st.checkbox(
+                        f"Je confirme vouloir supprimer définitivement le PV N° '{pv_ref_selected}'",
+                        key=f"{prefix}_confirm_del_selected_{selected_pv.get('id', 'sel')}_{selected_pv.get('ref_pv', '')}"
+                    )
+                with del_col2:
+                    if st.button(
+                        "🗑️ Supprimer ce PV",
+                        type="secondary",
+                        use_container_width=True,
+                        disabled=not confirm_delete,
+                        key=f"{prefix}_btn_del_selected_{selected_pv.get('id', 'sel')}_{selected_pv.get('ref_pv', '')}"
+                    ):
+                        pv_id_to_delete = selected_pv.get('id')
                         st.session_state['historique_pv'] = [
                             p for p in st.session_state['historique_pv']
-                            if p.get('ref_pv', '').strip().lower() != ref_current.lower()
+                            if p.get('id') != pv_id_to_delete and p.get('ref_pv') != pv_ref_selected
                         ]
-                        st.session_state['historique_pv'].insert(0, snapshot)
-                        if supabase_client:
-                            save_pv_to_supabase(supabase_client, snapshot)
-                        st.session_state['_pv_edit_mode'] = ref_current.lower()
-                        st.success(f"✅ PV '{ref_current}' enregistré avec succès dans l'historique !")
+                        delete_pv_from_supabase(supabase_client, pv_ref_selected)
+                        st.session_state['success_msg'] = f"🗑️ Le PV N° '{pv_ref_selected}' a été définitivement supprimé de la base de données."
+                        st.rerun()
 
-        with col_act4:
-            if st.button("🔄 Actualiser les calculs", use_container_width=True, key=f"{prefix}_btn_refresh"):
-                for k_mat in data_granulats.keys():
-                    update_passants(data_granulats[k_mat])
-                    if k_mat in ['SC', 'SD']:
-                        data_granulats[k_mat]['mf'] = compute_MF(
-                            data_granulats[k_mat]['sieves'],
-                            data_granulats[k_mat]['passants']
-                        )
-                st.success("✅ Calculs actualisés.")
-
-    with tabs[2]:
-        st.header("Historique des PV Enregistrés")
-        st.caption("Consultez, rechargez, modifiez ou supprimez les PV enregistrés lors des sessions.")
-
-        hist = st.session_state.get('historique_pv', [])
-        if not hist:
-            st.info("Aucun PV enregistré pour l'instant dans cette session.")
+            st.markdown("---")
+            st.write("### 📜 Liste complète des PV enregistrés")
+            for i, pv in enumerate(reversed(st.session_state['historique_pv'])):
+                ref_pv_disp = pv.get('ref_pv', '-')
+                date_disp = pv.get('date_creation', '-')
+                client_disp = pv.get('client', '-')
+                
+                item_title = f"📁 PV N° {ref_pv_disp} | Date : {date_disp} | Client : {client_disp}"
+                
+                with st.expander(item_title, expanded=False):
+                    st.markdown(f"**Chantier / Projet :** {pv.get('projet', '-')}")
+                    st.markdown(f"**Date de création :** {date_disp}")
+                    st.markdown(f"**Référence Rapport :** `{ref_pv_disp}`")
         else:
-            st.markdown(f"**Nombre de PV dans l'historique :** {len(hist)}")
-            for idx, pv_item in enumerate(hist):
-                p_info = pv_item.get('pv_info', {})
-                i_prel = pv_item.get('info_prelevement', {})
-                ref = p_info.get('ref_pv', pv_item.get('ref_pv', 'Sans réf'))
-                client = p_info.get('client', pv_item.get('client', ''))
-                projet = p_info.get('projet', pv_item.get('projet', ''))
-                date_c = pv_item.get('date_creation', 'Date inconnue')
-
-                with st.expander(f"📁 PV N° : {ref} — Client : {client} (Créé le {date_c})"):
-                    st.markdown(f"**Chantier / Projet :** {projet}")
-                    st.markdown(f"**Date du prélèvement :** {p_info.get('date', '-')}")
-                    st.markdown(f"**Lieu de prélèvement :** {i_prel.get('lieu_prelevement', '-')}")
-                    st.markdown(f"**Provenance :** {i_prel.get('provenance', '-')}")
-
-                    hc1, hc2, hc3, hc4 = st.columns(4)
-                    with hc1:
-                        if st.button("📂 Charger ce PV", key=f"{prefix}_load_hist_{idx}_{ref}"):
-                            st.session_state['_pending_pv_load'] = {
-                                'info_prelevement': copy.deepcopy(pv_item.get('info_prelevement', {})),
-                                'pv_info': copy.deepcopy(pv_item.get('pv_info', {})),
-                                'data_granulats': copy.deepcopy(pv_item.get('data_granulats', {})),
-                                'success_msg': f"✅ PV '{ref}' chargé avec succès.",
-                                'edit_ref': None
-                            }
-                            st.rerun()
-
-                    with hc2:
-                        if can_edit:
-                            if st.button("✏️ Modifier ce PV", key=f"{prefix}_edit_hist_{idx}_{ref}"):
-                                st.session_state['_pending_pv_load'] = {
-                                    'info_prelevement': copy.deepcopy(pv_item.get('info_prelevement', {})),
-                                    'pv_info': copy.deepcopy(pv_item.get('pv_info', {})),
-                                    'data_granulats': copy.deepcopy(pv_item.get('data_granulats', {})),
-                                    'success_msg': f"✏️ PV '{ref}' ouvert en modification. Vous pouvez modifier et enregistrer.",
-                                    'edit_ref': ref.strip().lower()
-                                }
-                                st.rerun()
-
-                    with hc3:
-                        pdf_b_hist = generate_pv_pdf(
-                            pv_item.get('pv_info', {}),
-                            pv_item.get('info_prelevement', {}),
-                            pv_item.get('data_granulats', {})
-                        )
-                        st.download_button(
-                            label="📥 Télécharger PDF",
-                            data=pdf_b_hist,
-                            file_name=f"PV_{ref.replace('/', '_')}.pdf",
-                            mime="application/pdf",
-                            key=f"{prefix}_dl_pdf_hist_{idx}_{ref}"
-                        )
-
-                    with hc4:
-                        if can_edit:
-                            if st.button("🗑️ Supprimer", key=f"{prefix}_del_hist_{idx}_{ref}"):
-                                st.session_state['historique_pv'] = [
-                                    p for i_p, p in enumerate(st.session_state['historique_pv']) if i_p != idx
-                                ]
-                                if supabase_client:
-                                    delete_pv_from_supabase(supabase_client, ref)
-                                st.success(f"🗑️ PV '{ref}' supprimé.")
-                                st.rerun()
-
-    with tabs[3]:
-        st.header("Synthèse Mensuelle des PV")
-        st.caption("Générez un tableau récapitulatif mensuel et un export Excel professionnel mis en page.")
-
-        all_pvs_synth = st.session_state.get('historique_pv', [])
-        if not all_pvs_synth:
-            st.info("Aucun PV dans l'historique pour établir une synthèse mensuelle.")
-        else:
-            months_map = {}
-            for pv_item in all_pvs_synth:
-                m_key, m_label, raw_d = _synthesis_month_info(pv_item)
-                if m_key and m_label:
-                    months_map.setdefault(m_key, {'label': m_label, 'pvs': []})
-                    months_map[m_key]['pvs'].append(pv_item)
-                else:
-                    months_map.setdefault((0, 0), {'label': 'Date non spécifiée / Autre', 'pvs': []})
-                    months_map[(0, 0)]['pvs'].append(pv_item)
-
-            sorted_month_keys = sorted(
-                [k for k in months_map.keys() if k != (0, 0)],
-                reverse=True
-            )
-            if (0, 0) in months_map:
-                sorted_month_keys.append((0, 0))
-
-            month_options = [months_map[k]['label'] for k in sorted_month_keys]
-            selected_month_label = st.selectbox(
-                "Sélectionner le mois de synthèse :",
-                month_options,
-                key=f"{prefix}_synth_month_select"
-            )
-
-            chosen_key = next(
-                (k for k in sorted_month_keys if months_map[k]['label'] == selected_month_label),
-                sorted_month_keys[0] if sorted_month_keys else None
-            )
-
-            if chosen_key is not None:
-                filtered_pvs = months_map[chosen_key]['pvs']
-                st.markdown(f"**Nombre de PV pour {selected_month_label} :** {len(filtered_pvs)}")
-
-                rows_preview = []
-                for pv_item in filtered_pvs:
-                    item_s, payload_s, pv_info_s, info_s = _synthesis_context(pv_item)
-                    ref_v = item_s.get('ref_pv') or pv_info_s.get('ref_pv') or '-'
-                    date_v = pv_info_s.get('date') or info_s.get('date_prelevement') or '-'
-                    lieu_v = info_s.get('lieu_prelevement') or '-'
-                    prov_v = info_s.get('provenance') or '-'
-                    comm_v = pv_info_s.get('commentaires') or '-'
-                    mats = item_s.get('data_granulats') or payload_s.get('data_granulats') or {}
-                    mats = _as_synthesis_mapping(mats)
-
-                    if mats:
-                        for f_key, mat_obj in mats.items():
-                            mat_obj = mat_obj or {}
-                            f_lbl = mat_obj.get('nom') or f_key
-                            cls_v = mat_obj.get('classe')
-                            if cls_v:
-                                f_lbl = f"{f_key} — {f_lbl} ({cls_v})"
-                            else:
-                                f_lbl = f"{f_key} — {f_lbl}"
-                            rows_preview.append({
-                                "Référence PV": ref_v,
-                                "Date": date_v,
-                                "Lieu": lieu_v,
-                                "Provenance": prov_v,
-                                "Fraction": f_lbl,
-                                "Commentaire": comm_v
-                            })
-                    else:
-                        rows_preview.append({
-                            "Référence PV": ref_v,
-                            "Date": date_v,
-                            "Lieu": lieu_v,
-                            "Provenance": prov_v,
-                            "Fraction": "-",
-                            "Commentaire": comm_v
-                        })
-
-                df_synth_preview = pd.DataFrame(rows_preview)
-                st.dataframe(df_synth_preview, use_container_width=True, hide_index=True)
-
-                if XLSXWRITER_AVAILABLE:
-                    try:
-                        excel_bytes = generate_synthesis_excel(filtered_pvs, selected_month_label)
-                        st.download_button(
-                            label="📊 Télécharger la synthèse Excel (A4 Paysage / Portrait coloré)",
-                            data=excel_bytes,
-                            file_name=f"Synthese_PV_{selected_month_label.replace(' ', '_')}.xlsx",
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                            use_container_width=True,
-                            key=f"{prefix}_dl_synth_excel"
-                        )
-                    except Exception as ex:
-                        st.error(f"Erreur lors de la génération du fichier Excel de synthèse : {str(ex)}")
-                else:
-                    st.warning("⚠️ Le module `xlsxwriter` n'est pas disponible. L'export Excel est désactivé.")
+            st.info("Aucun PV n'est enregistré dans l'historique pour le moment. Réalisez un essai et validez-le en Phase 1.")
