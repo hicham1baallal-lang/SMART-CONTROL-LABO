@@ -401,13 +401,13 @@ def generate_pv_html(pv_info, info_p, data_granulats):
         background-color: #2563eb;
         color: #ffffff;
         border: 1px solid #1d4ed8;
-        padding: 6px;
+        padding: 3px 4px;
         text-align: center;
         font-weight: bold;
     }}
     .lpee-table td {{
         border: 1px solid #cbd5e1;
-        padding: 5px;
+        padding: 3px 4px;
         text-align: center;
     }}
     .row-designation {{
@@ -480,7 +480,7 @@ def generate_pv_html(pv_info, info_p, data_granulats):
             font-size: 7px;
         }}
         .lpee-info-grid td, .lpee-norm-table td,
-        .lpee-table th, .lpee-table td {{ padding: 1px 2px; line-height: 1.05; }}
+        .lpee-table th, .lpee-table td {{ padding: 0.5px 1.5px; line-height: 0.95; }}
         .curve-box {{ margin: 2px 0; padding: 1px; font-size: 8px; }}
         .curve-box img {{ max-height: 105px; margin-top: 1px; }}
         .comments-box {{ margin-top: 2px; padding: 2px; font-size: 7px; }}
@@ -763,10 +763,10 @@ def generate_pv_pdf(pv_info, info_p, data_granulats):
         fontName='Helvetica-Bold', fontSize=8.5, leading=10,
         textColor=colors.white, alignment=1
     )
-    cell_bold = ParagraphStyle('PDFCellBold', fontName='Helvetica-Bold', fontSize=5.8, leading=6.5, alignment=1)
-    cell_norm = ParagraphStyle('PDFCellNorm', fontName='Helvetica', fontSize=5.8, leading=6.5, alignment=1)
-    cell_left = ParagraphStyle('PDFCellLeft', fontName='Helvetica', fontSize=5.8, leading=6.5, alignment=0)
-    cell_left_bold = ParagraphStyle('PDFCellLeftBold', fontName='Helvetica-Bold', fontSize=5.8, leading=6.5, alignment=0)
+    cell_bold = ParagraphStyle('PDFCellBold', fontName='Helvetica-Bold', fontSize=5.0, leading=5.2, alignment=1)
+    cell_norm = ParagraphStyle('PDFCellNorm', fontName='Helvetica', fontSize=5.0, leading=5.2, alignment=1)
+    cell_left = ParagraphStyle('PDFCellLeft', fontName='Helvetica', fontSize=5.0, leading=5.2, alignment=0)
+    cell_left_bold = ParagraphStyle('PDFCellLeftBold', fontName='Helvetica-Bold', fontSize=5.0, leading=5.2, alignment=0)
     
     ref_b = info_p.get('num_rapport', info_p.get('ref_base', '26/260/LGV/CS/1237'))
 
@@ -816,8 +816,8 @@ def generate_pv_pdf(pv_info, info_p, data_granulats):
         ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#1e3a8a')),
         ('ALIGN', (0,0), (-1,-1), 'CENTER'),
         ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 5),
-        ('TOPPADDING', (0,0), (-1,-1), 5),
+         ('BOTTOMPADDING', (0,0), (-1,-1), 2),
+         ('TOPPADDING', (0,0), (-1,-1), 2),
     ]))
     story.append(header_table)
     story.append(Spacer(1, 2))
@@ -841,8 +841,8 @@ def generate_pv_pdf(pv_info, info_p, data_granulats):
             ('BACKGROUND', (0,0), (0,-1), colors.HexColor('#f8fafc')),
             ('BACKGROUND', (2,0), (2,-1), colors.HexColor('#f8fafc')),
             ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-             ('TOPPADDING', (0,0), (-1,-1), 1 + pad_extra),
-             ('BOTTOMPADDING', (0,0), (-1,-1), 1 + pad_extra),
+             ('TOPPADDING', (0,0), (-1,-1), 0.4 + pad_extra),
+             ('BOTTOMPADDING', (0,0), (-1,-1), 0.4 + pad_extra),
         ]))
         flowables.append(info_table)
         flowables.append(Spacer(1, 1))
@@ -861,8 +861,8 @@ def generate_pv_pdf(pv_info, info_p, data_granulats):
             ('BACKGROUND', (0,0), (4,0), colors.HexColor('#f1f5f9')),
             ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#cbd5e1')),
             ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-             ('TOPPADDING', (0,0), (-1,-1), 1 + pad_extra),
-             ('BOTTOMPADDING', (0,0), (-1,-1), 1 + pad_extra),
+             ('TOPPADDING', (0,0), (-1,-1), 0.4 + pad_extra),
+             ('BOTTOMPADDING', (0,0), (-1,-1), 0.4 + pad_extra),
         ]))
         flowables.append(norm_table)
         flowables.append(Spacer(1, 1))
@@ -884,8 +884,8 @@ def generate_pv_pdf(pv_info, info_p, data_granulats):
                 ('BACKGROUND', (0,2), (0,2), colors.HexColor('#f1f5f9')),
                 ('BACKGROUND', (0,3), (-1,3), colors.HexColor('#fafafa')),
                 ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-                 ('TOPPADDING', (0,0), (-1,-1), 0.5 + pad_extra),
-                 ('BOTTOMPADDING', (0,0), (-1,-1), 0.5 + pad_extra),
+                 ('TOPPADDING', (0,0), (-1,-1), 0.2 + pad_extra),
+                 ('BOTTOMPADDING', (0,0), (-1,-1), 0.2 + pad_extra),
             ]))
             return t
 
