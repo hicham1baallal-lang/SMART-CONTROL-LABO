@@ -141,12 +141,42 @@ def get_passant_at_sieve(sieves, passings, target_sieve):
 
 def format_sieve_display(val):
     """Formate proprement un nombre de tamis pour l'affichage (évite les erreurs de type string/int)."""
-    if val is None or np.isnan(val):
+    if val is None:
         return "0"
-    val_f = float(val)
+    try:
+        val_f = float(val)
+    except (TypeError, ValueError):
+        return "0"
+    if np.isnan(val_f):
+        return "0"
     if val_f.is_integer():
         return str(int(val_f))
     return str(val_f).replace('.', ',')
+
+def _safe_text(value, default=''):
+    """Retourne toujours un texte exploitable, même si Supabase renvoie un nombre."""
+    if value is None:
+        return default
+    return str(value)
+
+def _next_snapshot_id(history):
+    """Calcule un identifiant numérique sans additionner une chaîne et un entier.
+
+    Les anciennes lignes peuvent contenir ``id`` sous forme de texte (par
+    exemple ``"12"``).  ``max(existing_ids) + 1`` provoquait alors :
+    ``can only concatenate str (not "int") to str``.
+    """
+    numeric_ids = []
+    for item in history or []:
+        raw_id = item.get('id') if isinstance(item, dict) else None
+        try:
+            if raw_id is not None and str(raw_id).strip() != '':
+                numeric_ids.append(int(float(raw_id)))
+        except (TypeError, ValueError):
+            # Les identifiants non numériques (UUID, valeur vide, etc.) sont
+            # ignorés pour le calcul du prochain identifiant local.
+            continue
+    return max(numeric_ids, default=0) + 1
 
 def calculate_characteristic_data(mat_data, tamis_D=None):
     """Déduit la liste des tamis caractéristiques (2D, 1.4D, D, d, d/2)"""
@@ -830,14 +860,14 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         del st.session_state['success_msg']
 
     def _build_pv_snapshot():
-        existing_ids = [p.get('id', 0) for p in st.session_state['historique_pv']]
-        next_id = (max(existing_ids) + 1) if existing_ids else 1
+        next_id = _next_snapshot_id(st.session_state.get('historique_pv', []))
+        ref_pv = _safe_text(st.session_state['pv_info'].get('ref_pv', '')).strip()
         return {
             'id': next_id,
             'date_creation': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            'ref_pv': st.session_state['pv_info'].get('ref_pv', '').strip(),
-            'projet': st.session_state['pv_info'].get('projet', ''),
-            'client': st.session_state['pv_info'].get('client', ''),
+            'ref_pv': ref_pv,
+            'projet': _safe_text(st.session_state['pv_info'].get('projet', '')),
+            'client': _safe_text(st.session_state['pv_info'].get('client', '')),
             'info_prelevement': copy.deepcopy(st.session_state['info_prelevement']),
             'pv_info': copy.deepcopy(st.session_state['pv_info']),
             'data_granulats': copy.deepcopy(st.session_state['data_granulats'])
@@ -849,7 +879,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         st.info("👁️ **Mode Consultation** : Vous êtes en lecture seule.")
 
     saved_num_rapports = [
-        pv.get('ref_pv', '').strip().lower() 
+        _safe_text(pv.get('ref_pv', '')).strip().lower()
         for pv in st.session_state.get('historique_pv', []) 
         if pv.get('ref_pv')
     ]
@@ -889,12 +919,20 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         new_lieu_prelev  = c5.text_input("Lieu de prélèvement", value=info_p.get('lieu_prelevement', 'Stock sur centrale à béton'), disabled=not can_edit, key=f"{prefix}_common_lieu_prelev")
         new_provenance   = c6.text_input("Provenance échantillon", value=info_p.get('provenance', 'TG PREFA OULAD SALEH'), disabled=not can_edit, key=f"{prefix}_common_provenance")
         
-        new_num_rapport  = st.text_input("N° RAPPORT D'ESSAI N°", value=info_p.get('num_rapport', default_num_rapport), disabled=not can_edit, key=f"{prefix}_common_num_rapport")
+        new_num_rapport  = st.text_input(
+            "N° RAPPORT D'ESSAI N°",
+            value=_safe_text(info_p.get('num_rapport', default_num_rapport)),
+            disabled=not can_edit,
+            key=f"{prefix}_common_num_rapport"
+        )
+        # Streamlit renvoie normalement une chaîne, mais cette normalisation
+        # protège aussi les dossiers historiques dont la valeur est numérique.
+        new_num_rapport = _safe_text(new_num_rapport).strip()
         new_ref_base     = new_num_rapport.strip()
 
-        is_duplicate = new_num_rapport.strip().lower() in saved_num_rapports if new_num_rapport.strip() else False
-        _edit_mode_ref = (st.session_state.get('_pv_edit_mode') or '').strip().lower()
-        _new_num_norm = new_num_rapport.strip().lower()
+        is_duplicate = new_num_rapport.lower() in saved_num_rapports if new_num_rapport else False
+        _edit_mode_ref = _safe_text(st.session_state.get('_pv_edit_mode') or '').strip().lower()
+        _new_num_norm = new_num_rapport.lower()
         is_authorized_edit = is_duplicate and bool(_edit_mode_ref) and _edit_mode_ref == _new_num_norm
         is_blocked_duplicate = is_duplicate and not is_authorized_edit
 
@@ -1063,7 +1101,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                 snapshot = _build_pv_snapshot()
                 existing_idx = None
                 for idx_pv, p_item in enumerate(st.session_state['historique_pv']):
-                    if p_item.get('ref_pv', '').strip().lower() == new_num_rapport.strip().lower():
+                    if _safe_text(p_item.get('ref_pv', '')).strip().lower() == new_num_rapport.lower():
                         existing_idx = idx_pv
                         break
 
