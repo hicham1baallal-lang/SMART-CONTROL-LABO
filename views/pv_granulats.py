@@ -215,41 +215,6 @@ def _find_lpee_logo_path():
     ]
     return next((p for p in _candidates if os.path.isfile(p)), None)
 
-def _safe_text(value, default=''):
-    """Retourne toujours un texte exploitable, même pour une valeur BD numérique."""
-    if value is None:
-        return default
-    return str(value)
-
-def _next_snapshot_id(history):
-    """Calcule le prochain identifiant sans additionner une chaîne et un entier."""
-    numeric_ids = []
-    for item in history or []:
-        raw_id = item.get('id') if isinstance(item, dict) else None
-        try:
-            if raw_id is not None and str(raw_id).strip():
-                numeric_ids.append(int(float(raw_id)))
-        except (TypeError, ValueError):
-            continue
-    return max(numeric_ids, default=0) + 1
-
-def get_month_year_label(date_str):
-    """Convertit une date en libellé français de type « Juillet 2026 »."""
-    if not date_str:
-        return None
-    months_fr = {
-        1: 'Janvier', 2: 'Février', 3: 'Mars', 4: 'Avril',
-        5: 'Mai', 6: 'Juin', 7: 'Juillet', 8: 'Août',
-        9: 'Septembre', 10: 'Octobre', 11: 'Novembre', 12: 'Décembre'
-    }
-    for fmt in ('%Y-%m-%d %H:%M:%S', '%Y-%m-%d', '%d/%m/%Y', '%d-%m-%Y'):
-        try:
-            dt = datetime.strptime(_safe_text(date_str).strip(), fmt)
-            return f"{months_fr[dt.month]} {dt.year}"
-        except ValueError:
-            continue
-    return None
-
 def generate_pv_html(pv_info, info_p, data_granulats):
     """Génère le document HTML complet et autonome du PV pour impression / téléchargement."""
     gii_data = data_granulats.get('GII', {})
@@ -258,14 +223,6 @@ def generate_pv_html(pv_info, info_p, data_granulats):
     sd_data  = data_granulats.get('SD', {})
 
     ref_b = info_p.get('num_rapport', info_p.get('ref_base', '26/260/LGV/CS/1237'))
-    # Le HTML téléchargé doit également contenir la courbe, pas seulement le PDF.
-    _curve_buffer = create_curve_image_buffer(
-        data_granulats,
-        ref_b,
-        fig_width=8,
-        fig_height=2.25
-    )
-    _curve_b64 = base64.b64encode(_curve_buffer.getvalue()).decode('ascii')
 
     empty_char = ({'2D': 0, '1.4D': 0, 'D': 0, 'd': 0, 'd/2': 0}, {'2D': 0.0, '1.4D': 0.0, 'D': 0.0, 'd': 0.0, 'd/2': 0.0})
     gii_sieves, gii_passants = calculate_characteristic_data(gii_data) if gii_data else empty_char
@@ -299,13 +256,6 @@ def generate_pv_html(pv_info, info_p, data_granulats):
                 <span>CENTRE TECHNIQUE REGIONAL DE CASABLANCA-SETTAT BENI MELLAL</span>
             </div>
         </div>"""
-
-    curve_html = f"""
-        <div class="curve-box">
-            <b>COURBE GRANULOMÉTRIQUE GLOBALE</b>
-            <img src="data:image/png;base64,{_curve_b64}" alt="Courbe granulométrique globale">
-        </div>
-    """
 
     html = f"""<!DOCTYPE html>
 <html lang="fr">
@@ -401,13 +351,13 @@ def generate_pv_html(pv_info, info_p, data_granulats):
         background-color: #2563eb;
         color: #ffffff;
         border: 1px solid #1d4ed8;
-        padding: 3px 4px;
+        padding: 6px;
         text-align: center;
         font-weight: bold;
     }}
     .lpee-table td {{
         border: 1px solid #cbd5e1;
-        padding: 3px 4px;
+        padding: 5px;
         text-align: center;
     }}
     .row-designation {{
@@ -442,50 +392,9 @@ def generate_pv_html(pv_info, info_p, data_granulats):
         height: 80px;
         vertical-align: top;
     }}
-    .curve-box {{
-        margin: 8px 0;
-        padding: 4px;
-        border: 1px solid #cbd5e1;
-        text-align: center;
-        font-size: 11px;
-        page-break-inside: avoid;
-    }}
-    .curve-box img {{
-        display: block;
-        width: 100%;
-        max-height: 170px;
-        object-fit: contain;
-        margin: 3px auto 0;
-    }}
     @media print {{
-        @page {{ size: A4 portrait; margin: 3mm; }}
-        body {{ padding: 0; margin: 0; }}
-        .lpee-pv-card {{
-            border: none;
-            box-shadow: none;
-            padding: 0;
-            width: 161%;
-            max-width: none;
-            margin: 0;
-            zoom: 0.62;
-        }}
-        .lpee-org-header {{ padding: 1px; margin-bottom: 1px; }}
-        .lpee-org-logo {{ width: 34px; height: 34px; }}
-        .lpee-org-text {{ font-size: 10px; line-height: 1.15; }}
-        .lpee-org-text span {{ font-size: 8px; }}
-        .lpee-header-title {{ margin-bottom: 2px; padding: 2px; font-size: 9px; }}
-        .lpee-info-grid, .lpee-norm-table, .lpee-table {{
-            margin-top: 2px;
-            margin-bottom: 2px;
-            font-size: 7px;
-        }}
-        .lpee-info-grid td, .lpee-norm-table td,
-        .lpee-table th, .lpee-table td {{ padding: 0.5px 1.5px; line-height: 0.95; }}
-        .curve-box {{ margin: 2px 0; padding: 1px; font-size: 8px; }}
-        .curve-box img {{ max-height: 105px; margin-top: 1px; }}
-        .comments-box {{ margin-top: 2px; padding: 2px; font-size: 7px; }}
-        .signature-box {{ margin-top: 2px; font-size: 7px; }}
-        .signature-box td {{ padding: 2px; height: 32px; }}
+        body {{ padding: 0; }}
+        .lpee-pv-card {{ border: none; box-shadow: none; padding: 0; }}
     }}
 </style>
 </head>
@@ -670,8 +579,6 @@ def generate_pv_html(pv_info, info_p, data_granulats):
             </tbody>
         </table>
 
-        {curve_html}
-
         <div class="comments-box">
             <b>COMMENTAIRES :</b><br>
             {pv_info.get('commentaires', '')}
@@ -750,23 +657,23 @@ def generate_pv_pdf(pv_info, info_p, data_granulats):
     doc = SimpleDocTemplate(
         buffer,
         pagesize=A4,
-        leftMargin=10,
-        rightMargin=10,
-        topMargin=8,
-        bottomMargin=8
+        leftMargin=15,
+        rightMargin=15,
+        topMargin=15,
+        bottomMargin=15
     )
     story = []
     styles = getSampleStyleSheet()
 
     title_style = ParagraphStyle(
         'PDFTitle', parent=styles['Normal'],
-        fontName='Helvetica-Bold', fontSize=8.5, leading=10,
+        fontName='Helvetica-Bold', fontSize=10, leading=13,
         textColor=colors.white, alignment=1
     )
-    cell_bold = ParagraphStyle('PDFCellBold', fontName='Helvetica-Bold', fontSize=5.0, leading=5.2, alignment=1)
-    cell_norm = ParagraphStyle('PDFCellNorm', fontName='Helvetica', fontSize=5.0, leading=5.2, alignment=1)
-    cell_left = ParagraphStyle('PDFCellLeft', fontName='Helvetica', fontSize=5.0, leading=5.2, alignment=0)
-    cell_left_bold = ParagraphStyle('PDFCellLeftBold', fontName='Helvetica-Bold', fontSize=5.0, leading=5.2, alignment=0)
+    cell_bold = ParagraphStyle('PDFCellBold', fontName='Helvetica-Bold', fontSize=7, leading=9, alignment=1)
+    cell_norm = ParagraphStyle('PDFCellNorm', fontName='Helvetica', fontSize=7, leading=9, alignment=1)
+    cell_left = ParagraphStyle('PDFCellLeft', fontName='Helvetica', fontSize=7, leading=9, alignment=0)
+    cell_left_bold = ParagraphStyle('PDFCellLeftBold', fontName='Helvetica-Bold', fontSize=7, leading=9, alignment=0)
     
     ref_b = info_p.get('num_rapport', info_p.get('ref_base', '26/260/LGV/CS/1237'))
 
@@ -780,7 +687,7 @@ def generate_pv_pdf(pv_info, info_p, data_granulats):
 
     org_style = ParagraphStyle(
         'PDFOrgHeader', parent=styles['Normal'],
-        fontName='Helvetica-Bold', fontSize=8.5, leading=10,
+        fontName='Helvetica-Bold', fontSize=10, leading=13,
         textColor=colors.HexColor('#1e3a8a'), alignment=1
     )
     org_text = (
@@ -790,8 +697,8 @@ def generate_pv_pdf(pv_info, info_p, data_granulats):
 
     if _logo_path:
         org_header_table = Table(
-            [[Image(_logo_path, width=34, height=34), Paragraph(org_text, org_style)]],
-            colWidths=[42, 523]
+            [[Image(_logo_path, width=48, height=48), Paragraph(org_text, org_style)]],
+            colWidths=[58, 507]
         )
         org_header_table.setStyle(TableStyle([
             ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
@@ -808,7 +715,7 @@ def generate_pv_pdf(pv_info, info_p, data_granulats):
         ]))
 
     story.append(org_header_table)
-    story.append(Spacer(1, 1))
+    story.append(Spacer(1, 2))
 
     header_text = f"RAPPORT D'ESSAI N° : {pv_info.get('ref_pv', '')}<br/><font size=7.5>OBJET : IDENTIFICATION DES GRANULATS POUR BETON</font>"
     header_table = Table([[Paragraph(header_text, title_style)]], colWidths=[565])
@@ -816,11 +723,11 @@ def generate_pv_pdf(pv_info, info_p, data_granulats):
         ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#1e3a8a')),
         ('ALIGN', (0,0), (-1,-1), 'CENTER'),
         ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-         ('BOTTOMPADDING', (0,0), (-1,-1), 2),
-         ('TOPPADDING', (0,0), (-1,-1), 2),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 5),
+        ('TOPPADDING', (0,0), (-1,-1), 5),
     ]))
     story.append(header_table)
-    story.append(Spacer(1, 2))
+    story.append(Spacer(1, 4))
 
     def build_adjustable_tables(pad_extra):
         flowables = []
@@ -841,11 +748,11 @@ def generate_pv_pdf(pv_info, info_p, data_granulats):
             ('BACKGROUND', (0,0), (0,-1), colors.HexColor('#f8fafc')),
             ('BACKGROUND', (2,0), (2,-1), colors.HexColor('#f8fafc')),
             ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-             ('TOPPADDING', (0,0), (-1,-1), 0.4 + pad_extra),
-             ('BOTTOMPADDING', (0,0), (-1,-1), 0.4 + pad_extra),
+            ('TOPPADDING', (0,0), (-1,-1), 2 + pad_extra),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 2 + pad_extra),
         ]))
         flowables.append(info_table)
-        flowables.append(Spacer(1, 1))
+        flowables.append(Spacer(1, 4))
 
         norm_data = [
             [Paragraph("Référence Normative", cell_bold), "", "", "", ""],
@@ -861,11 +768,11 @@ def generate_pv_pdf(pv_info, info_p, data_granulats):
             ('BACKGROUND', (0,0), (4,0), colors.HexColor('#f1f5f9')),
             ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#cbd5e1')),
             ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-             ('TOPPADDING', (0,0), (-1,-1), 0.4 + pad_extra),
-             ('BOTTOMPADDING', (0,0), (-1,-1), 0.4 + pad_extra),
+            ('TOPPADDING', (0,0), (-1,-1), 2 + pad_extra),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 2 + pad_extra),
         ]))
         flowables.append(norm_table)
-        flowables.append(Spacer(1, 1))
+        flowables.append(Spacer(1, 4))
 
         def build_mat_table(title_cols, row_data_vals, row_lim_vals):
             t_data = [
@@ -884,8 +791,8 @@ def generate_pv_pdf(pv_info, info_p, data_granulats):
                 ('BACKGROUND', (0,2), (0,2), colors.HexColor('#f1f5f9')),
                 ('BACKGROUND', (0,3), (-1,3), colors.HexColor('#fafafa')),
                 ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-                 ('TOPPADDING', (0,0), (-1,-1), 0.2 + pad_extra),
-                 ('BOTTOMPADDING', (0,0), (-1,-1), 0.2 + pad_extra),
+                ('TOPPADDING', (0,0), (-1,-1), 1.5 + pad_extra),
+                ('BOTTOMPADDING', (0,0), (-1,-1), 1.5 + pad_extra),
             ]))
             return t
 
@@ -914,7 +821,7 @@ def generate_pv_pdf(pv_info, info_p, data_granulats):
         ]
         t1_row2 = [Paragraph("Caractéristique générale", cell_left)] + [Paragraph(v, cell_norm) for v in ["100", "98-100", "85-99", "0-20", "0-5", "< 1,5", "FI 20", "< 30"]]
         flowables.append(build_mat_table(t1_cols, t1_row1, t1_row2))
-        flowables.append(Spacer(1, 1))
+        flowables.append(Spacer(1, 3))
 
         t2_cols = [
             ["2D", "1,4D", "D", "d", "d/2", "f", "FI", "LA"],
@@ -930,7 +837,7 @@ def generate_pv_pdf(pv_info, info_p, data_granulats):
         ]
         t2_row2 = [Paragraph("Caractéristique générale", cell_left)] + [Paragraph(v, cell_norm) for v in ["100", "98-100", "80-99", "0-20", "0-5", "< 1,5", "FI 20", "< 30"]]
         flowables.append(build_mat_table(t2_cols, t2_row1, t2_row2))
-        flowables.append(Spacer(1, 1))
+        flowables.append(Spacer(1, 3))
 
         t3_cols = [
             ["2D", "1,4D", "D", "% < 1mm", "% < 250µm", "% < 63µm", "MF", "SE (10)"],
@@ -947,7 +854,7 @@ def generate_pv_pdf(pv_info, info_p, data_granulats):
         ]
         t3_row2 = [Paragraph("Caractéristique générale", cell_left)] + [Paragraph(v, cell_norm) for v in ["100", "95-100", "85-99", "40(±20)", "50(±20)", "≤ 16", "2.4-4.0", "≥ 60"]]
         flowables.append(build_mat_table(t3_cols, t3_row1, t3_row2))
-        flowables.append(Spacer(1, 1))
+        flowables.append(Spacer(1, 3))
 
         t4_cols = [
             ["2D", "1,4D", "D", "% < 1mm", "% < 250µm", "% < 63µm", "MB", "-"],
@@ -964,7 +871,7 @@ def generate_pv_pdf(pv_info, info_p, data_granulats):
         ]
         t4_row2 = [Paragraph("Caractéristique générale", cell_left)] + [Paragraph(v, cell_norm) for v in ["100", "95-100", "85-99", "40(±20)", "50(±25)", "≤ 10", "VSS 2", "-"]]
         flowables.append(build_mat_table(t4_cols, t4_row1, t4_row2))
-        flowables.append(Spacer(1, 1))
+        flowables.append(Spacer(1, 4))
 
         return flowables
 
@@ -980,7 +887,7 @@ def generate_pv_pdf(pv_info, info_p, data_granulats):
         ('TOPPADDING', (0,0), (-1,-1), 3),
         ('BOTTOMPADDING', (0,0), (-1,-1), 3),
     ]))
-    comm_spacer = Spacer(1, 1)
+    comm_spacer = Spacer(1, 4)
 
     sig_data = [
         [
@@ -994,8 +901,8 @@ def generate_pv_pdf(pv_info, info_p, data_granulats):
         ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#cbd5e1')),
         ('ALIGN', (0,0), (-1,-1), 'CENTER'),
         ('VALIGN', (0,0), (-1,-1), 'TOP'),
-         ('TOPPADDING', (0,0), (-1,-1), 2),
-         ('BOTTOMPADDING', (0,0), (-1,-1), 5),
+        ('TOPPADDING', (0,0), (-1,-1), 4),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 16),
     ]))
 
     def _flowable_height(flowable, avail_w=565):
@@ -1004,11 +911,11 @@ def generate_pv_pdf(pv_info, info_p, data_granulats):
         except Exception:
             return 0
 
-    FRAME_PADDING = 6
+    FRAME_PADDING = 12
     page_height = A4[1] - doc.topMargin - doc.bottomMargin - FRAME_PADDING
-    CHART_HEIGHT = 125
-    CHART_BOTTOM_SPACER = 1
-    SAFETY_MARGIN = 3
+    CHART_HEIGHT = 220
+    CHART_BOTTOM_SPACER = 4
+    SAFETY_MARGIN = 6
 
     fixed_height = sum(_flowable_height(f) for f in story)
     fixed_height += _flowable_height(comm_table) + _flowable_height(comm_spacer) + _flowable_height(sig_table)
@@ -1018,9 +925,12 @@ def generate_pv_pdf(pv_info, info_p, data_granulats):
     raw_pad = leftover / (2 * ADJUSTABLE_ROWS)
     pad_extra = max(0.0, min(raw_pad, 12.0))
 
-    # Le PV est volontairement compacté sur une seule page A4.  La courbe
-    # conserve sa légende mais ne grandit pas avec l'espace résiduel.
-    chart_height = CHART_HEIGHT if raw_pad >= 0 else max(105, CHART_HEIGHT + leftover)
+    chart_height = CHART_HEIGHT
+    if raw_pad > 12.0:
+        chart_height += (raw_pad - 12.0) * 2 * ADJUSTABLE_ROWS
+        chart_height = min(chart_height, 420)
+    elif raw_pad < 0:
+        chart_height = max(180, CHART_HEIGHT + leftover)
 
     final_tables = build_adjustable_tables(pad_extra) if pad_extra > 0 else baseline_tables
     story.extend(final_tables)
@@ -1358,13 +1268,14 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
 
     def _build_pv_snapshot():
         """Construit un instantané complet du PV courant pour l'historique."""
-        next_id = _next_snapshot_id(st.session_state.get('historique_pv', []))
+        existing_ids = [p.get('id', 0) for p in st.session_state['historique_pv']]
+        next_id = (max(existing_ids) + 1) if existing_ids else 1
         return {
             'id': next_id,
             'date_creation': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            'ref_pv': _safe_text(st.session_state['pv_info'].get('ref_pv', '')).strip(),
-            'projet': _safe_text(st.session_state['pv_info'].get('projet', '')),
-            'client': _safe_text(st.session_state['pv_info'].get('client', '')),
+            'ref_pv': st.session_state['pv_info'].get('ref_pv', '').strip(),
+            'projet': st.session_state['pv_info'].get('projet', ''),
+            'client': st.session_state['pv_info'].get('client', ''),
             'info_prelevement': copy.deepcopy(st.session_state['info_prelevement']),
             'pv_info': copy.deepcopy(st.session_state['pv_info']),
             'data_granulats': copy.deepcopy(st.session_state['data_granulats'])
@@ -1376,7 +1287,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         st.info("👁️ **Mode Consultation** : Vous êtes en lecture seule.")
 
     saved_num_rapports = [
-        _safe_text(pv.get('ref_pv', '')).strip().lower()
+        pv.get('ref_pv', '').strip().lower() 
         for pv in st.session_state.get('historique_pv', []) 
         if pv.get('ref_pv')
     ]
@@ -1384,8 +1295,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
     tabs = st.tabs([
         "1️⃣ Feuilles d'Essais Complets",
         "2️⃣ PV d'Identification / Synthèse",
-        "3️⃣ Historique & Téléchargement de PV",
-        "📊 Synthèse des PV par mois"
+        "3️⃣ Historique & Téléchargement de PV"
     ])
 
     # ------------------------------------------------------------------------------
@@ -1424,14 +1334,8 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         new_lieu_prelev  = c5.text_input("Lieu de prélèvement", value=info_p.get('lieu_prelevement', 'Stock sur centrale à béton'), disabled=not can_edit, key=f"{prefix}_common_lieu_prelev")
         new_provenance   = c6.text_input("Provenance échantillon", value=info_p.get('provenance', 'TG PREFA OULAD SALEH'), disabled=not can_edit, key=f"{prefix}_common_provenance")
         
-        new_num_rapport  = st.text_input(
-            "N° RAPPORT D'ESSAI N°",
-            value=_safe_text(info_p.get('num_rapport', default_num_rapport)),
-            disabled=not can_edit,
-            key=f"{prefix}_common_num_rapport"
-        )
-        new_num_rapport = _safe_text(new_num_rapport).strip()
-        new_ref_base = new_num_rapport
+        new_num_rapport  = st.text_input("N° RAPPORT D'ESSAI N°", value=info_p.get('num_rapport', default_num_rapport), disabled=not can_edit, key=f"{prefix}_common_num_rapport")
+        new_ref_base     = new_num_rapport.strip()
 
 
         st.text_input(
@@ -1442,9 +1346,9 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
             help="La Référence labo (Base) reprend automatiquement le numéro du rapport d'essai."
         )
 
-        is_duplicate = new_num_rapport.lower() in saved_num_rapports if new_num_rapport else False
-        _edit_mode_ref = _safe_text(st.session_state.get('_pv_edit_mode') or '').strip().lower()
-        _new_num_norm = new_num_rapport.lower()
+        is_duplicate = new_num_rapport.strip().lower() in saved_num_rapports if new_num_rapport.strip() else False
+        _edit_mode_ref = (st.session_state.get('_pv_edit_mode') or '').strip().lower()
+        _new_num_norm = new_num_rapport.strip().lower()
         is_authorized_edit = is_duplicate and bool(_edit_mode_ref) and _edit_mode_ref == _new_num_norm
         is_blocked_duplicate = is_duplicate and not is_authorized_edit
 
@@ -1701,7 +1605,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                 # Mise à jour ou ajout dans la liste locale de session
                 existing_idx = None
                 for idx_pv, p_item in enumerate(st.session_state['historique_pv']):
-                    if _safe_text(p_item.get('ref_pv', '')).strip().lower() == new_num_rapport.lower():
+                    if p_item.get('ref_pv', '').strip().lower() == new_num_rapport.strip().lower():
                         existing_idx = idx_pv
                         break
 
@@ -1986,102 +1890,3 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                     st.markdown(f"**Référence Rapport :** `{ref_pv_disp}`")
         else:
             st.info("Aucun PV n'est enregistré dans l'historique pour le moment. Réalisez un essai et validez-le en Phase 1.")
-
-    # ------------------------------------------------------------------------------
-    # FENÊTRE 4 : SYNTHÈSE DES PV PAR MOIS
-    # ------------------------------------------------------------------------------
-    with tabs[3]:
-        st.header("📊 Synthèse des rapports d'essais")
-        st.caption(
-            "Filtrez les PV enregistrés par mois de prélèvement ou de création, "
-            "puis téléchargez la synthèse au format CSV."
-        )
-
-        historique_synthese = st.session_state.get('historique_pv', [])
-        if not historique_synthese:
-            st.info("Aucun PV disponible pour effectuer une synthèse.")
-        else:
-            mois_disponibles = set()
-            for item in historique_synthese:
-                pv_data = item.get('pv_info', {}) or {}
-                date_pv = pv_data.get('date') or item.get('date_creation')
-                mois_label = get_month_year_label(date_pv)
-                if mois_label:
-                    mois_disponibles.add(mois_label)
-
-            mois_list = sorted(mois_disponibles)
-            if not mois_list:
-                st.warning("Impossible de déterminer le mois des PV enregistrés.")
-            else:
-                selected_month = st.selectbox(
-                    "📅 Mois à afficher",
-                    ["Tous les mois"] + mois_list,
-                    key=f"{prefix}_synth_month_filter"
-                )
-
-                if selected_month == "Tous les mois":
-                    filtered_pvs = historique_synthese
-                else:
-                    filtered_pvs = []
-                    for item in historique_synthese:
-                        pv_data = item.get('pv_info', {}) or {}
-                        date_pv = pv_data.get('date') or item.get('date_creation')
-                        if get_month_year_label(date_pv) == selected_month:
-                            filtered_pvs.append(item)
-
-                clients = {
-                    _safe_text(item.get('client', item.get('pv_info', {}).get('client', '-')))
-                    for item in filtered_pvs
-                }
-                col_s1, col_s2, col_s3 = st.columns(3)
-                col_s1.metric("Nombre de PV", len(filtered_pvs))
-                col_s2.metric("Clients concernés", len([c for c in clients if c and c != '-']))
-                col_s3.metric("Mois sélectionné", selected_month)
-
-                synth_rows = []
-                for item in filtered_pvs:
-                    pv_data = item.get('pv_info', {}) or {}
-                    info_data = item.get('info_prelevement', {}) or {}
-                    synth_rows.append({
-                        "N° Rapport": _safe_text(item.get('ref_pv') or pv_data.get('ref_pv'), '-'),
-                        "Date prélèvement": _safe_text(pv_data.get('date'), '-'),
-                        "Client": _safe_text(item.get('client') or pv_data.get('client'), '-'),
-                        "Chantier / Projet": _safe_text(item.get('projet') or pv_data.get('projet'), '-'),
-                        "Provenance": _safe_text(info_data.get('provenance'), '-'),
-                        "Lieu": _safe_text(info_data.get('lieu_prelevement'), '-'),
-                        "Date création": _safe_text(item.get('date_creation'), '-')
-                    })
-
-                df_synth = pd.DataFrame(synth_rows)
-                st.dataframe(df_synth, use_container_width=True, hide_index=True)
-                st.download_button(
-                    label=f"📥 Télécharger la synthèse ({selected_month}) au format CSV",
-                    data=df_synth.to_csv(index=False).encode('utf-8-sig'),
-                    file_name=f"Synthese_PV_{selected_month.replace(' ', '_')}.csv",
-                    mime="text/csv",
-                    key=f"{prefix}_dl_csv_synthese"
-                )
-
-                st.markdown("### Répartition des essais par fraction")
-                fraction_rows = []
-                for item in filtered_pvs:
-                    data_materials = item.get('data_granulats', {}) or {}
-                    ref_item = _safe_text(item.get('ref_pv') or item.get('pv_info', {}).get('ref_pv'), '-')
-                    for material_key, material in data_materials.items():
-                        passants = material.get('passants', []) if isinstance(material, dict) else []
-                        refus = material.get('refus', []) if isinstance(material, dict) else []
-                        has_data = bool(passants) or any(float(value or 0) > 0 for value in refus)
-                        fraction_rows.append({
-                            "N° Rapport": ref_item,
-                            "Fraction": material_key,
-                            "Désignation": _safe_text(material.get('nom'), material_key),
-                            "Classe": _safe_text(material.get('classe'), '-'),
-                            "Essai renseigné": "Oui" if has_data else "Non"
-                        })
-
-                if fraction_rows:
-                    st.dataframe(
-                        pd.DataFrame(fraction_rows),
-                        use_container_width=True,
-                        hide_index=True
-                    )
