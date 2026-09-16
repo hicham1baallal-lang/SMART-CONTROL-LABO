@@ -180,25 +180,30 @@ FUSEAUX_GRANULO = {
 def verifier_cpc_grave(la, mde, es, ip, vb, has_vb):
     """
     Vérifie l'exigence CPC pour les graves non traitées :
-    LA < 30, MDE < 25, ES > 45, et IP < 12 — sauf pour les matériaux qui utilisent
-    le VB (Valeur au Bleu) au lieu de l'IP (ex: GNF, GNA), auquel cas VB < 1,2.
+    - Caractéristiques mécaniques : LA < 30, MDE < 25
+    - Propreté : IP < 6 ET ES >= 45 — sauf pour les matériaux qui utilisent le VB
+      (Valeur au Bleu) au lieu de l'IP (ex: GNF, GNA), auquel cas VB < 1,2.
     """
     ok_la = la < 30
     ok_mde = mde < 25
-    ok_es = es > 45
-    if has_vb:
-        ok_fines = vb < 1.2
-        fines_txt = f"VB {'<' if ok_fines else '>='} 1,2 ({vb:.2f})"
-    else:
-        ok_fines = ip < 12
-        fines_txt = f"IP {'<' if ok_fines else '>='} 12 ({ip:.1f}%)"
 
-    conforme = ok_la and ok_mde and ok_es and ok_fines
+    if has_vb:
+        ok_proprete = vb < 1.2
+        proprete_txt = f"VB {'<' if ok_proprete else '>='} 1,2 ({vb:.2f})"
+    else:
+        ok_ip = ip < 6
+        ok_es = es >= 45
+        ok_proprete = ok_ip and ok_es
+        proprete_txt = (
+            f"IP {'<' if ok_ip else '>='} 6 ({ip:.1f}%) et "
+            f"ES {'>=' if ok_es else '<'} 45 ({es:.1f}%)"
+        )
+
+    conforme = ok_la and ok_mde and ok_proprete
     detail = (
         f"LA {'<' if ok_la else '>='} 30 ({la:.1f}%) | "
         f"MDE {'<' if ok_mde else '>='} 25 ({mde:.1f}%) | "
-        f"ES {'>' if ok_es else '<='} 45 ({es:.1f}%) | "
-        f"{fines_txt}"
+        f"Propreté : {proprete_txt}"
     )
     return conforme, detail
 
@@ -221,6 +226,64 @@ def classer_grave(la, mde, coeff_apl, es, pass_80um):
     if pass_80um > 12.0:
         classe += " (fines > 12% : à vérifier)"
     return classe
+
+
+def _build_curve_png_bytes(tamis_vals, passant_vals, ech_label="Ech1", fuseau_def=None):
+    """Reconstruit la courbe granulométrique en mémoire, à partir des données
+    propres à CE PV (stockées dans son propre enregistrement), sans jamais
+    dépendre d'un fichier temporaire partagé entre sessions/matériaux."""
+    try:
+        plot_df = pd.DataFrame({"Tamis (mm)": tamis_vals, "% Passant": passant_vals})
+        plot_df["Tamis (mm)"] = plot_df["Tamis (mm)"].astype(float)
+        plot_df["% Passant"] = plot_df["% Passant"].astype(float)
+        plot_df = plot_df.sort_values(by="Tamis (mm)", ascending=True).reset_index(drop=True)
+        if plot_df.empty:
+            return None
+
+        fig, ax = plt.subplots(figsize=(7.0, 6.2))
+        x_indices = np.arange(len(plot_df))
+        sieve_values = plot_df["Tamis (mm)"].values
+
+        ticks_positions, ticks_labels = [], []
+        for idx, (x_pos, t_val) in enumerate(zip(x_indices, sieve_values)):
+            if t_val >= 10.0 or idx % 3 == 0:
+                ticks_positions.append(x_pos)
+                ticks_labels.append(f"{t_val}mm")
+
+        ax.plot(
+            x_indices, plot_df["% Passant"],
+            marker='o', markersize=4, linestyle='-', color='#004080', linewidth=1.8, label=ech_label
+        )
+
+        if fuseau_def:
+            fuseau_x, fuseau_vsi, fuseau_vss = [], [], []
+            for tamis_f, vsi_f, vss_f in fuseau_def:
+                row_f = plot_df[np.isclose(plot_df["Tamis (mm)"].astype(float), tamis_f, atol=1e-3)]
+                if not row_f.empty:
+                    fuseau_x.append(int(row_f.index[0]))
+                    fuseau_vsi.append(vsi_f)
+                    fuseau_vss.append(vss_f)
+            if len(fuseau_x) >= 2:
+                ax.plot(fuseau_x, fuseau_vss, linestyle='--', color='#b30000', linewidth=1.3, label='Fuseau VSS (sup.)')
+                ax.plot(fuseau_x, fuseau_vsi, linestyle='--', color='#1a7a1a', linewidth=1.3, label='Fuseau VSI (inf.)')
+                ax.fill_between(fuseau_x, fuseau_vsi, fuseau_vss, color='#ffcc00', alpha=0.15)
+
+        ax.set_xticks(ticks_positions)
+        ax.set_xticklabels(ticks_labels, rotation=70, ha='right', fontsize=7)
+        ax.set_xlabel("Ouverture des tamis (mm)")
+        ax.set_ylabel("% Passant (%)")
+        ax.set_ylim(-2, 105)
+        ax.grid(True, which="both", linestyle=":", alpha=0.6)
+        ax.legend(loc="lower right")
+        fig.tight_layout()
+
+        buf = io.BytesIO()
+        fig.savefig(buf, format="png", dpi=200)
+        plt.close(fig)
+        buf.seek(0)
+        return buf
+    except Exception:
+        return None
 
 
 class IdentificationPDF(FPDF):
@@ -368,12 +431,12 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
         _row3("Los Angeles LA (%)", data_dict.get('LA (%)', '-'), "< 30")
         _row3("Micro-Deval MDE (%)", data_dict.get('MDE (%)', '-'), "< 25")
         _row3("Coefficient d'aplatissement (%)", data_dict.get('Coefficient Aplatissement (%)', '-'))
-        _row3("Équivalent de Sable ES (%)", data_dict.get('ES (%)', '-'), "> 45")
+        _row3("Équivalent de Sable ES (%)", data_dict.get('ES (%)', '-'), "-" if mat_config["has_vbs"] else ">= 45")
         if mat_config["has_vbs"]:
             _row3("VB", data_dict.get('VB', data_dict.get('VBS', '-')), "< 1,2")
             _row3("Indice de Plasticité (IP)", data_dict.get('IP (%)', '-'), "-")
         else:
-            _row3("Indice de Plasticité (IP)", data_dict.get('IP (%)', '-'), "< 12")
+            _row3("Indice de Plasticité (IP)", data_dict.get('IP (%)', '-'), "< 6")
 
         pdf.cell(60, 5, " Proctor", 1, 0, "L")
         pdf.set_font("Helvetica", "B", 7)
@@ -390,7 +453,25 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
     pdf.set_font("Helvetica", "B", 8)
     pdf.set_fill_color(220, 230, 242)
     pdf.cell(190, 5, " COURBE GRANULOMÉTRIQUE", 1, 1, "L", fill=True)
-    if curve_img_path and os.path.exists(curve_img_path):
+
+    tamis_stored = data_dict.get("Courbe Tamis (mm)")
+    passant_stored = data_dict.get("Courbe Passant (%)")
+    curve_buf = None
+    if tamis_stored and passant_stored and len(tamis_stored) == len(passant_stored):
+        fuseau_def_pdf = FUSEAUX_GRANULO.get(mat_code) if family == "GRAVE" else None
+        curve_buf = _build_curve_png_bytes(
+            tamis_stored, passant_stored,
+            ech_label=str(data_dict.get('Ref Echantillon', 'Ech 1')),
+            fuseau_def=fuseau_def_pdf
+        )
+
+    if curve_buf is not None:
+        try:
+            pdf.image(curve_buf, x=10, y=pdf.get_y() + 1, w=190, h=6.2 * 10)
+            pdf.ln(64)
+        except Exception:
+            pdf.cell(190, 62, "[Erreur d'insertion de la courbe]", 1, 1, "C")
+    elif curve_img_path and os.path.exists(curve_img_path):
         try:
             pdf.image(curve_img_path, x=10, y=pdf.get_y() + 1, w=190, h=6.2 * 10)
             pdf.ln(64)
@@ -782,7 +863,12 @@ def show(supabase_client):
             "wL (%)": f"{w_opt:.1f}".replace('.', ','), 
             "Densité OPN": f"{dens_val:.2f}".replace('.', ','),
             "Classification (Auto)": classe_auto,
-            "Observation": obs
+            "Observation": obs,
+            # Courbe complète propre à CE PV (indépendante de tout fichier partagé),
+            # utilisée pour régénérer l'image à l'identique lors du téléchargement,
+            # même après reconnexion / nouvelle session.
+            "Courbe Tamis (mm)": result_df["Tamis (mm)"].astype(float).round(4).tolist(),
+            "Courbe Passant (%)": result_df["% Passant"].astype(float).round(2).tolist()
         }
 
         if mat_config["family"] == "REMBLAI":
