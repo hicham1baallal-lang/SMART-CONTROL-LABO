@@ -49,7 +49,7 @@ def get_tamis_D(df: pd.DataFrame) -> float:
     diffs = (df["% Passants"] - 95.0).abs()
     idx_closest = diffs.idxmin()
     val = df.loc[idx_closest, "Tamis (mm)"]
-    return int(val) if float(val).is_integer() else float(val)
+    return float(val) if not np.isnan(val) else 0.0
 
 def update_passants(mat_data):
     """Calcule les passants à partir des masses enregistrées (Méthode NF EN 933-1)"""
@@ -64,7 +64,7 @@ def update_passants(mat_data):
         
         passants_fmt = []
         for s, p in zip(sieves, passants):
-            passants_fmt.append(max(0.0, round(p, 1)))
+            passants_fmt.append(max(0.0, round(float(p), 1)))
         mat_data['passants'] = passants_fmt
     else:
         mat_data['passants'] = [100.0] * len(sieves)
@@ -84,10 +84,10 @@ def compute_sieve_at_passant(sieves, passings, target_passant):
     valid_sieves = s_arr[p_arr >= target_passant]
     if len(valid_sieves) > 0:
         val = valid_sieves[0]
-        return int(val) if float(val).is_integer() else float(val)
+        return float(val)
         
     val = s_arr[-1]
-    return int(val) if float(val).is_integer() else float(val)
+    return float(val)
 
 def get_d_D_from_material(mat_data):
     """Détermine d et D à partir de la classe granulaire ou par calcul."""
@@ -114,7 +114,7 @@ def get_d_D_from_material(mat_data):
             D_val = D_calc
         if d_val is None:
             d_val = compute_sieve_at_passant(sieves, passants, 5.0)
-        return float(d_val), float(D_val)
+        return float(d_val or 0.0), float(D_val or 0.0)
 
     return float(d_val or 0.0), float(D_val or 0.0)
 
@@ -139,23 +139,26 @@ def get_passant_at_sieve(sieves, passings, target_sieve):
         
     return float(np.interp(target_sieve, s_arr, p_arr))
 
+def format_sieve_display(val):
+    """Formate proprement un nombre de tamis pour l'affichage (évite les erreurs de type string/int)."""
+    if val is None or np.isnan(val):
+        return "0"
+    val_f = float(val)
+    if val_f.is_integer():
+        return str(int(val_f))
+    return str(val_f).replace('.', ',')
+
 def calculate_characteristic_data(mat_data, tamis_D=None):
     """Déduit la liste des tamis caractéristiques (2D, 1.4D, D, d, d/2)"""
     d, D_calc = get_d_D_from_material(mat_data)
     D = float(tamis_D) if (tamis_D is not None and tamis_D > 0) else D_calc
     
-    def fmt_sieve(val):
-        if val is None or val == 0:
-            return 0
-        val_r = round(val, 2)
-        return int(val_r) if float(val_r).is_integer() else val_r
-
     sieves_dict = {
-        '2D': fmt_sieve(2 * D),
-        '1.4D': fmt_sieve(1.4 * D),
-        'D': fmt_sieve(D),
-        'd': fmt_sieve(d),
-        'd/2': fmt_sieve(d / 2)
+        '2D': float(2 * D),
+        '1.4D': float(1.4 * D),
+        'D': float(D),
+        'd': float(d),
+        'd/2': float(d / 2)
     }
     
     passants_dict = {}
@@ -343,16 +346,6 @@ def generate_pv_html(pv_info, info_p, data_granulats):
         width: 18%;
         background-color: #f8fafc;
     }}
-    .lpee-norm-table {{
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 11px;
-        margin-bottom: 15px;
-    }}
-    .lpee-norm-table td {{
-        border: 1px solid #cbd5e1;
-        padding: 4px 8px;
-    }}
     .lpee-table {{
         width: 100%;
         border-collapse: collapse;
@@ -377,11 +370,6 @@ def generate_pv_html(pv_info, info_p, data_granulats):
         background-color: #f1f5f9;
         font-weight: bold;
         text-align: left !important;
-    }}
-    .row-limite {{
-        background-color: #fafafa;
-        font-size: 11px;
-        color: #475569;
     }}
     .comments-box {{
         margin-top: 15px;
@@ -448,11 +436,11 @@ def generate_pv_html(pv_info, info_p, data_granulats):
                     <th>2D</th><th>1,4D</th><th>D</th><th>d</th><th>d/2</th><th>f</th><th>FI</th><th>LA</th>
                 </tr>
                 <tr>
-                    <th>{gii_sieves['2D']}</th>
-                    <th>{gii_sieves['1.4D']}</th>
-                    <th>{gii_sieves['D']}</th>
-                    <th>{gii_sieves['d']}</th>
-                    <th>{gii_sieves['d/2']}</th>
+                    <th>{format_sieve_display(gii_sieves['2D'])}</th>
+                    <th>{format_sieve_display(gii_sieves['1.4D'])}</th>
+                    <th>{format_sieve_display(gii_sieves['D'])}</th>
+                    <th>{format_sieve_display(gii_sieves['d'])}</th>
+                    <th>{format_sieve_display(gii_sieves['d/2'])}</th>
                     <th>% &lt; 63µm</th><th>-</th><th>-</th>
                 </tr>
             </thead>
@@ -479,11 +467,11 @@ def generate_pv_html(pv_info, info_p, data_granulats):
                     <th>2D</th><th>1,4D</th><th>D</th><th>d</th><th>d/2</th><th>f</th><th>FI</th><th>LA</th>
                 </tr>
                 <tr>
-                    <th>{gi_sieves['2D']}</th>
-                    <th>{gi_sieves['1.4D']}</th>
-                    <th>{gi_sieves['D']}</th>
-                    <th>{gi_sieves['d']}</th>
-                    <th>{gi_sieves['d/2']}</th>
+                    <th>{format_sieve_display(gi_sieves['2D'])}</th>
+                    <th>{format_sieve_display(gi_sieves['1.4D'])}</th>
+                    <th>{format_sieve_display(gi_sieves['D'])}</th>
+                    <th>{format_sieve_display(gi_sieves['d'])}</th>
+                    <th>{format_sieve_display(gi_sieves['d/2'])}</th>
                     <th>% &lt; 63µm</th><th>-</th><th>-</th>
                 </tr>
             </thead>
@@ -510,9 +498,9 @@ def generate_pv_html(pv_info, info_p, data_granulats):
                     <th>2D</th><th>1,4D</th><th>D</th><th>% &lt; 1mm</th><th>% &lt; 250µm</th><th>% &lt; 63µm</th><th>MF</th><th>SE (10)</th>
                 </tr>
                 <tr>
-                    <th>{sc_sieves['2D']}</th>
-                    <th>{sc_sieves['1.4D']}</th>
-                    <th>{sc_sieves['D']}</th>
+                    <th>{format_sieve_display(sc_sieves['2D'])}</th>
+                    <th>{format_sieve_display(sc_sieves['1.4D'])}</th>
+                    <th>{format_sieve_display(sc_sieves['D'])}</th>
                     <th>-</th><th>-</th><th>-</th><th>CF</th><th>-</th>
                 </tr>
             </thead>
@@ -539,9 +527,9 @@ def generate_pv_html(pv_info, info_p, data_granulats):
                     <th>2D</th><th>1,4D</th><th>D</th><th>% &lt; 1mm</th><th>% &lt; 250µm</th><th>% &lt; 63µm</th><th>MB</th>
                 </tr>
                 <tr>
-                    <th>{sd_sieves['2D']}</th>
-                    <th>{sd_sieves['1.4D']}</th>
-                    <th>{sd_sieves['D']}</th>
+                    <th>{format_sieve_display(sd_sieves['2D'])}</th>
+                    <th>{format_sieve_display(sd_sieves['1.4D'])}</th>
+                    <th>{format_sieve_display(sd_sieves['D'])}</th>
                     <th>-</th><th>-</th><th>-</th><th>-</th>
                 </tr>
             </thead>
@@ -576,51 +564,6 @@ def generate_pv_html(pv_info, info_p, data_granulats):
 </html>"""
     return html
 
-def create_curve_image_buffer(data_granulats, ref_b, fig_width=8, fig_height=3.2):
-    """Génère un buffer image PNG haute définition de la courbe granulométrique pour le PDF."""
-    fig, ax = plt.subplots(figsize=(fig_width, fig_height), dpi=200)
-    colors_map = {'GII': '#1e40af', 'GI': '#0284c7', 'SC': '#16a34a', 'SD': '#ea580c'}
-    
-    for k in ['GII', 'GI', 'SC', 'SD']:
-        d = data_granulats.get(k, {})
-        if d.get('sieves') and d.get('passants') and len(d['sieves']) == len(d['passants']):
-            s_s, p_s = zip(*sorted(zip(d['sieves'], d['passants'])))
-            label_str = f"{d.get('nom', k)} ({ref_b}{SUFFIX_MAP.get(k, '')})" if ref_b else d.get('nom', k)
-            ax.plot(s_s, p_s, marker='o', markersize=3.5, label=label_str, color=colors_map.get(k, '#000000'), linewidth=1.5)
-
-    ax.set_xscale('log')
-    ax.set_xlim(0.063, 63)
-    ax.xaxis.set_major_locator(FixedLocator(SIEVE_TICKVALS))
-    ax.xaxis.set_major_formatter(FixedFormatter(SIEVE_TICKTEXT))
-    ax.xaxis.set_minor_locator(NullLocator())
-    ax.set_xlabel("Tamis (mm)", fontsize=8, fontweight='bold')
-    ax.set_ylabel("% Passants Cumulés", fontsize=8, fontweight='bold')
-    ax.set_ylim(-2, 105)
-    ax.grid(True, which="both", ls="--", lw=0.4, alpha=0.7)
-    ax.tick_params(axis='both', which='major', labelsize=7)
-    ax.set_title("COURBE GRANULOMETRIQUE GLOBALE", fontsize=9, fontweight='bold', pad=6)
-
-    ax.legend(
-        loc='upper center',
-        bbox_to_anchor=(0.5, -0.22),
-        ncol=2,
-        fontsize=6.5,
-        handlelength=1.3,
-        handletextpad=0.35,
-        columnspacing=1.2,
-        labelspacing=0.35,
-        borderpad=0.4,
-        frameon=True,
-        framealpha=0.95
-    )
-    fig.subplots_adjust(top=0.88, bottom=0.30, left=0.09, right=0.97)
-
-    buf = io.BytesIO()
-    plt.savefig(buf, format='png', dpi=200)
-    plt.close(fig)
-    buf.seek(0)
-    return buf
-
 def generate_pv_pdf(pv_info, info_p, data_granulats):
     """Génère le fichier PDF structuré du PV d'identification avec courbe intégrée."""
     if not REPORTLAB_AVAILABLE:
@@ -638,7 +581,6 @@ def generate_pv_pdf(pv_info, info_p, data_granulats):
         fontName='Helvetica-Bold', fontSize=10, leading=13,
         textColor=colors.white, alignment=1
     )
-    cell_bold = ParagraphStyle('PDFCellBold', fontName='Helvetica-Bold', fontSize=7, leading=9, alignment=1)
     cell_norm = ParagraphStyle('PDFCellNorm', fontName='Helvetica', fontSize=7, leading=9, alignment=1)
     cell_left = ParagraphStyle('PDFCellLeft', fontName='Helvetica', fontSize=7, leading=9, alignment=0)
     cell_left_bold = ParagraphStyle('PDFCellLeftBold', fontName='Helvetica-Bold', fontSize=7, leading=9, alignment=0)
@@ -912,7 +854,6 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         if pv.get('ref_pv')
     ]
 
-    # Définition des onglets incluant la nouvelle fenêtre de Synthèse par mois
     tabs = st.tabs([
         "1️⃣ Feuilles d'Essais Complets",
         "2️⃣ PV d'Identification / Synthèse",
@@ -1246,10 +1187,8 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         if not historique:
             st.info("ℹ️ Aucun PV disponible dans l'historique pour effectuer une synthèse.")
         else:
-            # Collecte de tous les mois disponibles
             mois_disponibles = set()
             for item in historique:
-                # Vérifie d'abord la date du PV / prélèvement, puis la date de création
                 d_pv = item.get('pv_info', {}).get('date') or item.get('date_creation')
                 m_label = get_month_year_label(d_pv)
                 if m_label:
@@ -1264,7 +1203,6 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                 with col_f1:
                     selected_month = st.selectbox("📅 Filtrer par mois :", ["Tous les mois"] + mois_list, key=f"{prefix}_synth_month_filter")
                 
-                # Filtrage des PV
                 if selected_month == "Tous les mois":
                     filtered_pvs = historique
                 else:
@@ -1279,7 +1217,6 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                 if not filtered_pvs:
                     st.info(f"Aucun PV trouvé pour le mois de {selected_month}.")
                 else:
-                    # Affichage d'un tableau récapitulatif
                     synth_rows = []
                     for item in filtered_pvs:
                         p_info = item.get('pv_info', {})
@@ -1296,7 +1233,6 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                     df_synth = pd.DataFrame(synth_rows)
                     st.dataframe(df_synth, use_container_width=True, hide_index=True)
 
-                    # Export de la synthèse du mois
                     csv_data = df_synth.to_csv(index=False).encode('utf-8')
                     st.download_button(
                         label=f"📥 Télécharger la synthèse ({selected_month}) au format CSV",
