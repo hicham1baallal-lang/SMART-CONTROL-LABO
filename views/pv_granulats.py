@@ -258,6 +258,14 @@ def generate_pv_html(pv_info, info_p, data_granulats):
     sd_data  = data_granulats.get('SD', {})
 
     ref_b = info_p.get('num_rapport', info_p.get('ref_base', '26/260/LGV/CS/1237'))
+    # Le HTML téléchargé doit également contenir la courbe, pas seulement le PDF.
+    _curve_buffer = create_curve_image_buffer(
+        data_granulats,
+        ref_b,
+        fig_width=8,
+        fig_height=2.25
+    )
+    _curve_b64 = base64.b64encode(_curve_buffer.getvalue()).decode('ascii')
 
     empty_char = ({'2D': 0, '1.4D': 0, 'D': 0, 'd': 0, 'd/2': 0}, {'2D': 0.0, '1.4D': 0.0, 'D': 0.0, 'd': 0.0, 'd/2': 0.0})
     gii_sieves, gii_passants = calculate_characteristic_data(gii_data) if gii_data else empty_char
@@ -291,6 +299,13 @@ def generate_pv_html(pv_info, info_p, data_granulats):
                 <span>CENTRE TECHNIQUE REGIONAL DE CASABLANCA-SETTAT BENI MELLAL</span>
             </div>
         </div>"""
+
+    curve_html = f"""
+        <div class="curve-box">
+            <b>COURBE GRANULOMÉTRIQUE GLOBALE</b>
+            <img src="data:image/png;base64,{_curve_b64}" alt="Courbe granulométrique globale">
+        </div>
+    """
 
     html = f"""<!DOCTYPE html>
 <html lang="fr">
@@ -427,9 +442,47 @@ def generate_pv_html(pv_info, info_p, data_granulats):
         height: 80px;
         vertical-align: top;
     }}
+    .curve-box {{
+        margin: 8px 0;
+        padding: 4px;
+        border: 1px solid #cbd5e1;
+        text-align: center;
+        font-size: 11px;
+        page-break-inside: avoid;
+    }}
+    .curve-box img {{
+        display: block;
+        width: 100%;
+        max-height: 170px;
+        object-fit: contain;
+        margin: 3px auto 0;
+    }}
     @media print {{
-        body {{ padding: 0; }}
-        .lpee-pv-card {{ border: none; box-shadow: none; padding: 0; }}
+        @page {{ size: A4 portrait; margin: 4mm; }}
+        body {{ padding: 0; margin: 0; }}
+        .lpee-pv-card {{
+            border: none;
+            box-shadow: none;
+            padding: 0;
+            width: 138%;
+            max-width: none;
+            margin: 0;
+            zoom: 0.72;
+        }}
+        .lpee-org-header {{ padding: 2px; margin-bottom: 2px; }}
+        .lpee-header-title {{ margin-bottom: 3px; padding: 4px; font-size: 11px; }}
+        .lpee-info-grid, .lpee-norm-table, .lpee-table {{
+            margin-top: 2px;
+            margin-bottom: 3px;
+            font-size: 8px;
+        }}
+        .lpee-info-grid td, .lpee-norm-table td,
+        .lpee-table th, .lpee-table td {{ padding: 2px 3px; }}
+        .curve-box {{ margin: 3px 0; padding: 2px; }}
+        .curve-box img {{ max-height: 135px; }}
+        .comments-box {{ margin-top: 3px; padding: 4px; font-size: 8px; }}
+        .signature-box {{ margin-top: 4px; font-size: 8px; }}
+        .signature-box td {{ padding: 3px; height: 42px; }}
     }}
 </style>
 </head>
@@ -613,6 +666,8 @@ def generate_pv_html(pv_info, info_p, data_granulats):
                 </tr>
             </tbody>
         </table>
+
+        {curve_html}
 
         <div class="comments-box">
             <b>COMMENTAIRES :</b><br>
