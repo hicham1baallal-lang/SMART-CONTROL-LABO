@@ -8,7 +8,6 @@ import copy
 import io
 import os
 import base64
-from xml.sax.saxutils import escape as xml_escape
 
 import matplotlib
 matplotlib.use('Agg')
@@ -50,7 +49,7 @@ def get_tamis_D(df: pd.DataFrame) -> float:
     diffs = (df["% Passants"] - 95.0).abs()
     idx_closest = diffs.idxmin()
     val = df.loc[idx_closest, "Tamis (mm)"]
-    return float(val) if not np.isnan(val) else 0.0
+    return int(val) if float(val).is_integer() else float(val)
 
 def update_passants(mat_data):
     """Calcule les passants à partir des masses enregistrées (Méthode NF EN 933-1)"""
@@ -65,7 +64,7 @@ def update_passants(mat_data):
         
         passants_fmt = []
         for s, p in zip(sieves, passants):
-            passants_fmt.append(max(0.0, round(float(p), 1)))
+            passants_fmt.append(max(0.0, round(p, 1)))
         mat_data['passants'] = passants_fmt
     else:
         mat_data['passants'] = [100.0] * len(sieves)
@@ -85,10 +84,10 @@ def compute_sieve_at_passant(sieves, passings, target_passant):
     valid_sieves = s_arr[p_arr >= target_passant]
     if len(valid_sieves) > 0:
         val = valid_sieves[0]
-        return float(val)
+        return int(val) if float(val).is_integer() else float(val)
         
     val = s_arr[-1]
-    return float(val)
+    return int(val) if float(val).is_integer() else float(val)
 
 def get_d_D_from_material(mat_data):
     """Détermine d et D à partir de la classe granulaire ou par calcul."""
@@ -115,7 +114,7 @@ def get_d_D_from_material(mat_data):
             D_val = D_calc
         if d_val is None:
             d_val = compute_sieve_at_passant(sieves, passants, 5.0)
-        return float(d_val or 0.0), float(D_val or 0.0)
+        return float(d_val), float(D_val)
 
     return float(d_val or 0.0), float(D_val or 0.0)
 
@@ -140,56 +139,23 @@ def get_passant_at_sieve(sieves, passings, target_sieve):
         
     return float(np.interp(target_sieve, s_arr, p_arr))
 
-def format_sieve_display(val):
-    """Formate proprement un nombre de tamis pour l'affichage (évite les erreurs de type string/int)."""
-    if val is None:
-        return "0"
-    try:
-        val_f = float(val)
-    except (TypeError, ValueError):
-        return "0"
-    if np.isnan(val_f):
-        return "0"
-    if val_f.is_integer():
-        return str(int(val_f))
-    return str(val_f).replace('.', ',')
-
-def _safe_text(value, default=''):
-    """Retourne toujours un texte exploitable, même si Supabase renvoie un nombre."""
-    if value is None:
-        return default
-    return str(value)
-
-def _next_snapshot_id(history):
-    """Calcule un identifiant numérique sans additionner une chaîne et un entier.
-
-    Les anciennes lignes peuvent contenir ``id`` sous forme de texte (par
-    exemple ``"12"``).  ``max(existing_ids) + 1`` provoquait alors :
-    ``can only concatenate str (not "int") to str``.
-    """
-    numeric_ids = []
-    for item in history or []:
-        raw_id = item.get('id') if isinstance(item, dict) else None
-        try:
-            if raw_id is not None and str(raw_id).strip() != '':
-                numeric_ids.append(int(float(raw_id)))
-        except (TypeError, ValueError):
-            # Les identifiants non numériques (UUID, valeur vide, etc.) sont
-            # ignorés pour le calcul du prochain identifiant local.
-            continue
-    return max(numeric_ids, default=0) + 1
-
 def calculate_characteristic_data(mat_data, tamis_D=None):
     """Déduit la liste des tamis caractéristiques (2D, 1.4D, D, d, d/2)"""
     d, D_calc = get_d_D_from_material(mat_data)
     D = float(tamis_D) if (tamis_D is not None and tamis_D > 0) else D_calc
     
+    def fmt_sieve(val):
+        if val is None or val == 0:
+            return 0
+        val_r = round(val, 2)
+        return int(val_r) if float(val_r).is_integer() else val_r
+
     sieves_dict = {
-        '2D': float(2 * D),
-        '1.4D': float(1.4 * D),
-        'D': float(D),
-        'd': float(d),
-        'd/2': float(d / 2)
+        '2D': fmt_sieve(2 * D),
+        '1.4D': fmt_sieve(1.4 * D),
+        'D': fmt_sieve(D),
+        'd': fmt_sieve(d),
+        'd/2': fmt_sieve(d / 2)
     }
     
     passants_dict = {}
@@ -200,7 +166,9 @@ def calculate_characteristic_data(mat_data, tamis_D=None):
     return sieves_dict, passants_dict
 
 def _blank_data_granulats():
-    """Structure vierge des 4 fractions (GII/GI/SC/SD)."""
+    """Structure vierge des 4 fractions (GII/GI/SC/SD), pour le bouton
+    'Ajouter un autre prélèvement' : conserve les grilles de tamis normatives
+    (structurelles) mais remet à zéro/None toutes les valeurs mesurées."""
     sieves_gii = [40, 31.5, 25, 20, 16, 14, 12.5, 10, 8, 6.3, 5, 4, 3.15, 2.5, 2, 1.6, 1.25, 1, 0.8, 0.63, 0.5, 0.4, 0.315, 0.25, 0.2, 0.16, 0.125, 0.1, 0.08, 0.063]
     sieves_gi  = [20, 16, 14, 12.5, 10, 8, 6.3, 5, 4, 3.15, 2.5, 2, 1.6, 1.25, 1, 0.8, 0.63, 0.5, 0.4, 0.315, 0.25, 0.2, 0.16, 0.125, 0.1, 0.08, 0.063]
     sieves_sable = [6.3, 5, 4, 3.15, 2.5, 2, 1.6, 1.25, 1, 0.8, 0.63, 0.5, 0.4, 0.315, 0.25, 0.2, 0.16, 0.125, 0.1, 0.08, 0.063]
@@ -236,7 +204,9 @@ def compute_MF(sieves, passings):
     return round(sum_refus_cum / 100.0, 2)
 
 def _find_lpee_logo_path():
-    """Cherche le logo LPEE à quelques emplacements usuels du dépôt."""
+    """Cherche le logo LPEE à quelques emplacements usuels du dépôt.
+    Retourne le chemin trouvé, ou None si absent (aucun logo n'est requis
+    pour que les PV se génèrent correctement)."""
     _candidates = [
         os.path.join(os.path.dirname(os.path.abspath(__file__)), 'assets', 'lpee_logo.png'),
         os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lpee_logo.png'),
@@ -245,81 +215,40 @@ def _find_lpee_logo_path():
     ]
     return next((p for p in _candidates if os.path.isfile(p)), None)
 
+def _safe_text(value, default=''):
+    """Retourne toujours un texte exploitable, même pour une valeur BD numérique."""
+    if value is None:
+        return default
+    return str(value)
+
+def _next_snapshot_id(history):
+    """Calcule le prochain identifiant sans additionner une chaîne et un entier."""
+    numeric_ids = []
+    for item in history or []:
+        raw_id = item.get('id') if isinstance(item, dict) else None
+        try:
+            if raw_id is not None and str(raw_id).strip():
+                numeric_ids.append(int(float(raw_id)))
+        except (TypeError, ValueError):
+            continue
+    return max(numeric_ids, default=0) + 1
+
 def get_month_year_label(date_str):
-    """Extrait un libellé 'Mois Année' (ex: 'Janvier 2026') à partir d'une chaîne de date."""
+    """Convertit une date en libellé français de type « Juillet 2026 »."""
     if not date_str:
         return None
+    months_fr = {
+        1: 'Janvier', 2: 'Février', 3: 'Mars', 4: 'Avril',
+        5: 'Mai', 6: 'Juin', 7: 'Juillet', 8: 'Août',
+        9: 'Septembre', 10: 'Octobre', 11: 'Novembre', 12: 'Décembre'
+    }
     for fmt in ('%Y-%m-%d %H:%M:%S', '%Y-%m-%d', '%d/%m/%Y', '%d-%m-%Y'):
         try:
-            dt = datetime.strptime(str(date_str).strip(), fmt)
-            months_fr = {
-                1: 'Janvier', 2: 'Février', 3: 'Mars', 4: 'Avril',
-                5: 'Mai', 6: 'Juin', 7: 'Juillet', 8: 'Août',
-                9: 'Septembre', 10: 'Octobre', 11: 'Novembre', 12: 'Décembre'
-            }
+            dt = datetime.strptime(_safe_text(date_str).strip(), fmt)
             return f"{months_fr[dt.month]} {dt.year}"
         except ValueError:
             continue
     return None
-
-def _generate_granulometry_plot_png(data_granulats, ref_b=''):
-    """Génère une courbe granulométrique PNG autonome pour le HTML et le PDF."""
-    colors_map = {'GII': '#0b1f5e', 'GI': '#0284c7', 'SC': '#16a34a', 'SD': '#ea580c'}
-    fig, ax = plt.subplots(figsize=(8.6, 4.6), dpi=160)
-    has_curve = False
-
-    for key in ['GII', 'GI', 'SC', 'SD']:
-        data = (data_granulats or {}).get(key, {})
-        sieves = data.get('sieves', [])
-        passants = data.get('passants', [])
-        if not sieves or not passants or len(sieves) != len(passants):
-            continue
-
-        points = sorted(
-            [(float(s), float(p)) for s, p in zip(sieves, passants) if float(s) > 0],
-            key=lambda item: item[0]
-        )
-        if not points:
-            continue
-
-        has_curve = True
-        x_values, y_values = zip(*points)
-        suffix = SUFFIX_MAP.get(key, '')
-        name = _safe_text(data.get('nom', key), key)
-        label = f"{name} ({ref_b}{suffix})" if ref_b else name
-        ax.plot(
-            x_values,
-            y_values,
-            marker='o',
-            markersize=3,
-            linewidth=1.8,
-            color=colors_map.get(key, '#334155'),
-            label=label
-        )
-
-    ax.set_xscale('log')
-    ax.set_xlabel('Tamis (mm)', fontsize=9)
-    ax.set_ylabel('% Passants cumulés', fontsize=9)
-    ax.set_ylim(0, 105)
-    ax.set_yticks(range(0, 101, 20))
-    ax.grid(True, which='both', linestyle='--', linewidth=0.45, alpha=0.45)
-    ax.set_title('Courbe granulométrique', fontsize=11, fontweight='bold')
-
-    if has_curve:
-        ax.legend(loc='best', fontsize=7, frameon=True)
-    else:
-        ax.text(
-            0.5, 0.5, 'Aucune donnée granulométrique disponible',
-            ha='center', va='center', transform=ax.transAxes, fontsize=10
-        )
-        ax.set_xlim(0.05, 50)
-
-    fig.tight_layout()
-    buffer = io.BytesIO()
-    fig.savefig(buffer, format='png', bbox_inches='tight', facecolor='white')
-    plt.close(fig)
-    buffer.seek(0)
-    return buffer.getvalue()
 
 def generate_pv_html(pv_info, info_p, data_granulats):
     """Génère le document HTML complet et autonome du PV pour impression / téléchargement."""
@@ -329,8 +258,6 @@ def generate_pv_html(pv_info, info_p, data_granulats):
     sd_data  = data_granulats.get('SD', {})
 
     ref_b = info_p.get('num_rapport', info_p.get('ref_base', '26/260/LGV/CS/1237'))
-    curve_png = _generate_granulometry_plot_png(data_granulats, _safe_text(ref_b))
-    curve_b64 = base64.b64encode(curve_png).decode('ascii') if curve_png else ''
 
     empty_char = ({'2D': 0, '1.4D': 0, 'D': 0, 'd': 0, 'd/2': 0}, {'2D': 0.0, '1.4D': 0.0, 'D': 0.0, 'd': 0.0, 'd/2': 0.0})
     gii_sieves, gii_passants = calculate_characteristic_data(gii_data) if gii_data else empty_char
@@ -364,16 +291,6 @@ def generate_pv_html(pv_info, info_p, data_granulats):
                 <span>CENTRE TECHNIQUE REGIONAL DE CASABLANCA-SETTAT BENI MELLAL</span>
             </div>
         </div>"""
-
-    curve_html = (
-        f"""
-        <div class="curve-box">
-            <div class="curve-title">COURBE GRANULOMÉTRIQUE</div>
-            <img src="data:image/png;base64,{curve_b64}" alt="Courbe granulométrique" class="curve-image">
-        </div>"""
-        if curve_b64 else
-        '<div class="curve-box"><div class="curve-title">COURBE GRANULOMÉTRIQUE</div><p>Aucune donnée disponible.</p></div>'
-    )
 
     html = f"""<!DOCTYPE html>
 <html lang="fr">
@@ -448,6 +365,16 @@ def generate_pv_html(pv_info, info_p, data_granulats):
         width: 18%;
         background-color: #f8fafc;
     }}
+    .lpee-norm-table {{
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 11px;
+        margin-bottom: 15px;
+    }}
+    .lpee-norm-table td {{
+        border: 1px solid #cbd5e1;
+        padding: 4px 8px;
+    }}
     .lpee-table {{
         width: 100%;
         border-collapse: collapse;
@@ -473,6 +400,11 @@ def generate_pv_html(pv_info, info_p, data_granulats):
         font-weight: bold;
         text-align: left !important;
     }}
+    .row-limite {{
+        background-color: #fafafa;
+        font-size: 11px;
+        color: #475569;
+    }}
     .comments-box {{
         margin-top: 15px;
         padding: 10px;
@@ -495,27 +427,9 @@ def generate_pv_html(pv_info, info_p, data_granulats):
         height: 80px;
         vertical-align: top;
     }}
-    .curve-box {{
-        margin-top: 18px;
-        margin-bottom: 15px;
-        padding: 10px;
-        border: 1px solid #cbd5e1;
-        border-radius: 4px;
-        text-align: center;
-        page-break-inside: avoid;
-    }}
-    .curve-title {{
-        color: #1e3a8a;
-        font-weight: bold;
-        font-size: 13px;
-        margin-bottom: 8px;
-    }}
-    .curve-image {{
-        display: block;
-        width: 100%;
-        max-width: 780px;
-        height: auto;
-        margin: 0 auto;
+    @media print {{
+        body {{ padding: 0; }}
+        .lpee-pv-card {{ border: none; box-shadow: none; padding: 0; }}
     }}
 </style>
 </head>
@@ -552,6 +466,19 @@ def generate_pv_html(pv_info, info_p, data_granulats):
             </tr>
         </table>
 
+        <table class="lpee-norm-table">
+            <tr style="background-color:#f1f5f9; font-weight:bold; text-align:center;">
+                <td colspan="5">Référence Normative</td>
+            </tr>
+            <tr>
+                <td><b>A.G :</b> NF EN 933-1</td>
+                <td><b>Équivalent de sable :</b> NF EN 933-8</td>
+                <td><b>VB :</b> NF EN 933-9</td>
+                <td><b>LOS ANGELES :</b> NF EN 1097-2</td>
+                <td><b>CA :</b> NF EN 933-3</td>
+            </tr>
+        </table>
+
         <!-- TABLEAU 1 : GRAVILLONS GII -->
         <table class="lpee-table">
             <thead>
@@ -560,11 +487,11 @@ def generate_pv_html(pv_info, info_p, data_granulats):
                     <th>2D</th><th>1,4D</th><th>D</th><th>d</th><th>d/2</th><th>f</th><th>FI</th><th>LA</th>
                 </tr>
                 <tr>
-                    <th>{format_sieve_display(gii_sieves['2D'])}</th>
-                    <th>{format_sieve_display(gii_sieves['1.4D'])}</th>
-                    <th>{format_sieve_display(gii_sieves['D'])}</th>
-                    <th>{format_sieve_display(gii_sieves['d'])}</th>
-                    <th>{format_sieve_display(gii_sieves['d/2'])}</th>
+                    <th>{gii_sieves['2D']}</th>
+                    <th>{gii_sieves['1.4D']}</th>
+                    <th>{gii_sieves['D']}</th>
+                    <th>{gii_sieves['d']}</th>
+                    <th>{gii_sieves['d/2']}</th>
                     <th>% &lt; 63µm</th><th>-</th><th>-</th>
                 </tr>
             </thead>
@@ -580,6 +507,10 @@ def generate_pv_html(pv_info, info_p, data_granulats):
                     <td>{gii_data.get('fi', '-') if gii_data.get('fi') is not None else '-'}</td>
                     <td>{gii_data.get('la', '-') if gii_data.get('la') is not None else '-'}</td>
                 </tr>
+                <tr class="row-limite">
+                    <td class="row-designation">Caractéristique générale de granularité</td>
+                    <td>100</td><td>98 - 100</td><td>85 - 99</td><td>0 - 20</td><td>0 - 5</td><td>&lt; 1,5</td><td>FI 20</td><td>&lt; 30</td>
+                </tr>
             </tbody>
         </table>
 
@@ -591,11 +522,11 @@ def generate_pv_html(pv_info, info_p, data_granulats):
                     <th>2D</th><th>1,4D</th><th>D</th><th>d</th><th>d/2</th><th>f</th><th>FI</th><th>LA</th>
                 </tr>
                 <tr>
-                    <th>{format_sieve_display(gi_sieves['2D'])}</th>
-                    <th>{format_sieve_display(gi_sieves['1.4D'])}</th>
-                    <th>{format_sieve_display(gi_sieves['D'])}</th>
-                    <th>{format_sieve_display(gi_sieves['d'])}</th>
-                    <th>{format_sieve_display(gi_sieves['d/2'])}</th>
+                    <th>{gi_sieves['2D']}</th>
+                    <th>{gi_sieves['1.4D']}</th>
+                    <th>{gi_sieves['D']}</th>
+                    <th>{gi_sieves['d']}</th>
+                    <th>{gi_sieves['d/2']}</th>
                     <th>% &lt; 63µm</th><th>-</th><th>-</th>
                 </tr>
             </thead>
@@ -611,6 +542,10 @@ def generate_pv_html(pv_info, info_p, data_granulats):
                     <td>{gi_data.get('fi', '-') if gi_data.get('fi') is not None else '-'}</td>
                     <td>{gi_data.get('la', '-') if gi_data.get('la') is not None else '-'}</td>
                 </tr>
+                <tr class="row-limite">
+                    <td class="row-designation">Caractéristique générale de granularité</td>
+                    <td>100</td><td>98 - 100</td><td>80 - 99</td><td>0 - 20</td><td>0 - 5</td><td>&lt; 1,5</td><td>FI 20</td><td>&lt; 30</td>
+                </tr>
             </tbody>
         </table>
 
@@ -622,9 +557,9 @@ def generate_pv_html(pv_info, info_p, data_granulats):
                     <th>2D</th><th>1,4D</th><th>D</th><th>% &lt; 1mm</th><th>% &lt; 250µm</th><th>% &lt; 63µm</th><th>MF</th><th>SE (10)</th>
                 </tr>
                 <tr>
-                    <th>{format_sieve_display(sc_sieves['2D'])}</th>
-                    <th>{format_sieve_display(sc_sieves['1.4D'])}</th>
-                    <th>{format_sieve_display(sc_sieves['D'])}</th>
+                    <th>{sc_sieves['2D']}</th>
+                    <th>{sc_sieves['1.4D']}</th>
+                    <th>{sc_sieves['D']}</th>
                     <th>-</th><th>-</th><th>-</th><th>CF</th><th>-</th>
                 </tr>
             </thead>
@@ -640,6 +575,10 @@ def generate_pv_html(pv_info, info_p, data_granulats):
                     <td>{sc_data.get('mf', '-') if sc_data.get('mf') is not None else '-'}</td>
                     <td>{sc_data.get('se', '-') if sc_data.get('se') is not None else '-'}</td>
                 </tr>
+                <tr class="row-limite">
+                    <td class="row-designation">Caractéristique générale de granularité</td>
+                    <td>100</td><td>95 - 100</td><td>85 - 99</td><td>40 (&plusmn;20)</td><td>50 (&plusmn;20)</td><td>&le; 16</td><td>2,4 - 4,0</td><td>&ge; 60</td>
+                </tr>
             </tbody>
         </table>
 
@@ -651,9 +590,9 @@ def generate_pv_html(pv_info, info_p, data_granulats):
                     <th>2D</th><th>1,4D</th><th>D</th><th>% &lt; 1mm</th><th>% &lt; 250µm</th><th>% &lt; 63µm</th><th>MB</th>
                 </tr>
                 <tr>
-                    <th>{format_sieve_display(sd_sieves['2D'])}</th>
-                    <th>{format_sieve_display(sd_sieves['1.4D'])}</th>
-                    <th>{format_sieve_display(sd_sieves['D'])}</th>
+                    <th>{sd_sieves['2D']}</th>
+                    <th>{sd_sieves['1.4D']}</th>
+                    <th>{sd_sieves['D']}</th>
                     <th>-</th><th>-</th><th>-</th><th>-</th>
                 </tr>
             </thead>
@@ -668,16 +607,19 @@ def generate_pv_html(pv_info, info_p, data_granulats):
                     <td>{get_passant_at_sieve(sd_data.get('sieves', []), sd_data.get('passants', []), 0.063):.1f}</td>
                     <td>{sd_data.get('mb', '-') if sd_data.get('mb') is not None else '-'}</td>
                 </tr>
+                <tr class="row-limite">
+                    <td class="row-designation">Caractéristique générale de granularité</td>
+                    <td>100</td><td>95 - 100</td><td>85 - 99</td><td>40 (&plusmn;20)</td><td>50 (&plusmn;25)</td><td>&le; 10</td><td>VSS 2</td>
+                </tr>
             </tbody>
         </table>
-
-        {curve_html}
 
         <div class="comments-box">
             <b>COMMENTAIRES :</b><br>
             {pv_info.get('commentaires', '')}
         </div>
 
+        <!-- SIGNATURES -->
         <table class="signature-box">
             <tr>
                 <td><b>LE COORDINATEUR DES ESSAIS</b><br><br><span style="color:#64748b;">Nom: {pv_info.get('coord_essais', 'O.IKEN')}</span><br>Visa:</td>
@@ -690,33 +632,97 @@ def generate_pv_html(pv_info, info_p, data_granulats):
 </html>"""
     return html
 
+def create_curve_image_buffer(data_granulats, ref_b, fig_width=8, fig_height=3.2):
+    """Génère un buffer image PNG haute définition de la courbe granulométrique pour le PDF."""
+    fig, ax = plt.subplots(figsize=(fig_width, fig_height), dpi=200)
+    colors_map = {'GII': '#1e40af', 'GI': '#0284c7', 'SC': '#16a34a', 'SD': '#ea580c'}
+    
+    for k in ['GII', 'GI', 'SC', 'SD']:
+        d = data_granulats.get(k, {})
+        if d.get('sieves') and d.get('passants') and len(d['sieves']) == len(d['passants']):
+            s_s, p_s = zip(*sorted(zip(d['sieves'], d['passants'])))
+            label_str = f"{d.get('nom', k)} ({ref_b}{SUFFIX_MAP.get(k, '')})" if ref_b else d.get('nom', k)
+            ax.plot(s_s, p_s, marker='o', markersize=3.5, label=label_str, color=colors_map.get(k, '#000000'), linewidth=1.5)
+
+    ax.set_xscale('log')
+    ax.set_xlim(0.063, 63)
+    ax.xaxis.set_major_locator(FixedLocator(SIEVE_TICKVALS))
+    ax.xaxis.set_major_formatter(FixedFormatter(SIEVE_TICKTEXT))
+    ax.xaxis.set_minor_locator(NullLocator())
+    ax.set_xlabel("Tamis (mm)", fontsize=8, fontweight='bold')
+    ax.set_ylabel("% Passants Cumulés", fontsize=8, fontweight='bold')
+    ax.set_ylim(-2, 105)
+    ax.grid(True, which="both", ls="--", lw=0.4, alpha=0.7)
+    ax.tick_params(axis='both', which='major', labelsize=7)
+    ax.set_title("COURBE GRANULOMETRIQUE GLOBALE", fontsize=9, fontweight='bold', pad=6)
+
+    # Légende compacte, placée SOUS le graphique (hors de la zone de tracé)
+    # pour ne jamais coller/chevaucher les courbes, quelle que soit leur forme.
+    ax.legend(
+        loc='upper center',
+        bbox_to_anchor=(0.5, -0.22),
+        ncol=2,
+        fontsize=6.5,
+        handlelength=1.3,
+        handletextpad=0.35,
+        columnspacing=1.2,
+        labelspacing=0.35,
+        borderpad=0.4,
+        frameon=True,
+        framealpha=0.95
+    )
+
+    # Marges fixes (au lieu de tight_layout) pour réserver l'espace du titre
+    # en haut et de la légende en bas, et garder un rendu prévisible quelle
+    # que soit la hauteur demandée pour le graphique.
+    fig.subplots_adjust(top=0.88, bottom=0.30, left=0.09, right=0.97)
+
+    buf = io.BytesIO()
+    plt.savefig(buf, format='png', dpi=200)
+    plt.close(fig)
+    buf.seek(0)
+    return buf
+
 def generate_pv_pdf(pv_info, info_p, data_granulats):
     """Génère le fichier PDF structuré du PV d'identification avec courbe intégrée."""
     if not REPORTLAB_AVAILABLE:
-        raise ImportError("La bibliothèque ReportLab n'est pas installée.")
+        raise ImportError("La bibliothèque ReportLab n'est pas installée. Veuillez lancer 'pip install reportlab'.")
 
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
-        buffer, pagesize=A4, leftMargin=15, rightMargin=15, topMargin=15, bottomMargin=15
+        buffer,
+        pagesize=A4,
+        leftMargin=10,
+        rightMargin=10,
+        topMargin=8,
+        bottomMargin=8
     )
     story = []
     styles = getSampleStyleSheet()
 
     title_style = ParagraphStyle(
         'PDFTitle', parent=styles['Normal'],
-        fontName='Helvetica-Bold', fontSize=10, leading=13,
+        fontName='Helvetica-Bold', fontSize=8.5, leading=10,
         textColor=colors.white, alignment=1
     )
-    cell_norm = ParagraphStyle('PDFCellNorm', fontName='Helvetica', fontSize=7, leading=9, alignment=1)
-    cell_left = ParagraphStyle('PDFCellLeft', fontName='Helvetica', fontSize=7, leading=9, alignment=0)
-    cell_left_bold = ParagraphStyle('PDFCellLeftBold', fontName='Helvetica-Bold', fontSize=7, leading=9, alignment=0)
+    cell_bold = ParagraphStyle('PDFCellBold', fontName='Helvetica-Bold', fontSize=5.8, leading=6.5, alignment=1)
+    cell_norm = ParagraphStyle('PDFCellNorm', fontName='Helvetica', fontSize=5.8, leading=6.5, alignment=1)
+    cell_left = ParagraphStyle('PDFCellLeft', fontName='Helvetica', fontSize=5.8, leading=6.5, alignment=0)
+    cell_left_bold = ParagraphStyle('PDFCellLeftBold', fontName='Helvetica-Bold', fontSize=5.8, leading=6.5, alignment=0)
     
     ref_b = info_p.get('num_rapport', info_p.get('ref_base', '26/260/LGV/CS/1237'))
+
+    # --------------------------------------------------------------------
+    # EN-TÊTE INSTITUTIONNEL (LPEE) — logo + raison sociale du laboratoire,
+    # affiché au-dessus du bandeau bleu "RAPPORT D'ESSAI N°...".
+    # Le logo est recherché dans quelques emplacements usuels du dépôt ;
+    # s'il est absent, l'en-tête reste affiché en texte seul (pas d'erreur).
+    # --------------------------------------------------------------------
     _logo_path = _find_lpee_logo_path()
 
     org_style = ParagraphStyle(
         'PDFOrgHeader', parent=styles['Normal'],
-        fontName='Helvetica-Bold', fontSize=10, leading=13,
+        fontName='Helvetica-Bold', fontSize=8.5, leading=10,
         textColor=colors.HexColor('#1e3a8a'), alignment=1
     )
     org_text = (
@@ -726,14 +732,25 @@ def generate_pv_pdf(pv_info, info_p, data_granulats):
 
     if _logo_path:
         org_header_table = Table(
-            [[Image(_logo_path, width=48, height=48), Paragraph(org_text, org_style)]],
-            colWidths=[58, 507]
+            [[Image(_logo_path, width=34, height=34), Paragraph(org_text, org_style)]],
+            colWidths=[42, 523]
         )
+        org_header_table.setStyle(TableStyle([
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('ALIGN', (0,0), (0,0), 'CENTER'),
+            ('TOPPADDING', (0,0), (-1,-1), 4),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 4),
+        ]))
     else:
         org_header_table = Table([[Paragraph(org_text, org_style)]], colWidths=[565])
+        org_header_table.setStyle(TableStyle([
+            ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+            ('TOPPADDING', (0,0), (-1,-1), 4),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 4),
+        ]))
 
     story.append(org_header_table)
-    story.append(Spacer(1, 2))
+    story.append(Spacer(1, 1))
 
     header_text = f"RAPPORT D'ESSAI N° : {pv_info.get('ref_pv', '')}<br/><font size=7.5>OBJET : IDENTIFICATION DES GRANULATS POUR BETON</font>"
     header_table = Table([[Paragraph(header_text, title_style)]], colWidths=[565])
@@ -745,10 +762,11 @@ def generate_pv_pdf(pv_info, info_p, data_granulats):
         ('TOPPADDING', (0,0), (-1,-1), 5),
     ]))
     story.append(header_table)
-    story.append(Spacer(1, 4))
+    story.append(Spacer(1, 2))
 
     def build_adjustable_tables(pad_extra):
         flowables = []
+
         info_data = [
             [Paragraph("Client :", cell_left_bold), Paragraph(str(pv_info.get('client', '')), cell_left_bold),
              Paragraph("N° Dossier :", cell_left_bold), Paragraph(str(info_p.get('dossier_no', '-')), cell_left)],
@@ -765,251 +783,226 @@ def generate_pv_pdf(pv_info, info_p, data_granulats):
             ('BACKGROUND', (0,0), (0,-1), colors.HexColor('#f8fafc')),
             ('BACKGROUND', (2,0), (2,-1), colors.HexColor('#f8fafc')),
             ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-            ('TOPPADDING', (0,0), (-1,-1), 2 + pad_extra),
-            ('BOTTOMPADDING', (0,0), (-1,-1), 2 + pad_extra),
+             ('TOPPADDING', (0,0), (-1,-1), 1 + pad_extra),
+             ('BOTTOMPADDING', (0,0), (-1,-1), 1 + pad_extra),
         ]))
         flowables.append(info_table)
-        flowables.append(Spacer(1, 4))
+        flowables.append(Spacer(1, 1))
+
+        norm_data = [
+            [Paragraph("Référence Normative", cell_bold), "", "", "", ""],
+            [Paragraph("<b>A.G :</b> NF EN 933-1", cell_norm),
+             Paragraph("<b>Équivalent de sable :</b> NF EN 933-8", cell_norm),
+             Paragraph("<b>VB :</b> NF EN 933-9", cell_norm),
+             Paragraph("<b>LOS ANGELES :</b> NF EN 1097-2", cell_norm),
+             Paragraph("<b>CA :</b> NF EN 933-3", cell_norm)]
+        ]
+        norm_table = Table(norm_data, colWidths=[113]*5)
+        norm_table.setStyle(TableStyle([
+            ('SPAN', (0,0), (4,0)),
+            ('BACKGROUND', (0,0), (4,0), colors.HexColor('#f1f5f9')),
+            ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#cbd5e1')),
+            ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+             ('TOPPADDING', (0,0), (-1,-1), 1 + pad_extra),
+             ('BOTTOMPADDING', (0,0), (-1,-1), 1 + pad_extra),
+        ]))
+        flowables.append(norm_table)
+        flowables.append(Spacer(1, 1))
+
+        def build_mat_table(title_cols, row_data_vals, row_lim_vals):
+            t_data = [
+                [Paragraph("<b>Désignations</b>", cell_bold)] + [Paragraph(f"<b>{c}</b>", cell_bold) for c in title_cols[0]],
+                [""] + [Paragraph(f"<b>{c}</b>", cell_bold) for c in title_cols[1]],
+                row_data_vals,
+                row_lim_vals
+            ]
+            col_w = [165] + [50]*8
+            t = Table(t_data, colWidths=col_w)
+            t.setStyle(TableStyle([
+                ('SPAN', (0,0), (0,1)),
+                ('BACKGROUND', (0,0), (-1,1), colors.HexColor('#2563eb')),
+                ('TEXTCOLOR', (0,0), (-1,1), colors.white),
+                ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#cbd5e1')),
+                ('BACKGROUND', (0,2), (0,2), colors.HexColor('#f1f5f9')),
+                ('BACKGROUND', (0,3), (-1,3), colors.HexColor('#fafafa')),
+                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                 ('TOPPADDING', (0,0), (-1,-1), 1 + pad_extra),
+                 ('BOTTOMPADDING', (0,0), (-1,-1), 1 + pad_extra),
+            ]))
+            return t
+
+        empty_char = ({'2D': 0, '1.4D': 0, 'D': 0, 'd': 0, 'd/2': 0}, {'2D': 0.0, '1.4D': 0.0, 'D': 0.0, 'd': 0.0, 'd/2': 0.0})
+        gii_data = data_granulats.get('GII', {})
+        gi_data  = data_granulats.get('GI', {})
+        sc_data  = data_granulats.get('SC', {})
+        sd_data  = data_granulats.get('SD', {})
+
+        gii_s, gii_p = calculate_characteristic_data(gii_data) if gii_data else empty_char
+        gi_s, gi_p   = calculate_characteristic_data(gi_data) if gi_data else empty_char
+        sc_s, sc_p   = calculate_characteristic_data(sc_data) if sc_data else empty_char
+        sd_s, sd_p   = calculate_characteristic_data(sd_data) if sd_data else empty_char
+
+        t1_cols = [
+            ["2D", "1,4D", "D", "d", "d/2", "f", "FI", "LA"],
+            [str(gii_s['2D']), str(gii_s['1.4D']), str(gii_s['D']), str(gii_s['d']), str(gii_s['d/2']), "% < 63µm", "-", "-"]
+        ]
+        t1_row1 = [
+            Paragraph(f"<b>{gii_data.get('nom', 'GII')} - ({ref_b}/1)</b>", cell_left),
+            Paragraph(f"{gii_p['2D']:.0f}", cell_norm), Paragraph(f"{gii_p['1.4D']:.0f}", cell_norm), Paragraph(f"{gii_p['D']:.0f}", cell_norm),
+            Paragraph(f"{gii_p['d']:.0f}", cell_norm), Paragraph(f"{gii_p['d/2']:.0f}", cell_norm),
+            Paragraph(f"{get_passant_at_sieve(gii_data.get('sieves', []), gii_data.get('passants', []), 0.063):.1f}", cell_norm),
+            Paragraph(f"{gii_data.get('fi', '-') if gii_data.get('fi') is not None else '-'}", cell_norm),
+            Paragraph(f"{gii_data.get('la', '-') if gii_data.get('la') is not None else '-'}", cell_norm)
+        ]
+        t1_row2 = [Paragraph("Caractéristique générale", cell_left)] + [Paragraph(v, cell_norm) for v in ["100", "98-100", "85-99", "0-20", "0-5", "< 1,5", "FI 20", "< 30"]]
+        flowables.append(build_mat_table(t1_cols, t1_row1, t1_row2))
+        flowables.append(Spacer(1, 1))
+
+        t2_cols = [
+            ["2D", "1,4D", "D", "d", "d/2", "f", "FI", "LA"],
+            [str(gi_s['2D']), str(gi_s['1.4D']), str(gi_s['D']), str(gi_s['d']), str(gi_s['d/2']), "% < 63µm", "-", "-"]
+        ]
+        t2_row1 = [
+            Paragraph(f"<b>{gi_data.get('nom', 'GI')} - ({ref_b}/2)</b>", cell_left),
+            Paragraph(f"{gi_p['2D']:.0f}", cell_norm), Paragraph(f"{gi_p['1.4D']:.0f}", cell_norm), Paragraph(f"{gi_p['D']:.0f}", cell_norm),
+            Paragraph(f"{gi_p['d']:.0f}", cell_norm), Paragraph(f"{gi_p['d/2']:.0f}", cell_norm),
+            Paragraph(f"{get_passant_at_sieve(gi_data.get('sieves', []), gi_data.get('passants', []), 0.063):.1f}", cell_norm),
+            Paragraph(f"{gi_data.get('fi', '-') if gi_data.get('fi') is not None else '-'}", cell_norm),
+            Paragraph(f"{gi_data.get('la', '-') if gi_data.get('la') is not None else '-'}", cell_norm)
+        ]
+        t2_row2 = [Paragraph("Caractéristique générale", cell_left)] + [Paragraph(v, cell_norm) for v in ["100", "98-100", "80-99", "0-20", "0-5", "< 1,5", "FI 20", "< 30"]]
+        flowables.append(build_mat_table(t2_cols, t2_row1, t2_row2))
+        flowables.append(Spacer(1, 1))
+
+        t3_cols = [
+            ["2D", "1,4D", "D", "% < 1mm", "% < 250µm", "% < 63µm", "MF", "SE (10)"],
+            [str(sc_s['2D']), str(sc_s['1.4D']), str(sc_s['D']), "-", "-", "-", "CF", "-"]
+        ]
+        t3_row1 = [
+            Paragraph(f"<b>{sc_data.get('nom', 'SC')} - ({ref_b}/3)</b>", cell_left),
+            Paragraph(f"{sc_p['2D']:.0f}", cell_norm), Paragraph(f"{sc_p['1.4D']:.0f}", cell_norm), Paragraph(f"{sc_p['D']:.0f}", cell_norm),
+            Paragraph(f"{get_passant_at_sieve(sc_data.get('sieves', []), sc_data.get('passants', []), 1.0):.0f}", cell_norm),
+            Paragraph(f"{get_passant_at_sieve(sc_data.get('sieves', []), sc_data.get('passants', []), 0.25):.0f}", cell_norm),
+            Paragraph(f"{get_passant_at_sieve(sc_data.get('sieves', []), sc_data.get('passants', []), 0.063):.1f}", cell_norm),
+            Paragraph(f"{sc_data.get('mf', '-') if sc_data.get('mf') is not None else '-'}", cell_norm),
+            Paragraph(f"{sc_data.get('se', '-') if sc_data.get('se') is not None else '-'}", cell_norm)
+        ]
+        t3_row2 = [Paragraph("Caractéristique générale", cell_left)] + [Paragraph(v, cell_norm) for v in ["100", "95-100", "85-99", "40(±20)", "50(±20)", "≤ 16", "2.4-4.0", "≥ 60"]]
+        flowables.append(build_mat_table(t3_cols, t3_row1, t3_row2))
+        flowables.append(Spacer(1, 1))
+
+        t4_cols = [
+            ["2D", "1,4D", "D", "% < 1mm", "% < 250µm", "% < 63µm", "MB", "-"],
+            [str(sd_s['2D']), str(sd_s['1.4D']), str(sd_s['D']), "-", "-", "-", "-", "-"]
+        ]
+        t4_row1 = [
+            Paragraph(f"<b>{sd_data.get('nom', 'SD')} - ({ref_b}/4)</b>", cell_left),
+            Paragraph(f"{sd_p['2D']:.0f}", cell_norm), Paragraph(f"{sd_p['1.4D']:.0f}", cell_norm), Paragraph(f"{sd_p['D']:.0f}", cell_norm),
+            Paragraph(f"{get_passant_at_sieve(sd_data.get('sieves', []), sd_data.get('passants', []), 1.0):.0f}", cell_norm),
+            Paragraph(f"{get_passant_at_sieve(sd_data.get('sieves', []), sd_data.get('passants', []), 0.25):.0f}", cell_norm),
+            Paragraph(f"{get_passant_at_sieve(sd_data.get('sieves', []), sd_data.get('passants', []), 0.063):.1f}", cell_norm),
+            Paragraph(f"{sd_data.get('mb', '-') if sd_data.get('mb') is not None else '-'}", cell_norm),
+            Paragraph("-", cell_norm)
+        ]
+        t4_row2 = [Paragraph("Caractéristique générale", cell_left)] + [Paragraph(v, cell_norm) for v in ["100", "95-100", "85-99", "40(±20)", "50(±25)", "≤ 10", "VSS 2", "-"]]
+        flowables.append(build_mat_table(t4_cols, t4_row1, t4_row2))
+        flowables.append(Spacer(1, 1))
+
         return flowables
 
-    pdf_section_style = ParagraphStyle(
-        'PDFSectionTitle',
-        parent=styles['Normal'],
-        fontName='Helvetica-Bold',
-        fontSize=8.5,
-        leading=10,
-        textColor=colors.HexColor('#1e3a8a'),
-        spaceBefore=4,
-        spaceAfter=3
-    )
-    pdf_table_header = ParagraphStyle(
-        'PDFTableHeader',
-        parent=styles['Normal'],
-        fontName='Helvetica-Bold',
-        fontSize=5.8,
-        leading=6.8,
-        textColor=colors.white,
-        alignment=1
-    )
-    pdf_table_subheader = ParagraphStyle(
-        'PDFTableSubHeader',
-        parent=styles['Normal'],
-        fontName='Helvetica',
-        fontSize=5.8,
-        leading=6.8,
-        textColor=colors.HexColor('#0f172a'),
-        alignment=1
-    )
-    pdf_table_cell = ParagraphStyle(
-        'PDFTableCell',
-        parent=styles['Normal'],
-        fontName='Helvetica',
-        fontSize=6.2,
-        leading=7.2,
-        alignment=1
-    )
-    pdf_table_cell_left = ParagraphStyle(
-        'PDFTableCellLeft',
-        parent=styles['Normal'],
-        fontName='Helvetica-Bold',
-        fontSize=6.2,
-        leading=7.2,
-        alignment=0
-    )
+    ADJUSTABLE_ROWS = 4 + 2 + (4 * 4)
+    baseline_tables = build_adjustable_tables(0)
 
-    def pdf_paragraph(value, style=pdf_table_cell, default='-'):
-        text = _safe_text(value, default)
-        return Paragraph(xml_escape(text), style)
-
-    def pdf_number(value, digits=0):
-        try:
-            number = float(value)
-            return f"{number:.{digits}f}"
-        except (TypeError, ValueError):
-            return '-'
-
-    def add_result_table(key, title, columns, subcolumns, values):
-        """Ajoute au PDF un tableau de synthèse complet pour une fraction."""
-        mat_data = (data_granulats or {}).get(key, {})
-        table_width = 565
-        designation_width = 125
-        value_width = (table_width - designation_width) / len(columns)
-        table_data = [
-            [pdf_paragraph('Désignations', pdf_table_header)] +
-            [pdf_paragraph(column, pdf_table_header) for column in columns],
-            [pdf_paragraph('', pdf_table_subheader)] +
-            [pdf_paragraph(column, pdf_table_subheader) for column in subcolumns],
-            [pdf_paragraph(
-                f"{_safe_text(mat_data.get('nom', key), key)} - ({_safe_text(ref_b)}/{SUFFIX_MAP.get(key, '').lstrip('/')})",
-                pdf_table_cell_left
-            )] +
-            [pdf_paragraph(value) for value in values]
-        ]
-        result_table = Table(
-            table_data,
-            colWidths=[designation_width] + [value_width] * len(columns),
-            repeatRows=2
-        )
-        result_table.setStyle(TableStyle([
-            ('GRID', (0, 0), (-1, -1), 0.35, colors.HexColor('#cbd5e1')),
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2563eb')),
-            ('BACKGROUND', (0, 1), (-1, 1), colors.HexColor('#eff6ff')),
-            ('BACKGROUND', (0, 2), (0, 2), colors.HexColor('#f1f5f9')),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('ALIGN', (1, 0), (-1, -1), 'CENTER'),
-            ('SPAN', (0, 0), (0, 1)),
-            ('TOPPADDING', (0, 0), (-1, -1), 3),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
-            ('LEFTPADDING', (0, 0), (-1, -1), 2),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 2),
-        ]))
-        return KeepTogether([
-            Paragraph(xml_escape(title), pdf_section_style),
-            result_table,
-            Spacer(1, 5)
-        ])
-
-    story.extend(build_adjustable_tables(0))
-
-    # Les tableaux de résultats étaient absents de l'ancien générateur PDF.
-    # Ils sont maintenant ajoutés avec les mêmes données que l'aperçu HTML.
-    result_data = data_granulats or {}
-    result_specs = [
-        (
-            'GII',
-            'TABLEAU DES RÉSULTATS - GRAVILLONS GII',
-            ['2D', '1,4D', 'D', 'd', 'd/2', 'f', 'FI', 'LA'],
-            [
-                format_sieve_display(calculate_characteristic_data(result_data.get('GII', {}))[0]['2D']),
-                format_sieve_display(calculate_characteristic_data(result_data.get('GII', {}))[0]['1.4D']),
-                format_sieve_display(calculate_characteristic_data(result_data.get('GII', {}))[0]['D']),
-                format_sieve_display(calculate_characteristic_data(result_data.get('GII', {}))[0]['d']),
-                format_sieve_display(calculate_characteristic_data(result_data.get('GII', {}))[0]['d/2']),
-                '% < 63 µm', '-', '-'
-            ],
-            lambda d: [
-                pdf_number(calculate_characteristic_data(d)[1]['2D']),
-                pdf_number(calculate_characteristic_data(d)[1]['1.4D']),
-                pdf_number(calculate_characteristic_data(d)[1]['D']),
-                pdf_number(calculate_characteristic_data(d)[1]['d']),
-                pdf_number(calculate_characteristic_data(d)[1]['d/2']),
-                pdf_number(get_passant_at_sieve(d.get('sieves', []), d.get('passants', []), 0.063), 1),
-                _safe_text(d.get('fi'), '-'),
-                _safe_text(d.get('la'), '-')
-            ]
-        ),
-        (
-            'GI',
-            'TABLEAU DES RÉSULTATS - GRAVILLONS GI',
-            ['2D', '1,4D', 'D', 'd', 'd/2', 'f', 'FI', 'LA'],
-            None,
-            lambda d: [
-                pdf_number(calculate_characteristic_data(d)[1]['2D']),
-                pdf_number(calculate_characteristic_data(d)[1]['1.4D']),
-                pdf_number(calculate_characteristic_data(d)[1]['D']),
-                pdf_number(calculate_characteristic_data(d)[1]['d']),
-                pdf_number(calculate_characteristic_data(d)[1]['d/2']),
-                pdf_number(get_passant_at_sieve(d.get('sieves', []), d.get('passants', []), 0.063), 1),
-                _safe_text(d.get('fi'), '-'),
-                _safe_text(d.get('la'), '-')
-            ]
-        ),
-        (
-            'SC',
-            'TABLEAU DES RÉSULTATS - SABLE GROSSIER',
-            ['2D', '1,4D', 'D', '% < 1 mm', '% < 250 µm', '% < 63 µm', 'MF', 'SE (10)'],
-            None,
-            lambda d: [
-                pdf_number(calculate_characteristic_data(d)[1]['2D']),
-                pdf_number(calculate_characteristic_data(d)[1]['1.4D']),
-                pdf_number(calculate_characteristic_data(d)[1]['D']),
-                pdf_number(get_passant_at_sieve(d.get('sieves', []), d.get('passants', []), 1.0)),
-                pdf_number(get_passant_at_sieve(d.get('sieves', []), d.get('passants', []), 0.25)),
-                pdf_number(get_passant_at_sieve(d.get('sieves', []), d.get('passants', []), 0.063), 1),
-                _safe_text(d.get('mf'), '-'),
-                _safe_text(d.get('se'), '-')
-            ]
-        ),
-        (
-            'SD',
-            'TABLEAU DES RÉSULTATS - SABLE FIN',
-            ['2D', '1,4D', 'D', '% < 1 mm', '% < 250 µm', '% < 63 µm', 'MB'],
-            None,
-            lambda d: [
-                pdf_number(calculate_characteristic_data(d)[1]['2D']),
-                pdf_number(calculate_characteristic_data(d)[1]['1.4D']),
-                pdf_number(calculate_characteristic_data(d)[1]['D']),
-                pdf_number(get_passant_at_sieve(d.get('sieves', []), d.get('passants', []), 1.0)),
-                pdf_number(get_passant_at_sieve(d.get('sieves', []), d.get('passants', []), 0.25)),
-                pdf_number(get_passant_at_sieve(d.get('sieves', []), d.get('passants', []), 0.063), 1),
-                _safe_text(d.get('mb'), '-')
-            ]
-        )
-    ]
-
-    for key, title, columns, subcolumns, values_builder in result_specs:
-        mat_data = result_data.get(key, {})
-        char_sieves, _ = calculate_characteristic_data(mat_data)
-        if subcolumns is None:
-            subcolumns = [
-                format_sieve_display(char_sieves['2D']),
-                format_sieve_display(char_sieves['1.4D']),
-                format_sieve_display(char_sieves['D'])
-            ] + ['-', '-', '-', '-'][:len(columns) - 3]
-        values = values_builder(mat_data) if callable(values_builder) else values_builder
-        story.append(add_result_table(key, title, columns, subcolumns, values))
-
-    curve_png = _generate_granulometry_plot_png(result_data, _safe_text(ref_b))
-    story.append(Paragraph('COURBE GRANULOMÉTRIQUE', pdf_section_style))
-    story.append(Image(io.BytesIO(curve_png), width=535, height=285))
-    story.append(Spacer(1, 5))
-
-    comments = xml_escape(_safe_text(pv_info.get('commentaires', ''), ''))
-    story.append(Paragraph('COMMENTAIRES', pdf_section_style))
-    story.append(Table(
-        [[Paragraph(comments or '-', cell_left)]],
-        colWidths=[565],
-        style=TableStyle([
-            ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e1')),
-            ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#f8fafc')),
-            ('TOPPADDING', (0, 0), (-1, -1), 6),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-            ('LEFTPADDING', (0, 0), (-1, -1), 6),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 6),
-        ])
-    ))
-    signature_table = Table(
-        [[
-            Paragraph('<b>LE COORDINATEUR DES ESSAIS</b><br/><br/>Nom : ' +
-                      xml_escape(_safe_text(pv_info.get('coord_essais', 'O.IKEN'))), cell_norm),
-            Paragraph('<b>LE CHEF DU LABORATOIRE</b><br/><br/>Nom : ' +
-                      xml_escape(_safe_text(pv_info.get('chef_labo', 'H.BAALLAL'))), cell_norm),
-            Paragraph('<b>REÇU PAR LE CLIENT</b><br/><br/>Nom :', cell_norm)
-        ]],
-        colWidths=[188.3, 188.3, 188.3],
-        rowHeights=[62]
-    )
-    signature_table.setStyle(TableStyle([
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e1')),
-        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('TOPPADDING', (0, 0), (-1, -1), 6),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+    comm_text = f"<b>COMMENTAIRES :</b><br/>{pv_info.get('commentaires', '')}"
+    comm_p = Paragraph(comm_text, cell_left)
+    comm_table = Table([[comm_p]], colWidths=[565])
+    comm_table.setStyle(TableStyle([
+        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#cbd5e1')),
+        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#f8fafc')),
+        ('TOPPADDING', (0,0), (-1,-1), 3),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 3),
     ]))
-    story.append(Spacer(1, 8))
-    story.append(signature_table)
+    comm_spacer = Spacer(1, 1)
+
+    sig_data = [
+        [
+            Paragraph(f"<b>LE COORDINATEUR DES ESSAIS</b><br/><br/><font color='#64748b'>Nom: {pv_info.get('coord_essais', 'O.IKEN')}</font><br/>Visa:", cell_norm),
+            Paragraph(f"<b>LE CHEF DU LABORATOIRE</b><br/><br/><font color='#64748b'>Nom: {pv_info.get('chef_labo', 'H.BAALLAL')}</font><br/>Visa:", cell_norm),
+            Paragraph("<b>REÇU PAR LE CLIENT</b><br/><br/><font color='#64748b'>Nom:</font><br/>Visa:", cell_norm)
+        ]
+    ]
+    sig_table = Table(sig_data, colWidths=[188.3, 188.3, 188.3])
+    sig_table.setStyle(TableStyle([
+        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#cbd5e1')),
+        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+         ('TOPPADDING', (0,0), (-1,-1), 2),
+         ('BOTTOMPADDING', (0,0), (-1,-1), 5),
+    ]))
+
+    def _flowable_height(flowable, avail_w=565):
+        try:
+            return flowable.wrap(avail_w, 100000)[1]
+        except Exception:
+            return 0
+
+    FRAME_PADDING = 6
+    page_height = A4[1] - doc.topMargin - doc.bottomMargin - FRAME_PADDING
+    CHART_HEIGHT = 155
+    CHART_BOTTOM_SPACER = 1
+    SAFETY_MARGIN = 3
+
+    fixed_height = sum(_flowable_height(f) for f in story)
+    fixed_height += _flowable_height(comm_table) + _flowable_height(comm_spacer) + _flowable_height(sig_table)
+    baseline_height = sum(_flowable_height(f) for f in baseline_tables)
+
+    leftover = page_height - fixed_height - baseline_height - CHART_HEIGHT - CHART_BOTTOM_SPACER - SAFETY_MARGIN
+    raw_pad = leftover / (2 * ADJUSTABLE_ROWS)
+    pad_extra = max(0.0, min(raw_pad, 12.0))
+
+    # Le PV est volontairement compacté sur une seule page A4.  La courbe
+    # conserve sa légende mais ne grandit pas avec l'espace résiduel.
+    chart_height = CHART_HEIGHT if raw_pad >= 0 else max(125, CHART_HEIGHT + leftover)
+
+    final_tables = build_adjustable_tables(pad_extra) if pad_extra > 0 else baseline_tables
+    story.extend(final_tables)
+
+    chart_buf = create_curve_image_buffer(
+        data_granulats, ref_b,
+        fig_width=565 / 72.0,
+        fig_height=chart_height / 72.0
+    )
+    img = Image(chart_buf, width=565, height=chart_height)
+    story.append(KeepTogether([
+        img,
+        Spacer(1, CHART_BOTTOM_SPACER)
+    ]))
+
+    story.append(comm_table)
+    story.append(comm_spacer)
+    story.append(sig_table)
 
     doc.build(story)
     buffer.seek(0)
     return buffer.getvalue()
 
+# ------------------------------------------------------------------------------
+# FONCTIONS DE PERSISTANCE BD / SUPABASE (Restauration permanente après déconnexion)
+# ------------------------------------------------------------------------------
 def fetch_pvs_from_supabase(supabase_client):
     """Charge l'historique complet des PV depuis la base de données Supabase."""
+    debug = {'client_present': bool(supabase_client), 'attempts': []}
     if not supabase_client:
+        try:
+            st.session_state['_pv_db_debug_fetch'] = debug
+        except Exception:
+            pass
         return None
     for table_name in ['pv_granulats', 'historique_pv']:
         try:
             res = supabase_client.table(table_name).select('*').execute()
+            n_rows = len(res.data) if res and hasattr(res, 'data') and res.data else 0
+            debug['attempts'].append({'table': table_name, 'ok': True, 'rows_found': n_rows})
             if res and hasattr(res, 'data') and res.data:
                 loaded = []
                 for row in res.data:
@@ -1023,14 +1016,30 @@ def fetch_pvs_from_supabase(supabase_client):
                         loaded.append(item)
                     else:
                         loaded.append(row)
+                debug['loaded_from'] = table_name
+                debug['loaded_count'] = len(loaded)
+                try:
+                    st.session_state['_pv_db_debug_fetch'] = debug
+                except Exception:
+                    pass
                 return loaded
-        except Exception:
+        except Exception as e:
+            debug['attempts'].append({'table': table_name, 'ok': False, 'error': str(e)})
             continue
+    try:
+        st.session_state['_pv_db_debug_fetch'] = debug
+    except Exception:
+        pass
     return None
 
 def save_pv_to_supabase(supabase_client, pv_snapshot):
     """Sauvegarde ou met à jour de façon permanente un PV sur la base de données Supabase."""
+    debug = {'client_present': bool(supabase_client), 'attempts': [], 'saved': False}
     if not supabase_client:
+        try:
+            st.session_state['_pv_db_debug_save'] = debug
+        except Exception:
+            pass
         return
     payload = {
         'ref_pv': pv_snapshot.get('ref_pv'),
@@ -1042,20 +1051,49 @@ def save_pv_to_supabase(supabase_client, pv_snapshot):
     for table_name in ['pv_granulats', 'historique_pv']:
         try:
             supabase_client.table(table_name).upsert(payload, on_conflict='ref_pv').execute()
+            debug['attempts'].append({'table': table_name, 'ok': True})
+            debug['saved'] = True
+            debug['saved_to'] = table_name
+            try:
+                st.session_state['_pv_db_debug_save'] = debug
+            except Exception:
+                pass
             return
-        except Exception:
+        except Exception as e:
+            debug['attempts'].append({'table': table_name, 'ok': False, 'error': str(e)})
             continue
+    try:
+        st.session_state['_pv_db_debug_save'] = debug
+    except Exception:
+        pass
 
 def delete_pv_from_supabase(supabase_client, pv_ref):
     """Supprime un PV de la base de données Supabase."""
+    debug = {'client_present': bool(supabase_client), 'attempts': [], 'deleted': False}
     if not supabase_client or not pv_ref:
+        try:
+            st.session_state['_pv_db_debug_delete'] = debug
+        except Exception:
+            pass
         return
     for table_name in ['pv_granulats', 'historique_pv']:
         try:
             supabase_client.table(table_name).delete().eq('ref_pv', pv_ref).execute()
+            debug['attempts'].append({'table': table_name, 'ok': True})
+            debug['deleted'] = True
+            debug['deleted_from'] = table_name
+            try:
+                st.session_state['_pv_db_debug_delete'] = debug
+            except Exception:
+                pass
             return
-        except Exception:
+        except Exception as e:
+            debug['attempts'].append({'table': table_name, 'ok': False, 'error': str(e)})
             continue
+    try:
+        st.session_state['_pv_db_debug_delete'] = debug
+    except Exception:
+        pass
 
 # ------------------------------------------------------------------------------
 # FONCTION PRINCIPALE STREAMLIT
@@ -1063,6 +1101,12 @@ def delete_pv_from_supabase(supabase_client, pv_ref):
 def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
     prefix = kwargs.get('key_prefix', 'pvg')
 
+    # ------------------------------------------------------------------------
+    # APPLICATION D'UN CHARGEMENT DE PV EN ATTENTE (depuis l'historique) —
+    # DOIT s'exécuter tout en haut de show(), AVANT la création de tout widget,
+    # pour pouvoir écrire dans st.session_state[f"{prefix}_..."] sans provoquer
+    # de StreamlitWidgetAlreadyInstantiatedError.
+    # ------------------------------------------------------------------------
     if '_pending_pv_load' in st.session_state:
         _pending = st.session_state.pop('_pending_pv_load')
         st.session_state['info_prelevement'] = _pending.get('info_prelevement', {})
@@ -1088,8 +1132,16 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         st.session_state[f"{prefix}_pv_comm_input"] = _pv_info_ld.get('commentaires', '')
 
         st.session_state['success_msg'] = _pending.get('success_msg', "✅ PV chargé.")
+        # Active le mode modification uniquement si ce chargement provient bien
+        # du bouton "✏️ Modifier ce PV" (edit_ref renseigné) — sert à autoriser
+        # la re-validation sous le même N° Rapport sans être bloqué comme doublon.
         st.session_state['_pv_edit_mode'] = _pending.get('edit_ref')
 
+    # ------------------------------------------------------------------------
+    # RÉINITIALISATION POUR UN NOUVEAU PRÉLÈVEMENT (bouton "➕ Ajouter un autre
+    # prélèvement") — même contrainte que ci-dessus : DOIT s'exécuter avant la
+    # création de tout widget.
+    # ------------------------------------------------------------------------
     if st.session_state.pop('_pending_pv_reset', False):
         _kept_chantier = st.session_state.get('info_prelevement', {}).get('chantier', '')
         _kept_client = st.session_state.get('info_prelevement', {}).get('client', '')
@@ -1116,13 +1168,21 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
             'chef_labo': _kept_chef
         }
         st.session_state['data_granulats'] = _blank_data_granulats()
+
+        # Quitte le mode modification : ce nouveau prélèvement n'est PAS une
+        # édition d'un PV existant, donc un N° Rapport en double doit être
+        # bloqué normalement (voir vérification is_blocked_duplicate).
         st.session_state['_pv_edit_mode'] = None
 
+        # Purge de tous les widgets de saisie de CE module (préfixés par
+        # `prefix`) pour qu'ils se réinitialisent proprement à partir des
+        # données vierges ci-dessus au lieu de garder d'anciennes valeurs
+        # tapées par l'utilisateur.
         for _wk in list(st.session_state.keys()):
             if _wk.startswith(f"{prefix}_"):
                 del st.session_state[_wk]
 
-        st.session_state['success_msg'] = "🆕 Nouveau prélèvement prêt."
+        st.session_state['success_msg'] = "🆕 Nouveau prélèvement prêt — Client et Chantier conservés, le reste a été vidé."
 
     if 'info_prelevement' not in st.session_state:
         st.session_state['info_prelevement'] = {}
@@ -1142,7 +1202,48 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         st.session_state['info_prelevement'].setdefault(k, v)
 
     if 'data_granulats' not in st.session_state:
-        st.session_state['data_granulats'] = _blank_data_granulats()
+        st.session_state['data_granulats'] = {
+            'GII': {
+                'nom': 'Gravillons GII',
+                'classe': '10/20',
+                'ref_client': '', 'date_prelevement': '', 'lieu_prelevement': '',
+                'sieves': [40, 31.5, 25, 20, 16, 14, 12.5, 10, 8, 6.3, 5, 4, 3.15, 2.5, 2, 1.6, 1.25, 1, 0.8, 0.63, 0.5, 0.4, 0.315, 0.25, 0.2, 0.16, 0.125, 0.1, 0.08, 0.063],
+                'refus': [0.0, 0.0, 0.0, 199.7, 2200.3, 732.7, 308.7, 424.0, 163.2, 45.0, 6.9, 2.1, 0.2, 0.1, 0.2, 0.2, 0.1, 0.0, 0.1, 0.2, 0.1, 0.1, 0.1, 0.1, 0.0, 0.2, 0.1, 0.1, 0.1, 0.1],
+                'M1': 4110.5, 'M2': 4095.2, 'P': 1.3,
+                'passants': [], 
+                'fi': 16.0, 'la': 26.0, 'mb': None, 'mf': None, 'se': None
+            },
+            'GI': {
+                'nom': 'Gravillons GI',
+                'classe': '4/10',
+                'ref_client': '', 'date_prelevement': '', 'lieu_prelevement': '',
+                'sieves': [20, 16, 14, 12.5, 10, 8, 6.3, 5, 4, 3.15, 2.5, 2, 1.6, 1.25, 1, 0.8, 0.63, 0.5, 0.4, 0.315, 0.25, 0.2, 0.16, 0.125, 0.1, 0.08, 0.063],
+                'refus': [199.7, 2200.3, 732.7, 308.7, 424.0, 163.2, 45.0, 6.9, 2.1, 0.2, 0.1, 0.2, 0.2, 0.1, 0.0, 0.1, 0.2, 0.1, 0.1, 0.1, 0.1, 0.0, 0.2, 0.1, 0.1, 0.1, 0.1],
+                'M1': 2000.0, 'M2': 1990.0, 'P': 0.0,
+                'passants': [], 
+                'fi': 14.0, 'la': 26.0, 'mb': None, 'mf': None, 'se': None
+            },
+            'SD': {
+                'nom': 'Sable fin',
+                'classe': '0/0,63',
+                'ref_client': '', 'date_prelevement': '', 'lieu_prelevement': '',
+                'sieves': [6.3, 5, 4, 3.15, 2.5, 2, 1.6, 1.25, 1, 0.8, 0.63, 0.5, 0.4, 0.315, 0.25, 0.2, 0.16, 0.125, 0.1, 0.08, 0.063],
+                'refus': [45.0, 6.9, 2.1, 0.2, 0.1, 0.2, 0.2, 0.1, 0.0, 0.1, 0.2, 0.1, 0.1, 0.1, 0.1, 0.0, 0.2, 0.1, 0.1, 0.1, 0.1],
+                'M1': 1000.0, 'M2': 900.0, 'P': 2.0,
+                'passants': [],
+                'fi': None, 'la': None, 'mb': 0.7, 'mf': None, 'se': None
+            },
+            'SC': {
+                'nom': 'Sable grossier',
+                'classe': '0/4',
+                'ref_client': '', 'date_prelevement': '', 'lieu_prelevement': '',
+                'sieves': [6.3, 5, 4, 3.15, 2.5, 2, 1.6, 1.25, 1, 0.8, 0.63, 0.5, 0.4, 0.315, 0.25, 0.2, 0.16, 0.125, 0.1, 0.08, 0.063],
+                'refus': [45.0, 6.9, 2.1, 0.2, 0.1, 0.2, 0.2, 0.1, 0.0, 0.1, 0.2, 0.1, 0.1, 0.1, 0.1, 0.0, 0.2, 0.1, 0.1, 0.1, 0.1],
+                'M1': 1000.0, 'M2': 910.0, 'P': 3.0,
+                'passants': [],
+                'fi': None, 'la': None, 'mb': None, 'mf': 3.50, 'se': 65.0
+            }
+        }
 
     for k in st.session_state['data_granulats'].keys():
         if not st.session_state['data_granulats'][k]['passants']:
@@ -1156,6 +1257,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
     if 'historique_pv' not in st.session_state:
         st.session_state['historique_pv'] = []
 
+    # Chargement initial automatique depuis Supabase si reconnecté / déconnecté au préalable
     if supabase_client and not st.session_state.get('pvs_loaded_from_db', False):
         db_pvs = fetch_pvs_from_supabase(supabase_client)
         if db_pvs is not None:
@@ -1181,13 +1283,28 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         st.success(st.session_state['success_msg'])
         del st.session_state['success_msg']
 
+    # --------------------------------------------------------------------------
+    # IDENTIFICATION DE L'UTILISATEUR
+    # --------------------------------------------------------------------------
+    user_tokens = []
+    for _uk in ('username', 'user', 'user_name', 'current_user', 'user_email', 'email', 'nom_utilisateur', 'role'):
+        _uv = kwargs.get(_uk) or st.session_state.get(_uk)
+        if _uv:
+            if isinstance(_uv, dict):
+                user_tokens.extend([str(_uv.get(k, '')) for k in ('username', 'email', 'role', 'name')])
+            else:
+                user_tokens.append(str(_uv))
+    
+    combined_user_str = " ".join(user_tokens).lower()
+    is_baallal_admin = bool(is_admin) or ('baallal' in combined_user_str) or st.session_state.get('is_admin', False) or (st.session_state.get('role') == 'admin')
+
     def _build_pv_snapshot():
+        """Construit un instantané complet du PV courant pour l'historique."""
         next_id = _next_snapshot_id(st.session_state.get('historique_pv', []))
-        ref_pv = _safe_text(st.session_state['pv_info'].get('ref_pv', '')).strip()
         return {
             'id': next_id,
             'date_creation': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            'ref_pv': ref_pv,
+            'ref_pv': _safe_text(st.session_state['pv_info'].get('ref_pv', '')).strip(),
             'projet': _safe_text(st.session_state['pv_info'].get('projet', '')),
             'client': _safe_text(st.session_state['pv_info'].get('client', '')),
             'info_prelevement': copy.deepcopy(st.session_state['info_prelevement']),
@@ -1209,8 +1326,8 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
     tabs = st.tabs([
         "1️⃣ Feuilles d'Essais Complets",
         "2️⃣ PV d'Identification / Synthèse",
-        "3️⃣ Historique & Téléchargement",
-        "📊 Synthèse & Filtrage par Mois"
+        "3️⃣ Historique & Téléchargement de PV",
+        "📊 Synthèse des PV par mois"
     ])
 
     # ------------------------------------------------------------------------------
@@ -1223,12 +1340,20 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
             col_new1, col_new2 = st.columns([1, 3])
             with col_new1:
                 if st.button("➕ Ajouter un autre prélèvement", use_container_width=True, key=f"{prefix}_btn_new_prelevement"):
+                    # Même contrainte que pour le chargement d'un PV : on ne peut
+                    # pas réassigner ici les clés de session_state déjà liées à
+                    # des widgets déjà instanciés dans ce run. On stocke donc la
+                    # demande de réinitialisation et on la traite tout en haut de
+                    # show(), avant la création des widgets, au prochain run.
                     st.session_state['_pending_pv_reset'] = True
                     st.rerun()
             with col_new2:
-                st.caption("Garde le Client et le Chantier actuels, mais vide le N° Rapport et les pesées.")
+                st.caption(
+                    "Garde le Client et le Chantier actuels, mais vide le N° Rapport, la date de "
+                    "prélèvement et toutes les valeurs de pesée/tamisage pour saisir un nouveau prélèvement."
+                )
 
-        st.markdown("##### 📍 Informations de prélèvement")
+        st.markdown("##### 📍 Informations de prélèvement (Communes à tous les matériaux)")
         c1, c2, c3 = st.columns(3)
         c4, c5, c6 = st.columns(3)
         
@@ -1247,10 +1372,17 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
             disabled=not can_edit,
             key=f"{prefix}_common_num_rapport"
         )
-        # Streamlit renvoie normalement une chaîne, mais cette normalisation
-        # protège aussi les dossiers historiques dont la valeur est numérique.
         new_num_rapport = _safe_text(new_num_rapport).strip()
-        new_ref_base     = new_num_rapport.strip()
+        new_ref_base = new_num_rapport
+
+
+        st.text_input(
+            "Référence labo (Base) - Identique au N° Rapport", 
+            value=new_ref_base, 
+            disabled=True, 
+            key=f"{prefix}_common_ref_base_disp",
+            help="La Référence labo (Base) reprend automatiquement le numéro du rapport d'essai."
+        )
 
         is_duplicate = new_num_rapport.lower() in saved_num_rapports if new_num_rapport else False
         _edit_mode_ref = _safe_text(st.session_state.get('_pv_edit_mode') or '').strip().lower()
@@ -1259,9 +1391,13 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         is_blocked_duplicate = is_duplicate and not is_authorized_edit
 
         if is_authorized_edit:
-            st.info(f"✏️ **Mode modification :** édition du PV existant N° `{new_num_rapport}`.")
+            st.info(f"✏️ **Mode modification :** vous éditez le PV existant N° `{new_num_rapport}`. Valider mettra à jour sa fiche (pas de doublon créé).")
         elif is_blocked_duplicate:
-            st.error(f"⛔ **Numéro de rapport en double !** Le N° `{new_num_rapport}` existe déjà dans l'historique.")
+            st.error(
+                f"⛔ **Numéro de rapport en double !** Le N° `{new_num_rapport}` existe déjà dans l'historique "
+                "pour un autre prélèvement. Changez le N° Rapport d'essai pour ce nouveau prélèvement, ou, si "
+                "vous vouliez modifier ce PV existant, chargez-le depuis l'onglet 3️⃣ Historique via « ✏️ Modifier ce PV »."
+            )
 
         if can_edit:
             st.session_state['info_prelevement']['chantier'] = new_chantier
@@ -1290,14 +1426,21 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         key = mat_key_map[selected_mat]
         mat_data = st.session_state['data_granulats'][key]
         
+        sub_ref = f"{new_ref_base}{SUFFIX_MAP[key]}" if new_ref_base else SUFFIX_MAP[key]
+        
         col1, col2 = st.columns([1, 1])
         
         with col1:
             st.subheader(f"Saisie des données : {mat_data['nom']}")
+            st.caption(f"Sous-référence Labo générée : {sub_ref}")
+
+            st.markdown("##### ⚖️ Pesées (Procédé : Lavage et tamisage)")
             c_m1, c_m2, c_p = st.columns(3)
             new_M1 = c_m1.number_input("Masse totale M1 (g)", value=float(mat_data.get('M1', 1000.0)), step=0.1, format="%.1f", disabled=not can_edit, key=f"{prefix}_m1_{key}")
             new_M2 = c_m2.number_input("Masse après lavage M2 (g)", value=float(mat_data.get('M2', 1000.0)), step=0.1, format="%.1f", disabled=not can_edit, key=f"{prefix}_m2_{key}")
             new_P  = c_p.number_input("Matériau au fond P (g)", value=float(mat_data.get('P', 0.0)), step=0.1, format="%.1f", disabled=not can_edit, key=f"{prefix}_p_{key}")
+            
+            st.subheader("Analyse par tamisage (Saisie des refus en g)")
             
             df_display = pd.DataFrame({
                 "Tamis (mm)": mat_data['sieves'],
@@ -1316,7 +1459,12 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                 key=f"{prefix}_editor_{key}",
                 column_config={
                     "Tamis (mm)": st.column_config.NumberColumn(disabled=True),
-                    "Masse de refus Ri (g)": st.column_config.NumberColumn(disabled=not can_edit, min_value=0.0, step=0.1, format="%.1f"),
+                    "Masse de refus Ri (g)": st.column_config.NumberColumn(
+                        disabled=not can_edit, 
+                        min_value=0.0, 
+                        step=0.1, 
+                        format="%.1f"
+                    ),
                     "% Refus": st.column_config.NumberColumn(disabled=True, format="%.1f %%"),
                     "% Refus Cumulés": st.column_config.NumberColumn(disabled=True, format="%.1f %%"),
                     "% Passants": st.column_config.NumberColumn(disabled=True, format="%.1f %%")
@@ -1337,9 +1485,29 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                 mat_data['refus'] = [round(float(r), 1) for r in edited_df["Masse de refus Ri (g)"].tolist()]
                 update_passants(mat_data)
 
+            st.markdown("##### 🔍 Vérifications et Validations (NF EN 933-1)")
+            
+            refus_array = edited_df["Masse de refus Ri (g)"].values
+            somme_Ri = sum(refus_array)
+            masse_calc = somme_Ri + new_P
+            perte_fraction = 100 * (new_M2 - masse_calc) / new_M2 if new_M2 > 0 else 0
+            fines_f = 100 * ((new_M1 - new_M2) + new_P) / new_M1 if new_M1 > 0 else 0
+            
+            c_v1, c_v2 = st.columns(2)
+            c_v1.info(f"**ΣRi + P :** {masse_calc:.1f} g\n\n**% Tamisat fines (f) :** {fines_f:.2f} %")
+            
+            if perte_fraction < 1.0:
+                c_v2.success(f"**Pertes de tamisage :** {perte_fraction:.2f} %\n\n✅ Essai Valide (< 1%)")
+            else:
+                c_v2.error(f"**Pertes de tamisage :** {perte_fraction:.2f} %\n\n❌ Rejeter l'essai (> 1%)")
+
             calculated_mf = compute_MF(mat_data['sieves'], mat_data['passants'])
 
+            st.markdown("---")
+            st.subheader(f"Caractéristiques de {mat_data['classe']}")
+            
             col_a, col_b = st.columns(2)
+            
             if key in ["GII", "GI"]:
                 with col_a:
                     fi_val = st.number_input("Coeff. Aplatissement (FI)", value=float(mat_data.get('fi') or 0.0), step=0.1, format="%.1f", disabled=not can_edit, key=f"{prefix}_fi_{key}")
@@ -1350,7 +1518,13 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                 with col_a:
                     mb_val = st.number_input("Valeur de Bleu (MB)", value=float(mat_data.get('mb') or 0.0), step=0.1, format="%.1f", disabled=not can_edit, key=f"{prefix}_mb_{key}")
                 with col_b:
-                    mf_val = st.number_input("Module de Finesse (MF)", value=float(calculated_mf), disabled=True, key=f"{prefix}_mf_{key}")
+                    mf_val = st.number_input(
+                        "Module de Finesse (MF - Calculé Auto)", 
+                        value=float(calculated_mf), 
+                        disabled=True, 
+                        help="FM = Σ(Refus cumulés sur 4, 2, 1, 0.5, 0.25, 0.125 mm) / 100",
+                        key=f"{prefix}_mf_{key}"
+                    )
                     se_val = st.number_input("Équivalent de Sable (SE 10)", value=float(mat_data.get('se') or 0.0), step=0.1, format="%.1f", disabled=not can_edit, key=f"{prefix}_se_{key}")
                 fi_val, la_val = 0.0, 0.0
 
@@ -1359,10 +1533,12 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                 st.session_state['data_granulats'][key]['M2'] = new_M2
                 st.session_state['data_granulats'][key]['P'] = new_P
                 st.session_state['data_granulats'][key]['refus'] = [round(float(r), 1) for r in edited_df["Masse de refus Ri (g)"].tolist()]
+                
                 st.session_state['data_granulats'][key]['fi'] = fi_val if fi_val > 0 else None
                 st.session_state['data_granulats'][key]['la'] = la_val if la_val > 0 else None
                 st.session_state['data_granulats'][key]['mb'] = mb_val if mb_val > 0 else None
                 st.session_state['data_granulats'][key]['se'] = se_val if se_val > 0 else None
+
                 update_passants(st.session_state['data_granulats'][key])
                 if key in ["SC", "SD"]:
                     st.session_state['data_granulats'][key]['mf'] = compute_MF(
@@ -1372,6 +1548,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
 
         with col2:
             st.subheader("Synthèse des Tamis Caractéristiques")
+
             tamis_D = get_tamis_D(edited_df)
             char_sieves, char_passants = calculate_characteristic_data(mat_data, tamis_D=tamis_D)
 
@@ -1384,26 +1561,66 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                 df_char_mat = pd.DataFrame({
                     "Grandeur": ["2D", "1.4D", "D", "d", "d/2"],
                     "Tamis (mm)": [char_sieves['2D'], char_sieves['1.4D'], char_sieves['D'], char_sieves['d'], char_sieves['d/2']],
-                    "% Passant": [f"{char_passants[k]:.1f} %" for k in ['2D', '1.4D', 'D', 'd', 'd/2']]
+                    "% Passant": [
+                        f"{char_passants['2D']:.1f} %",
+                        f"{char_passants['1.4D']:.1f} %",
+                        f"{char_passants['D']:.1f} %",
+                        f"{char_passants['d']:.1f} %",
+                        f"{char_passants['d/2']:.1f} %"
+                    ]
                 })
+                st.markdown(f"**Tamis normatifs : {mat_data['nom']}**")
                 st.dataframe(df_char_mat, hide_index=True, use_container_width=True)
 
+            st.markdown("---")
+            st.subheader("Courbe Granulométrique Globale")
+
             fig = go.Figure()
-            colors_map = {'GII': 'navy', 'GI': '#0284c7', 'SC': '#16a34a', 'SD': '#ea580c'}
+            colors = {'GII': 'navy', 'GI': '#0284c7', 'SC': '#16a34a', 'SD': '#ea580c'}
+            
             for k, d in st.session_state['data_granulats'].items():
                 if d.get('sieves') and d.get('passants') and len(d['sieves']) == len(d['passants']):
                     s_s, p_s = zip(*sorted(zip(d['sieves'], d['passants'])))
+                    line_width = 2.5 if k == key else 1.5
+                    opacity = 1.0 if k == key else 0.4
+                    
                     fig.add_trace(go.Scatter(
-                        x=s_s, y=p_s, mode="lines+markers",
+                        x=s_s, y=p_s,
+                        mode="lines+markers",
                         name=f"{d['nom']} ({new_ref_base}{SUFFIX_MAP[k]})" if new_ref_base else d['nom'],
-                        line=dict(color=colors_map[k], width=2.5 if k == key else 1.5)
+                        line=dict(color=colors[k], width=line_width),
+                        marker=dict(size=6),
+                        opacity=opacity
                     ))
+
             fig.update_layout(
-                xaxis=dict(type="log", title="Tamis (mm)", tickmode="array", tickvals=SIEVE_TICKVALS, ticktext=SIEVE_TICKTEXT),
-                yaxis=dict(title="% Passants Cumulés", range=[0, 105]),
-                height=380, margin=dict(l=20, r=20, t=30, b=20)
+                xaxis=dict(
+                    title="Tamis (mm)",
+                    type="log",
+                    tickmode="array",
+                    tickvals=SIEVE_TICKVALS,
+                    ticktext=SIEVE_TICKTEXT
+                ),
+                yaxis=dict(
+                    title="% Passants Cumulés",
+                    range=[0, 105]
+                ),
+                margin=dict(l=20, r=20, t=30, b=20),
+                height=380,
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
             )
+
             st.plotly_chart(fig, use_container_width=True)
+
+        st.markdown("---")
+        st.subheader("📋 Validation et Enregistrement Global des Essais")
+
+        if not supabase_client:
+            st.warning(
+                "⚠️ Aucune base de données n'est connectée à ce module : la validation ci-dessous "
+                "enregistrera bien le PV dans l'historique de **cette session**, mais il sera **perdu** "
+                "au prochain redémarrage/reconnexion. Voir l'onglet 3️⃣ Historique pour le diagnostic complet."
+            )
 
         if can_edit:
             if st.button("✅ Valider et enregistrer l'ensemble des essais", type="primary", use_container_width=True, key=f"{prefix}_btn_validate_all", disabled=is_blocked_duplicate):
@@ -1415,12 +1632,15 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                             st.session_state['data_granulats'][mat_k]['passants']
                         )
 
+                # Mettre à jour les informations du PV d'Identification courant
                 st.session_state['pv_info']['ref_pv'] = new_num_rapport
                 st.session_state['pv_info']['projet'] = new_chantier
                 st.session_state['pv_info']['client'] = new_client
                 st.session_state['pv_info']['date'] = new_date_prelev
 
                 snapshot = _build_pv_snapshot()
+                
+                # Mise à jour ou ajout dans la liste locale de session
                 existing_idx = None
                 for idx_pv, p_item in enumerate(st.session_state['historique_pv']):
                     if _safe_text(p_item.get('ref_pv', '')).strip().lower() == new_num_rapport.lower():
@@ -1432,8 +1652,10 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                 else:
                     st.session_state['historique_pv'].append(snapshot)
                 
+                # Persistance permanente dans Supabase
                 save_pv_to_supabase(supabase_client, snapshot)
-                st.session_state['success_msg'] = f"✅ Rapport N° '{new_num_rapport}' validé et enregistré avec succès !"
+
+                st.session_state['success_msg'] = f"✅ L'ensemble des essais pour le Rapport N° '{new_num_rapport}' a été validé ! Le PV est disponible sous la phase 2️⃣ et enregistré sous la phase 3️⃣."
                 st.rerun()
 
     # ------------------------------------------------------------------------------
@@ -1441,17 +1663,27 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
     # ------------------------------------------------------------------------------
     with tabs[1]:
         st.header("PV d'Identification des Granulats pour Béton")
+        
         pv_info_dict = st.session_state['pv_info']
 
         with st.expander("⚙️ Modifier les entêtes et signataires du PV", expanded=False):
             c1, c2, c3 = st.columns(3)
             c4, c5, c6 = st.columns(3)
-            projet_val = c1.text_input("Chantier / Projet", pv_info_dict.get('projet', ''), disabled=not can_edit, key=f"{prefix}_pv_proj")
-            client_val = c2.text_input("Client", pv_info_dict.get('client', ''), disabled=not can_edit, key=f"{prefix}_pv_cli")
-            ref_val = c3.text_input("N° RAPPORT D'ESSAI N°", st.session_state['info_prelevement'].get('num_rapport', default_num_rapport), disabled=True, key=f"{prefix}_pv_ref")
-            date_val = c4.text_input("Date du prélèvement", pv_info_dict.get('date', ''), disabled=not can_edit, key=f"{prefix}_pv_dt")
-            coord_val = c5.text_input("Coordinateur des essais", pv_info_dict.get('coord_essais', 'O.IKEN'), disabled=not can_edit, key=f"{prefix}_pv_coo")
-            chef_val = c6.text_input("Chef du laboratoire", pv_info_dict.get('chef_labo', 'H.BAALLAL'), disabled=not can_edit, key=f"{prefix}_pv_che")
+            
+            projet_val   = c1.text_input("Chantier / Projet", pv_info_dict.get('projet', ''), disabled=not can_edit, key=f"{prefix}_pv_proj")
+            client_val   = c2.text_input("Client", pv_info_dict.get('client', ''), disabled=not can_edit, key=f"{prefix}_pv_cli")
+            ref_val      = c3.text_input(
+                "N° RAPPORT D'ESSAI N°",
+                st.session_state['info_prelevement'].get('num_rapport', default_num_rapport),
+                disabled=True,
+                key=f"{prefix}_pv_ref",
+                help="Identique au N° Rapport d'essai de la feuille d'essais."
+            )
+            date_val     = c4.text_input("Date du prélèvement", pv_info_dict.get('date', ''), disabled=not can_edit, key=f"{prefix}_pv_dt")
+            coord_val    = c5.text_input("Coordinateur des essais", pv_info_dict.get('coord_essais', 'O.IKEN'), disabled=not can_edit, key=f"{prefix}_pv_coo")
+            chef_val     = c6.text_input("Chef du laboratoire", pv_info_dict.get('chef_labo', 'H.BAALLAL'), disabled=not can_edit, key=f"{prefix}_pv_che")
+
+            st.session_state['pv_info']['ref_pv'] = st.session_state['info_prelevement'].get('num_rapport', default_num_rapport)
 
             if can_edit:
                 st.session_state['pv_info']['projet'] = projet_val
@@ -1460,157 +1692,338 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                 st.session_state['pv_info']['coord_essais'] = coord_val
                 st.session_state['pv_info']['chef_labo'] = chef_val
 
-        current_pv_html = generate_pv_html(st.session_state['pv_info'], st.session_state['info_prelevement'], st.session_state['data_granulats'])
+        current_pv_html = generate_pv_html(
+            st.session_state['pv_info'],
+            st.session_state['info_prelevement'],
+            st.session_state['data_granulats']
+        )
+
         st.markdown(clean_html(current_pv_html), unsafe_allow_html=True)
         st.markdown("<br>", unsafe_allow_html=True)
         
         col_dl_pdf1, col_dl_pdf2 = st.columns(2)
+        
         with col_dl_pdf1:
             st.download_button(
-                label="📄 Télécharger le Rapport PV (HTML)",
+                label="📄 Télécharger le Rapport PV (Format HTML Imprimable)",
                 data=current_pv_html,
                 file_name=f"PV_Granulats_{st.session_state['pv_info'].get('ref_pv', 'rapport').replace('/', '_')}.html",
-                mime="text/html", use_container_width=True, key=f"{prefix}_dl_html_tab2"
+                mime="text/html",
+                use_container_width=True,
+                type="secondary",
+                key=f"{prefix}_dl_html_tab2"
             )
+
         with col_dl_pdf2:
             if REPORTLAB_AVAILABLE:
                 try:
-                    pdf_bytes = generate_pv_pdf(st.session_state['pv_info'], st.session_state['info_prelevement'], st.session_state['data_granulats'])
+                    pdf_bytes = generate_pv_pdf(
+                        st.session_state['pv_info'],
+                        st.session_state['info_prelevement'],
+                        st.session_state['data_granulats']
+                    )
                     st.download_button(
-                        label="🔴 Télécharger le Rapport PV (PDF)",
+                        label="🔴 Télécharger le Rapport PV avec Courbe (Format PDF)",
                         data=pdf_bytes,
                         file_name=f"PV_Granulats_{st.session_state['pv_info'].get('ref_pv', 'rapport').replace('/', '_')}.pdf",
-                        mime="application/pdf", use_container_width=True, type="primary", key=f"{prefix}_dl_pdf_tab2"
+                        mime="application/pdf",
+                        use_container_width=True,
+                        type="primary",
+                        key=f"{prefix}_dl_pdf_tab2"
                     )
                 except Exception as e:
-                    st.error(f"Erreur PDF : {e}")
+                    st.error(f"Erreur lors de la création du PDF : {e}")
             else:
-                st.warning("ReportLab non disponible pour le PDF.")
+                st.warning("⚠️ Pour activer le téléchargement PDF, installez ReportLab : `pip install reportlab`")
+
+        st.markdown("---")
+        st.subheader("COURBE GRANULOMETRIQUE GLOBALE DU PV")
+        fig_global_tab2 = go.Figure()
+        
+        colors = {'GII': '#1e40af', 'GI': '#0284c7', 'SC': '#16a34a', 'SD': '#ea580c'}
+        ref_b = st.session_state['info_prelevement'].get('num_rapport', default_num_rapport)
+        
+        for k, d in st.session_state['data_granulats'].items():
+            if d.get('sieves') and d.get('passants') and len(d['sieves']) == len(d['passants']):
+                s_s, p_s = zip(*sorted(zip(d['sieves'], d['passants'])))
+                fig_global_tab2.add_trace(go.Scatter(
+                    x=s_s, y=p_s,
+                    mode='lines+markers',
+                    name=f"{d['nom']} ({ref_b}{SUFFIX_MAP[k]})" if ref_b else d['nom'],
+                    line=dict(color=colors[k], width=2)
+                ))
+            
+        fig_global_tab2.update_layout(
+            xaxis=dict(type="log", title="Tamis (mm)", tickmode="array", tickvals=SIEVE_TICKVALS, ticktext=SIEVE_TICKTEXT),
+            yaxis=dict(title="% Passants Cumulés", range=[0, 105]),
+            height=440,
+            margin=dict(l=30, r=30, t=30, b=30),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+        )
+        st.plotly_chart(fig_global_tab2, use_container_width=True)
 
         comm_input = st.text_area("COMMENTAIRES :", value=st.session_state['pv_info'].get('commentaires', ''), disabled=not can_edit, height=80, key=f"{prefix}_pv_comm_input")
         if can_edit:
             st.session_state['pv_info']['commentaires'] = comm_input
 
     # ------------------------------------------------------------------------------
-    # FENÊTRE 3 : HISTORIQUE & TÉLÉCHARGEMENT
+    # FENÊTRE 3 : HISTORIQUE & TÉLÉCHARGEMENT DE PV (RUBRIQUE DE RECHERCHE)
     # ------------------------------------------------------------------------------
     with tabs[2]:
         st.header("Historique et Sauvegarde des PV")
-        historique = st.session_state.get('historique_pv', [])
 
-        if not historique:
-            st.info("Aucun PV enregistré pour le moment dans l'historique.")
+        # Diagnostic : le message d'alerte reste visible pour tout le monde
+        # UNIQUEMENT s'il y a un vrai problème (ça affecte la sécurité de leurs
+        # données). Le détail technique brut (JSON), lui, est réservé à
+        # l'admin baallal pour ne plus encombrer l'écran des autres
+        # utilisateurs maintenant que la connexion fonctionne.
+        _dbg_fetch = st.session_state.get('_pv_db_debug_fetch')
+        _dbg_save = st.session_state.get('_pv_db_debug_save')
+
+        _fetch_failed = bool(_dbg_fetch and _dbg_fetch.get('attempts') and not any(a.get('ok') for a in _dbg_fetch['attempts']))
+        _save_failed = bool(_dbg_save and not _dbg_save.get('saved') and _dbg_save.get('attempts'))
+
+        if not supabase_client:
+            st.error(
+                "❌ **Aucun client Supabase n'est transmis à ce module** (`supabase_client=None`). "
+                "C'est pour cela que l'historique des PV est perdu à chaque redémarrage/reconnexion : "
+                "il n'existe alors qu'en mémoire de la session en cours. "
+                "Ce paramètre est fourni par l'application qui appelle `show(...)` — vérifiez l'endroit où "
+                "ce module est invoqué (le routeur principal de l'app) pour vous assurer qu'un client "
+                "Supabase valide y est bien passé en argument `supabase_client`."
+            )
+        elif _fetch_failed:
+            st.error(
+                "❌ **Le client Supabase est bien transmis, mais la lecture de l'historique a échoué** "
+                "sur les deux tables testées (`pv_granulats` et `historique_pv`)."
+            )
+        elif _save_failed:
+            st.warning(
+                "⚠️ La dernière tentative d'enregistrement d'un PV en base a échoué sur les deux tables testées."
+            )
+        elif is_baallal_admin and supabase_client and _dbg_fetch and _dbg_fetch.get('loaded_from'):
+            st.caption(f"✅ Connexion base de données OK — historique chargé depuis `{_dbg_fetch['loaded_from']}` ({_dbg_fetch.get('loaded_count', 0)} PV).")
+
+
+        if st.session_state['historique_pv']:
+            st.write("### 🔎 Recherche & Sélection de PV")
+
+            # Rubrique de sélection / recherche selon le format présenté
+            pv_options = {}
+            for idx, pv_item in enumerate(reversed(st.session_state['historique_pv'])):
+                ref_pv_item = pv_item.get('ref_pv', f"PV-{idx+1}")
+                client_item = pv_item.get('client', '-')
+                projet_item = pv_item.get('projet', '-')
+                date_item   = pv_item.get('date_creation', pv_item.get('date', '-'))
+                
+                # Format d'affichage : Référence | Client | Chantier | Date
+                option_label = f"Référence : {ref_pv_item} | Client : {client_item} | Chantier : {projet_item} | Date : {date_item}"
+                pv_options[option_label] = pv_item
+
+            selected_pv_label = st.selectbox(
+                "Sélectionnez le PV à consulter :",
+                options=list(pv_options.keys()),
+                key=f"{prefix}_select_pv_dropdown_search"
+            )
+
+            selected_pv = pv_options[selected_pv_label]
+            pv_ref_selected = selected_pv.get('ref_pv', '-')
+
+            st.markdown(f"#### 📄 PV Sélectionné : `{pv_ref_selected}`")
+            col_sel1, col_sel2, col_sel3 = st.columns(3)
+            col_sel1.markdown(f"**Client :** {selected_pv.get('client', '-')}")
+            col_sel2.markdown(f"**Chantier :** {selected_pv.get('projet', '-')}")
+            col_sel3.markdown(f"**Date d'enregistrement :** {selected_pv.get('date_creation', '-')}")
+
+            pv_info_hist = selected_pv.get('pv_info', {})
+            info_p_hist  = selected_pv.get('info_prelevement', {})
+            data_g_hist  = selected_pv.get('data_granulats', {})
+
+            if REPORTLAB_AVAILABLE:
+                try:
+                    pdf_hist_bytes = generate_pv_pdf(pv_info_hist, info_p_hist, data_g_hist)
+                    st.download_button(
+                        label="🔴 Télécharger PV en PDF avec Courbe",
+                        data=pdf_hist_bytes,
+                        file_name=f"PV_Granulats_{str(pv_ref_selected).replace('/', '_')}.pdf",
+                        mime="application/pdf",
+                        key=f"{prefix}_dl_pdf_sel_pv_main",
+                        type="primary",
+                        use_container_width=True
+                    )
+                except Exception as e:
+                    st.error(f"Erreur lors de la génération du PDF : {e}")
+
+            # ------------------------------------------------------------------
+            # SECTION MODIFICATION — rubrique dédiée, visible dans l'historique
+            # ------------------------------------------------------------------
+            if can_edit:
+                st.markdown("---")
+                st.markdown("##### ✏️ Modification du PV")
+                st.caption(
+                    "Charge ce PV dans les onglets 1️⃣ et 2️⃣ pour en modifier les valeurs. "
+                    "Une fois vos modifications faites, retournez dans l'onglet 1️⃣ et cliquez sur "
+                    "« ✅ Valider et enregistrer l'ensemble des essais » : comme le N° Rapport est "
+                    "identique, la fiche existante sera mise à jour (pas de doublon créé)."
+                )
+                if st.button("✏️ Modifier ce PV", use_container_width=True, key=f"{prefix}_btn_load_pv_active_main"):
+                    # IMPORTANT : on ne peut pas réassigner ici les clés de
+                    # session_state déjà liées à des widgets (ex: {prefix}_common_client)
+                    # car ces widgets ont déjà été instanciés plus haut dans CE MÊME
+                    # run (l'onglet 1 s'exécute avant l'onglet 3, même s'il n'est pas
+                    # affiché). Cela déclenche StreamlitWidgetAlreadyInstantiatedError.
+                    # On stocke donc la demande de chargement et on la traite tout en
+                    # haut de show(), AVANT la création de ces widgets, au prochain run.
+                    st.session_state['_pending_pv_load'] = {
+                        'info_prelevement': copy.deepcopy(selected_pv.get('info_prelevement', {})),
+                        'pv_info': copy.deepcopy(selected_pv.get('pv_info', {})),
+                        'data_granulats': copy.deepcopy(selected_pv.get('data_granulats', {})),
+                        'edit_ref': pv_ref_selected,
+                        'success_msg': f"✅ Le PV N° '{pv_ref_selected}' a été chargé dans les onglets 1️⃣ et 2️⃣ pour modification. Éditez les valeurs puis validez à nouveau pour enregistrer."
+                    }
+                    st.rerun()
+
+            # ------------------------------------------------------------------
+            # SECTION SUPPRESSION — Accessible aux administrateurs
+            # ------------------------------------------------------------------
+            if is_baallal_admin:
+                st.markdown("---")
+                st.markdown("##### 🔐 Suppression sécurisée (Administration)")
+                del_col1, del_col2 = st.columns([3, 1])
+                
+                with del_col1:
+                    confirm_delete = st.checkbox(
+                        f"Je confirme vouloir supprimer définitivement le PV N° '{pv_ref_selected}'",
+                        key=f"{prefix}_confirm_del_selected_{selected_pv.get('id', 'sel')}_{selected_pv.get('ref_pv', '')}"
+                    )
+                with del_col2:
+                    if st.button(
+                        "🗑️ Supprimer ce PV",
+                        type="secondary",
+                        use_container_width=True,
+                        disabled=not confirm_delete,
+                        key=f"{prefix}_btn_del_selected_{selected_pv.get('id', 'sel')}_{selected_pv.get('ref_pv', '')}"
+                    ):
+                        pv_id_to_delete = selected_pv.get('id')
+                        st.session_state['historique_pv'] = [
+                            p for p in st.session_state['historique_pv']
+                            if p.get('id') != pv_id_to_delete and p.get('ref_pv') != pv_ref_selected
+                        ]
+                        delete_pv_from_supabase(supabase_client, pv_ref_selected)
+                        st.session_state['success_msg'] = f"🗑️ Le PV N° '{pv_ref_selected}' a été définitivement supprimé de la base de données."
+                        st.rerun()
+
+            st.markdown("---")
+            st.write("### 📜 Liste complète des PV enregistrés")
+            for i, pv in enumerate(reversed(st.session_state['historique_pv'])):
+                ref_pv_disp = pv.get('ref_pv', '-')
+                date_disp = pv.get('date_creation', '-')
+                client_disp = pv.get('client', '-')
+                
+                item_title = f"📁 PV N° {ref_pv_disp} | Date : {date_disp} | Client : {client_disp}"
+                
+                with st.expander(item_title, expanded=False):
+                    st.markdown(f"**Chantier / Projet :** {pv.get('projet', '-')}")
+                    st.markdown(f"**Date de création :** {date_disp}")
+                    st.markdown(f"**Référence Rapport :** `{ref_pv_disp}`")
         else:
-            df_hist = pd.DataFrame([
-                {
-                    "ID": item.get('id'),
-                    "N° Rapport": item.get('ref_pv'),
-                    "Client": item.get('client'),
-                    "Chantier": item.get('projet'),
-                    "Date de création": item.get('date_creation')
-                } for item in historique
-            ])
-            st.dataframe(df_hist, use_container_width=True, hide_index=True)
-
-            st.markdown("### 🔍 Actions sur l'historique")
-            selected_ref = st.selectbox("Sélectionner un PV par son N° de Rapport", [item.get('ref_pv') for item in historique], key=f"{prefix}_hist_select")
-            
-            selected_item = next((item for item in historique if item.get('ref_pv') == selected_ref), None)
-            if selected_item:
-                col_h1, col_h2, col_h3 = st.columns(3)
-                with col_h1:
-                    if st.button("📂 Charger ce PV", use_container_width=True, key=f"{prefix}_btn_load_hist"):
-                        st.session_state['_pending_pv_load'] = {
-                            'info_prelevement': selected_item.get('info_prelevement', {}),
-                            'pv_info': selected_item.get('pv_info', {}),
-                            'data_granulats': selected_item.get('data_granulats', {}),
-                            'success_msg': f"✅ PV N° '{selected_ref}' chargé avec succès.",
-                            'edit_ref': selected_item.get('ref_pv')
-                        }
-                        st.rerun()
-                with col_h2:
-                    if can_edit and st.button("🗑️ Supprimer ce PV", use_container_width=True, type="secondary", key=f"{prefix}_btn_del_hist"):
-                        st.session_state['historique_pv'] = [it for it in historique if it.get('ref_pv') != selected_ref]
-                        delete_pv_from_supabase(supabase_client, selected_ref)
-                        st.success(f"🗑️ PV N° '{selected_ref}' supprimé.")
-                        st.rerun()
+            st.info("Aucun PV n'est enregistré dans l'historique pour le moment. Réalisez un essai et validez-le en Phase 1.")
 
     # ------------------------------------------------------------------------------
-    # FENÊTRE 4 : SYNTHÈSE & FILTRAGE PAR MOIS
+    # FENÊTRE 4 : SYNTHÈSE DES PV PAR MOIS
     # ------------------------------------------------------------------------------
     with tabs[3]:
-        st.header("📊 Synthèse & Filtrage des PV par Mois")
-        st.markdown("Recherchez et filtrez les rapports d'essais par mois de prélèvement ou de création (ex: *Janvier 2026*, *Février 2026*).")
+        st.header("📊 Synthèse des rapports d'essais")
+        st.caption(
+            "Filtrez les PV enregistrés par mois de prélèvement ou de création, "
+            "puis téléchargez la synthèse au format CSV."
+        )
 
-        historique = st.session_state.get('historique_pv', [])
-        
-        if not historique:
-            st.info("ℹ️ Aucun PV disponible dans l'historique pour effectuer une synthèse.")
+        historique_synthese = st.session_state.get('historique_pv', [])
+        if not historique_synthese:
+            st.info("Aucun PV disponible pour effectuer une synthèse.")
         else:
             mois_disponibles = set()
-            for item in historique:
-                d_pv = item.get('pv_info', {}).get('date') or item.get('date_creation')
-                m_label = get_month_year_label(d_pv)
-                if m_label:
-                    mois_disponibles.add(m_label)
+            for item in historique_synthese:
+                pv_data = item.get('pv_info', {}) or {}
+                date_pv = pv_data.get('date') or item.get('date_creation')
+                mois_label = get_month_year_label(date_pv)
+                if mois_label:
+                    mois_disponibles.add(mois_label)
 
-            mois_list = sorted(list(mois_disponibles))
-            
+            mois_list = sorted(mois_disponibles)
             if not mois_list:
-                st.warning("⚠️ Impossible de déterminer les mois pour les PV enregistrés.")
+                st.warning("Impossible de déterminer le mois des PV enregistrés.")
             else:
-                col_f1, col_f2 = st.columns([2, 2])
-                with col_f1:
-                    selected_month = st.selectbox("📅 Filtrer par mois :", ["Tous les mois"] + mois_list, key=f"{prefix}_synth_month_filter")
-                
+                selected_month = st.selectbox(
+                    "📅 Mois à afficher",
+                    ["Tous les mois"] + mois_list,
+                    key=f"{prefix}_synth_month_filter"
+                )
+
                 if selected_month == "Tous les mois":
-                    filtered_pvs = historique
+                    filtered_pvs = historique_synthese
                 else:
                     filtered_pvs = []
-                    for item in historique:
-                        d_pv = item.get('pv_info', {}).get('date') or item.get('date_creation')
-                        if get_month_year_label(d_pv) == selected_month:
+                    for item in historique_synthese:
+                        pv_data = item.get('pv_info', {}) or {}
+                        date_pv = pv_data.get('date') or item.get('date_creation')
+                        if get_month_year_label(date_pv) == selected_month:
                             filtered_pvs.append(item)
 
-                st.markdown(f"### Résultats pour : **{selected_month}** ({len(filtered_pvs)} rapport(s) trouvé(s))")
+                clients = {
+                    _safe_text(item.get('client', item.get('pv_info', {}).get('client', '-')))
+                    for item in filtered_pvs
+                }
+                col_s1, col_s2, col_s3 = st.columns(3)
+                col_s1.metric("Nombre de PV", len(filtered_pvs))
+                col_s2.metric("Clients concernés", len([c for c in clients if c and c != '-']))
+                col_s3.metric("Mois sélectionné", selected_month)
 
-                if not filtered_pvs:
-                    st.info(f"Aucun PV trouvé pour le mois de {selected_month}.")
-                else:
-                    synth_rows = []
-                    for item in filtered_pvs:
-                        p_info = item.get('pv_info', {})
-                        inf_p = item.get('info_prelevement', {})
-                        synth_rows.append({
-                            "N° Rapport": p_info.get('ref_pv', '-'),
-                            "Date Prélèvement": p_info.get('date', '-'),
-                            "Client": p_info.get('client', '-'),
-                            "Chantier / Projet": p_info.get('projet', '-'),
-                            "Lieu": inf_p.get('lieu_prelevement', '-'),
-                            "Date Enregistrement": item.get('date_creation', '-')
+                synth_rows = []
+                for item in filtered_pvs:
+                    pv_data = item.get('pv_info', {}) or {}
+                    info_data = item.get('info_prelevement', {}) or {}
+                    synth_rows.append({
+                        "N° Rapport": _safe_text(item.get('ref_pv') or pv_data.get('ref_pv'), '-'),
+                        "Date prélèvement": _safe_text(pv_data.get('date'), '-'),
+                        "Client": _safe_text(item.get('client') or pv_data.get('client'), '-'),
+                        "Chantier / Projet": _safe_text(item.get('projet') or pv_data.get('projet'), '-'),
+                        "Provenance": _safe_text(info_data.get('provenance'), '-'),
+                        "Lieu": _safe_text(info_data.get('lieu_prelevement'), '-'),
+                        "Date création": _safe_text(item.get('date_creation'), '-')
+                    })
+
+                df_synth = pd.DataFrame(synth_rows)
+                st.dataframe(df_synth, use_container_width=True, hide_index=True)
+                st.download_button(
+                    label=f"📥 Télécharger la synthèse ({selected_month}) au format CSV",
+                    data=df_synth.to_csv(index=False).encode('utf-8-sig'),
+                    file_name=f"Synthese_PV_{selected_month.replace(' ', '_')}.csv",
+                    mime="text/csv",
+                    key=f"{prefix}_dl_csv_synthese"
+                )
+
+                st.markdown("### Répartition des essais par fraction")
+                fraction_rows = []
+                for item in filtered_pvs:
+                    data_materials = item.get('data_granulats', {}) or {}
+                    ref_item = _safe_text(item.get('ref_pv') or item.get('pv_info', {}).get('ref_pv'), '-')
+                    for material_key, material in data_materials.items():
+                        passants = material.get('passants', []) if isinstance(material, dict) else []
+                        refus = material.get('refus', []) if isinstance(material, dict) else []
+                        has_data = bool(passants) or any(float(value or 0) > 0 for value in refus)
+                        fraction_rows.append({
+                            "N° Rapport": ref_item,
+                            "Fraction": material_key,
+                            "Désignation": _safe_text(material.get('nom'), material_key),
+                            "Classe": _safe_text(material.get('classe'), '-'),
+                            "Essai renseigné": "Oui" if has_data else "Non"
                         })
-                    
-                    df_synth = pd.DataFrame(synth_rows)
-                    st.dataframe(df_synth, use_container_width=True, hide_index=True)
 
-                    csv_data = df_synth.to_csv(index=False).encode('utf-8')
-                    st.download_button(
-                        label=f"📥 Télécharger la synthèse ({selected_month}) au format CSV",
-                        data=csv_data,
-                        file_name=f"Synthese_PV_{selected_month.replace(' ', '_')}.csv",
-                        mime="text/csv",
-                        key=f"{prefix}_dl_csv_synth"
+                if fraction_rows:
+                    st.dataframe(
+                        pd.DataFrame(fraction_rows),
+                        use_container_width=True,
+                        hide_index=True
                     )
-
-                    st.markdown("---")
-                    st.markdown("### 📋 Détail des rapports du mois sélectionné")
-                    for item in filtered_pvs:
-                        r_num = item.get('ref_pv', 'Sans ref')
-                        r_client = item.get('client', 'Inconnu')
-                        r_date = item.get('date', 'Date inconnue')
-                        with st.expander(f"Rapport N° : {r_num} | Client : {r_client} | Date : {r_date}"):
-                            st.json({
-                                "Informations de Prélèvement": item.get('info_prelevement', {}),
-                                "Détails PV": item.get('pv_info', {}),
-                                "Date de création": item.get('date_creation', '-')
-                            })
