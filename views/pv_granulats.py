@@ -8,6 +8,7 @@ import copy
 import io
 import os
 import base64
+from xml.sax.saxutils import escape as xml_escape
 
 import matplotlib
 matplotlib.use('Agg')
@@ -261,6 +262,65 @@ def get_month_year_label(date_str):
             continue
     return None
 
+def _generate_granulometry_plot_png(data_granulats, ref_b=''):
+    """Génère une courbe granulométrique PNG autonome pour le HTML et le PDF."""
+    colors_map = {'GII': '#0b1f5e', 'GI': '#0284c7', 'SC': '#16a34a', 'SD': '#ea580c'}
+    fig, ax = plt.subplots(figsize=(8.6, 4.6), dpi=160)
+    has_curve = False
+
+    for key in ['GII', 'GI', 'SC', 'SD']:
+        data = (data_granulats or {}).get(key, {})
+        sieves = data.get('sieves', [])
+        passants = data.get('passants', [])
+        if not sieves or not passants or len(sieves) != len(passants):
+            continue
+
+        points = sorted(
+            [(float(s), float(p)) for s, p in zip(sieves, passants) if float(s) > 0],
+            key=lambda item: item[0]
+        )
+        if not points:
+            continue
+
+        has_curve = True
+        x_values, y_values = zip(*points)
+        suffix = SUFFIX_MAP.get(key, '')
+        name = _safe_text(data.get('nom', key), key)
+        label = f"{name} ({ref_b}{suffix})" if ref_b else name
+        ax.plot(
+            x_values,
+            y_values,
+            marker='o',
+            markersize=3,
+            linewidth=1.8,
+            color=colors_map.get(key, '#334155'),
+            label=label
+        )
+
+    ax.set_xscale('log')
+    ax.set_xlabel('Tamis (mm)', fontsize=9)
+    ax.set_ylabel('% Passants cumulés', fontsize=9)
+    ax.set_ylim(0, 105)
+    ax.set_yticks(range(0, 101, 20))
+    ax.grid(True, which='both', linestyle='--', linewidth=0.45, alpha=0.45)
+    ax.set_title('Courbe granulométrique', fontsize=11, fontweight='bold')
+
+    if has_curve:
+        ax.legend(loc='best', fontsize=7, frameon=True)
+    else:
+        ax.text(
+            0.5, 0.5, 'Aucune donnée granulométrique disponible',
+            ha='center', va='center', transform=ax.transAxes, fontsize=10
+        )
+        ax.set_xlim(0.05, 50)
+
+    fig.tight_layout()
+    buffer = io.BytesIO()
+    fig.savefig(buffer, format='png', bbox_inches='tight', facecolor='white')
+    plt.close(fig)
+    buffer.seek(0)
+    return buffer.getvalue()
+
 def generate_pv_html(pv_info, info_p, data_granulats):
     """Génère le document HTML complet et autonome du PV pour impression / téléchargement."""
     gii_data = data_granulats.get('GII', {})
@@ -269,6 +329,8 @@ def generate_pv_html(pv_info, info_p, data_granulats):
     sd_data  = data_granulats.get('SD', {})
 
     ref_b = info_p.get('num_rapport', info_p.get('ref_base', '26/260/LGV/CS/1237'))
+    curve_png = _generate_granulometry_plot_png(data_granulats, _safe_text(ref_b))
+    curve_b64 = base64.b64encode(curve_png).decode('ascii') if curve_png else ''
 
     empty_char = ({'2D': 0, '1.4D': 0, 'D': 0, 'd': 0, 'd/2': 0}, {'2D': 0.0, '1.4D': 0.0, 'D': 0.0, 'd': 0.0, 'd/2': 0.0})
     gii_sieves, gii_passants = calculate_characteristic_data(gii_data) if gii_data else empty_char
@@ -302,6 +364,16 @@ def generate_pv_html(pv_info, info_p, data_granulats):
                 <span>CENTRE TECHNIQUE REGIONAL DE CASABLANCA-SETTAT BENI MELLAL</span>
             </div>
         </div>"""
+
+    curve_html = (
+        f"""
+        <div class="curve-box">
+            <div class="curve-title">COURBE GRANULOMÉTRIQUE</div>
+            <img src="data:image/png;base64,{curve_b64}" alt="Courbe granulométrique" class="curve-image">
+        </div>"""
+        if curve_b64 else
+        '<div class="curve-box"><div class="curve-title">COURBE GRANULOMÉTRIQUE</div><p>Aucune donnée disponible.</p></div>'
+    )
 
     html = f"""<!DOCTYPE html>
 <html lang="fr">
@@ -422,6 +494,28 @@ def generate_pv_html(pv_info, info_p, data_granulats):
         text-align: center;
         height: 80px;
         vertical-align: top;
+    }}
+    .curve-box {{
+        margin-top: 18px;
+        margin-bottom: 15px;
+        padding: 10px;
+        border: 1px solid #cbd5e1;
+        border-radius: 4px;
+        text-align: center;
+        page-break-inside: avoid;
+    }}
+    .curve-title {{
+        color: #1e3a8a;
+        font-weight: bold;
+        font-size: 13px;
+        margin-bottom: 8px;
+    }}
+    .curve-image {{
+        display: block;
+        width: 100%;
+        max-width: 780px;
+        height: auto;
+        margin: 0 auto;
     }}
 </style>
 </head>
@@ -577,6 +671,8 @@ def generate_pv_html(pv_info, info_p, data_granulats):
             </tbody>
         </table>
 
+        {curve_html}
+
         <div class="comments-box">
             <b>COMMENTAIRES :</b><br>
             {pv_info.get('commentaires', '')}
@@ -676,7 +772,233 @@ def generate_pv_pdf(pv_info, info_p, data_granulats):
         flowables.append(Spacer(1, 4))
         return flowables
 
+    pdf_section_style = ParagraphStyle(
+        'PDFSectionTitle',
+        parent=styles['Normal'],
+        fontName='Helvetica-Bold',
+        fontSize=8.5,
+        leading=10,
+        textColor=colors.HexColor('#1e3a8a'),
+        spaceBefore=4,
+        spaceAfter=3
+    )
+    pdf_table_header = ParagraphStyle(
+        'PDFTableHeader',
+        parent=styles['Normal'],
+        fontName='Helvetica-Bold',
+        fontSize=5.8,
+        leading=6.8,
+        textColor=colors.white,
+        alignment=1
+    )
+    pdf_table_subheader = ParagraphStyle(
+        'PDFTableSubHeader',
+        parent=styles['Normal'],
+        fontName='Helvetica',
+        fontSize=5.8,
+        leading=6.8,
+        textColor=colors.HexColor('#0f172a'),
+        alignment=1
+    )
+    pdf_table_cell = ParagraphStyle(
+        'PDFTableCell',
+        parent=styles['Normal'],
+        fontName='Helvetica',
+        fontSize=6.2,
+        leading=7.2,
+        alignment=1
+    )
+    pdf_table_cell_left = ParagraphStyle(
+        'PDFTableCellLeft',
+        parent=styles['Normal'],
+        fontName='Helvetica-Bold',
+        fontSize=6.2,
+        leading=7.2,
+        alignment=0
+    )
+
+    def pdf_paragraph(value, style=pdf_table_cell, default='-'):
+        text = _safe_text(value, default)
+        return Paragraph(xml_escape(text), style)
+
+    def pdf_number(value, digits=0):
+        try:
+            number = float(value)
+            return f"{number:.{digits}f}"
+        except (TypeError, ValueError):
+            return '-'
+
+    def add_result_table(key, title, columns, subcolumns, values):
+        """Ajoute au PDF un tableau de synthèse complet pour une fraction."""
+        mat_data = (data_granulats or {}).get(key, {})
+        table_width = 565
+        designation_width = 125
+        value_width = (table_width - designation_width) / len(columns)
+        table_data = [
+            [pdf_paragraph('Désignations', pdf_table_header)] +
+            [pdf_paragraph(column, pdf_table_header) for column in columns],
+            [pdf_paragraph('', pdf_table_subheader)] +
+            [pdf_paragraph(column, pdf_table_subheader) for column in subcolumns],
+            [pdf_paragraph(
+                f"{_safe_text(mat_data.get('nom', key), key)} - ({_safe_text(ref_b)}/{SUFFIX_MAP.get(key, '').lstrip('/')})",
+                pdf_table_cell_left
+            )] +
+            [pdf_paragraph(value) for value in values]
+        ]
+        result_table = Table(
+            table_data,
+            colWidths=[designation_width] + [value_width] * len(columns),
+            repeatRows=2
+        )
+        result_table.setStyle(TableStyle([
+            ('GRID', (0, 0), (-1, -1), 0.35, colors.HexColor('#cbd5e1')),
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2563eb')),
+            ('BACKGROUND', (0, 1), (-1, 1), colors.HexColor('#eff6ff')),
+            ('BACKGROUND', (0, 2), (0, 2), colors.HexColor('#f1f5f9')),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('ALIGN', (1, 0), (-1, -1), 'CENTER'),
+            ('SPAN', (0, 0), (0, 1)),
+            ('TOPPADDING', (0, 0), (-1, -1), 3),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+            ('LEFTPADDING', (0, 0), (-1, -1), 2),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 2),
+        ]))
+        return KeepTogether([
+            Paragraph(xml_escape(title), pdf_section_style),
+            result_table,
+            Spacer(1, 5)
+        ])
+
     story.extend(build_adjustable_tables(0))
+
+    # Les tableaux de résultats étaient absents de l'ancien générateur PDF.
+    # Ils sont maintenant ajoutés avec les mêmes données que l'aperçu HTML.
+    result_data = data_granulats or {}
+    result_specs = [
+        (
+            'GII',
+            'TABLEAU DES RÉSULTATS - GRAVILLONS GII',
+            ['2D', '1,4D', 'D', 'd', 'd/2', 'f', 'FI', 'LA'],
+            [
+                format_sieve_display(calculate_characteristic_data(result_data.get('GII', {}))[0]['2D']),
+                format_sieve_display(calculate_characteristic_data(result_data.get('GII', {}))[0]['1.4D']),
+                format_sieve_display(calculate_characteristic_data(result_data.get('GII', {}))[0]['D']),
+                format_sieve_display(calculate_characteristic_data(result_data.get('GII', {}))[0]['d']),
+                format_sieve_display(calculate_characteristic_data(result_data.get('GII', {}))[0]['d/2']),
+                '% < 63 µm', '-', '-'
+            ],
+            lambda d: [
+                pdf_number(calculate_characteristic_data(d)[1]['2D']),
+                pdf_number(calculate_characteristic_data(d)[1]['1.4D']),
+                pdf_number(calculate_characteristic_data(d)[1]['D']),
+                pdf_number(calculate_characteristic_data(d)[1]['d']),
+                pdf_number(calculate_characteristic_data(d)[1]['d/2']),
+                pdf_number(get_passant_at_sieve(d.get('sieves', []), d.get('passants', []), 0.063), 1),
+                _safe_text(d.get('fi'), '-'),
+                _safe_text(d.get('la'), '-')
+            ]
+        ),
+        (
+            'GI',
+            'TABLEAU DES RÉSULTATS - GRAVILLONS GI',
+            ['2D', '1,4D', 'D', 'd', 'd/2', 'f', 'FI', 'LA'],
+            None,
+            lambda d: [
+                pdf_number(calculate_characteristic_data(d)[1]['2D']),
+                pdf_number(calculate_characteristic_data(d)[1]['1.4D']),
+                pdf_number(calculate_characteristic_data(d)[1]['D']),
+                pdf_number(calculate_characteristic_data(d)[1]['d']),
+                pdf_number(calculate_characteristic_data(d)[1]['d/2']),
+                pdf_number(get_passant_at_sieve(d.get('sieves', []), d.get('passants', []), 0.063), 1),
+                _safe_text(d.get('fi'), '-'),
+                _safe_text(d.get('la'), '-')
+            ]
+        ),
+        (
+            'SC',
+            'TABLEAU DES RÉSULTATS - SABLE GROSSIER',
+            ['2D', '1,4D', 'D', '% < 1 mm', '% < 250 µm', '% < 63 µm', 'MF', 'SE (10)'],
+            None,
+            lambda d: [
+                pdf_number(calculate_characteristic_data(d)[1]['2D']),
+                pdf_number(calculate_characteristic_data(d)[1]['1.4D']),
+                pdf_number(calculate_characteristic_data(d)[1]['D']),
+                pdf_number(get_passant_at_sieve(d.get('sieves', []), d.get('passants', []), 1.0)),
+                pdf_number(get_passant_at_sieve(d.get('sieves', []), d.get('passants', []), 0.25)),
+                pdf_number(get_passant_at_sieve(d.get('sieves', []), d.get('passants', []), 0.063), 1),
+                _safe_text(d.get('mf'), '-'),
+                _safe_text(d.get('se'), '-')
+            ]
+        ),
+        (
+            'SD',
+            'TABLEAU DES RÉSULTATS - SABLE FIN',
+            ['2D', '1,4D', 'D', '% < 1 mm', '% < 250 µm', '% < 63 µm', 'MB'],
+            None,
+            lambda d: [
+                pdf_number(calculate_characteristic_data(d)[1]['2D']),
+                pdf_number(calculate_characteristic_data(d)[1]['1.4D']),
+                pdf_number(calculate_characteristic_data(d)[1]['D']),
+                pdf_number(get_passant_at_sieve(d.get('sieves', []), d.get('passants', []), 1.0)),
+                pdf_number(get_passant_at_sieve(d.get('sieves', []), d.get('passants', []), 0.25)),
+                pdf_number(get_passant_at_sieve(d.get('sieves', []), d.get('passants', []), 0.063), 1),
+                _safe_text(d.get('mb'), '-')
+            ]
+        )
+    ]
+
+    for key, title, columns, subcolumns, values_builder in result_specs:
+        mat_data = result_data.get(key, {})
+        char_sieves, _ = calculate_characteristic_data(mat_data)
+        if subcolumns is None:
+            subcolumns = [
+                format_sieve_display(char_sieves['2D']),
+                format_sieve_display(char_sieves['1.4D']),
+                format_sieve_display(char_sieves['D'])
+            ] + ['-', '-', '-', '-'][:len(columns) - 3]
+        values = values_builder(mat_data) if callable(values_builder) else values_builder
+        story.append(add_result_table(key, title, columns, subcolumns, values))
+
+    curve_png = _generate_granulometry_plot_png(result_data, _safe_text(ref_b))
+    story.append(Paragraph('COURBE GRANULOMÉTRIQUE', pdf_section_style))
+    story.append(Image(io.BytesIO(curve_png), width=535, height=285))
+    story.append(Spacer(1, 5))
+
+    comments = xml_escape(_safe_text(pv_info.get('commentaires', ''), ''))
+    story.append(Paragraph('COMMENTAIRES', pdf_section_style))
+    story.append(Table(
+        [[Paragraph(comments or '-', cell_left)]],
+        colWidths=[565],
+        style=TableStyle([
+            ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e1')),
+            ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#f8fafc')),
+            ('TOPPADDING', (0, 0), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+            ('LEFTPADDING', (0, 0), (-1, -1), 6),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+        ])
+    ))
+    signature_table = Table(
+        [[
+            Paragraph('<b>LE COORDINATEUR DES ESSAIS</b><br/><br/>Nom : ' +
+                      xml_escape(_safe_text(pv_info.get('coord_essais', 'O.IKEN'))), cell_norm),
+            Paragraph('<b>LE CHEF DU LABORATOIRE</b><br/><br/>Nom : ' +
+                      xml_escape(_safe_text(pv_info.get('chef_labo', 'H.BAALLAL'))), cell_norm),
+            Paragraph('<b>REÇU PAR LE CLIENT</b><br/><br/>Nom :', cell_norm)
+        ]],
+        colWidths=[188.3, 188.3, 188.3],
+        rowHeights=[62]
+    )
+    signature_table.setStyle(TableStyle([
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e1')),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('TOPPADDING', (0, 0), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+    ]))
+    story.append(Spacer(1, 8))
+    story.append(signature_table)
+
     doc.build(story)
     buffer.seek(0)
     return buffer.getvalue()
