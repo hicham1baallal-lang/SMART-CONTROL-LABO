@@ -458,31 +458,34 @@ def generate_pv_html(pv_info, info_p, data_granulats):
         margin: 3px auto 0;
     }}
     @media print {{
-        @page {{ size: A4 portrait; margin: 4mm; }}
+        @page {{ size: A4 portrait; margin: 3mm; }}
         body {{ padding: 0; margin: 0; }}
         .lpee-pv-card {{
             border: none;
             box-shadow: none;
             padding: 0;
-            width: 138%;
+            width: 161%;
             max-width: none;
             margin: 0;
-            zoom: 0.72;
+            zoom: 0.62;
         }}
-        .lpee-org-header {{ padding: 2px; margin-bottom: 2px; }}
-        .lpee-header-title {{ margin-bottom: 3px; padding: 4px; font-size: 11px; }}
+        .lpee-org-header {{ padding: 1px; margin-bottom: 1px; }}
+        .lpee-org-logo {{ width: 34px; height: 34px; }}
+        .lpee-org-text {{ font-size: 10px; line-height: 1.15; }}
+        .lpee-org-text span {{ font-size: 8px; }}
+        .lpee-header-title {{ margin-bottom: 2px; padding: 2px; font-size: 9px; }}
         .lpee-info-grid, .lpee-norm-table, .lpee-table {{
             margin-top: 2px;
-            margin-bottom: 3px;
-            font-size: 8px;
+            margin-bottom: 2px;
+            font-size: 7px;
         }}
         .lpee-info-grid td, .lpee-norm-table td,
-        .lpee-table th, .lpee-table td {{ padding: 2px 3px; }}
-        .curve-box {{ margin: 3px 0; padding: 2px; }}
-        .curve-box img {{ max-height: 135px; }}
-        .comments-box {{ margin-top: 3px; padding: 4px; font-size: 8px; }}
-        .signature-box {{ margin-top: 4px; font-size: 8px; }}
-        .signature-box td {{ padding: 3px; height: 42px; }}
+        .lpee-table th, .lpee-table td {{ padding: 1px 2px; line-height: 1.05; }}
+        .curve-box {{ margin: 2px 0; padding: 1px; font-size: 8px; }}
+        .curve-box img {{ max-height: 105px; margin-top: 1px; }}
+        .comments-box {{ margin-top: 2px; padding: 2px; font-size: 7px; }}
+        .signature-box {{ margin-top: 2px; font-size: 7px; }}
+        .signature-box td {{ padding: 2px; height: 32px; }}
     }}
 </style>
 </head>
@@ -881,8 +884,8 @@ def generate_pv_pdf(pv_info, info_p, data_granulats):
                 ('BACKGROUND', (0,2), (0,2), colors.HexColor('#f1f5f9')),
                 ('BACKGROUND', (0,3), (-1,3), colors.HexColor('#fafafa')),
                 ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-                 ('TOPPADDING', (0,0), (-1,-1), 1 + pad_extra),
-                 ('BOTTOMPADDING', (0,0), (-1,-1), 1 + pad_extra),
+                 ('TOPPADDING', (0,0), (-1,-1), 0.5 + pad_extra),
+                 ('BOTTOMPADDING', (0,0), (-1,-1), 0.5 + pad_extra),
             ]))
             return t
 
@@ -1003,7 +1006,7 @@ def generate_pv_pdf(pv_info, info_p, data_granulats):
 
     FRAME_PADDING = 6
     page_height = A4[1] - doc.topMargin - doc.bottomMargin - FRAME_PADDING
-    CHART_HEIGHT = 155
+    CHART_HEIGHT = 125
     CHART_BOTTOM_SPACER = 1
     SAFETY_MARGIN = 3
 
@@ -1017,7 +1020,7 @@ def generate_pv_pdf(pv_info, info_p, data_granulats):
 
     # Le PV est volontairement compacté sur une seule page A4.  La courbe
     # conserve sa légende mais ne grandit pas avec l'espace résiduel.
-    chart_height = CHART_HEIGHT if raw_pad >= 0 else max(125, CHART_HEIGHT + leftover)
+    chart_height = CHART_HEIGHT if raw_pad >= 0 else max(105, CHART_HEIGHT + leftover)
 
     final_tables = build_adjustable_tables(pad_extra) if pad_extra > 0 else baseline_tables
     story.extend(final_tables)
