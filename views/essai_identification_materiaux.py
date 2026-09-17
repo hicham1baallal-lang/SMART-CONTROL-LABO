@@ -68,8 +68,9 @@ MATERIAL_TYPES = {
     "REM-CTG2": {
         "label": "Remblai contigu type 2", "family": "REMBLAI", "has_vbs": False,
         "force_granulats_sheet": True,
-        "hide_es": True, "hide_coeff_apl": True, "hide_la_mde": True,
+        "hide_es": True, "hide_coeff_apl": True,
         "use_vbs_for_gtr": True, "fine_sieve_override": 0.08,
+        "extra_tamis": [100],
     },
     "CDF": {"label": "Couche de forme", "family": "GRAVE", "has_vbs": False},
     "SC-031": {"label": "Sous couche 0/31.5", "family": "GRAVE", "has_vbs": False},
@@ -246,21 +247,20 @@ def classer_qualite_rt(la, mde):
 GTR_CLASSES_AUTORISEES_CTG2 = {"D3", "C2B3", "C2", "B4", "B5", "R21", "R22"}
 
 
-def verifier_exigence_remblai_ctg2(classe_gtr, pass_fines, dmax):
+def verifier_exigence_remblai_ctg2(classe_gtr, pass_fines=None, dmax=None):
     """
-    Vérifie l'exigence spécifique au Remblai contigu type 2 :
-    Classification GTR parmi {D3, C2B3, C2, B4, B5, R21, R22}, %< 0,08mm < 15%, Dmax <= 300mm.
+    Vérifie l'exigence spécifique au Remblai contigu type 2 : la conformité est basée
+    uniquement sur la classification GTR, qui doit appartenir à
+    {D3, C2B3, C2, B4, B5, R21, R22}. %< 0,08mm et Dmax sont affichés comme exigences
+    informatives sur la feuille mais ne conditionnent pas ce verdict.
     """
     classe_txt = str(classe_gtr).strip().upper()
-    ok_gtr = classe_txt in GTR_CLASSES_AUTORISEES_CTG2
-    ok_fines = pass_fines < 15.0
-    ok_dmax = dmax <= 300.0
-    conforme = ok_gtr and ok_fines and ok_dmax
-    detail = (
-        f"GTR {'OK' if ok_gtr else 'NON admise'} ({classe_gtr}) | "
-        f"%< 0,08mm {'<' if ok_fines else '>='} 15% ({pass_fines:.1f}%) | "
-        f"Dmax {'<=' if ok_dmax else '>'} 300mm ({dmax:.0f}mm)"
-    )
+    conforme = classe_txt in GTR_CLASSES_AUTORISEES_CTG2
+    detail = f"Classification GTR : {classe_gtr} — {'admise' if conforme else 'NON admise'} dans {{D3, C2B3, C2, B4, B5, R21, R22}}"
+    if pass_fines is not None:
+        detail += f" | %< 0,08mm : {pass_fines:.1f}% (exigence < 15%)"
+    if dmax is not None:
+        detail += f" | Dmax : {dmax:.0f}mm (exigence <= 300mm)"
     return conforme, detail
 
 
@@ -422,6 +422,8 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
     ag_norme = "NM EN 933-1" if uses_granulats_sheet(mat_code, mat_config) else "NM 00.8.082"
     if family == "REMBLAI":
         normes_txt = f" Normes : A.G: {ag_norme} | IP: NF P94-051 | VBS: NM 13.1.178"
+        if not mat_config.get("hide_la_mde"):
+            normes_txt += " | LA: NM EN 1097-2 | MDE: NM EN 1097-1"
     else:
         normes_txt = f" Normes : A.G: {ag_norme} | LA: NM EN 1097-2 | MDE: NM EN 1097-1"
         if not mat_config.get("hide_coeff_apl"):
@@ -460,6 +462,8 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
         _row3r("%< 2 mm", data_dict.get('Passant 2mm (%)', '66'))
         _row3r("%< 50 mm", data_dict.get('Passant 50mm (%)', '100'))
         _row3r("D MAX", data_dict.get('Dmax (mm)', '50'), "<= 300 mm")
+        _row3r("Los Angeles LA (%)", data_dict.get('LA (%)', '-'))
+        _row3r("Micro-Deval MDE (%)", data_dict.get('MDE (%)', '-'))
         _row3r("VBS", data_dict.get('VBS', '0,42'))
         _row3r("Indice de Plasticité (IP)", data_dict.get('IP (%)', '4,2'))
 
@@ -800,6 +804,8 @@ def show(supabase_client):
                 2.5, 2, 1.6, 1.25, 1, 0.8, 0.63, 0.5, 0.4, 0.315, 0.25, 0.2, 0.16,
                 0.125, 0.1, 0.08, 0.063
             ]
+            if mat_config.get("extra_tamis"):
+                TAMIS_GRAVE_MM = sorted(set(TAMIS_GRAVE_MM) | set(mat_config["extra_tamis"]), reverse=True)
             df_template_grave = pd.DataFrame({
                 "Tamis (mm)": TAMIS_GRAVE_MM,
                 "Refus partiel Ri (g)": [0.0] * len(TAMIS_GRAVE_MM)
