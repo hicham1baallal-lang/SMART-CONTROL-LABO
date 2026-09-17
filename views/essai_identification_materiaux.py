@@ -492,7 +492,7 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
 
         if "Qualite RT" in data_dict:
             pdf.set_font("Helvetica", "", 7.5)
-            pdf.cell(60, 5, " Qualité (LA+MDE)", 1, 0, "L")
+            pdf.cell(60, 5, " classe de qualité ST 590", 1, 0, "L")
             pdf.set_font("Helvetica", "B", 8)
             pdf.cell(130, 5, str(data_dict.get("Qualite RT")), 1, 1, "C")
 
