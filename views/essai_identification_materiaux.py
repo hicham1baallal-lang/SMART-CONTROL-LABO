@@ -70,7 +70,12 @@ MATERIAL_TYPES = {
     "SC-031": {"label": "Sous couche 0/31.5", "family": "GRAVE", "has_vbs": False},
     "GNF-040": {"label": "GNF 0/40", "family": "GRAVE", "has_vbs": True},
     "GNA-031": {"label": "GNA 0/31.5", "family": "GRAVE", "has_vbs": True},
-    "GNT-060": {"label": "GNT 0/60", "family": "GRAVE", "has_vbs": False, "show_gtr_extra": True, "show_rt_extra": True},
+    "GNT-060": {
+        "label": "GNT 0/60", "family": "GRAVE", "has_vbs": False,
+        "show_gtr_extra": True, "show_rt_extra": True,
+        "hide_es": True, "hide_coeff_apl": True, "use_vbs_for_gtr": True,
+        "exigence_col_label": "Exigence", "obs_mode": "gtr_rt",
+    },
     "GNT-PRA": {"label": "GNT Bloc technique PRA", "family": "GRAVE", "has_vbs": False},
 }
 
@@ -177,12 +182,13 @@ FUSEAUX_GRANULO = {
 }
 
 
-def verifier_cpc_grave(la, mde, es, ip, vb, has_vb):
+def verifier_cpc_grave(la, mde, es, ip, vb, has_vb, check_es=True):
     """
     Vérifie l'exigence CPC pour les graves non traitées :
     - Caractéristiques mécaniques : LA < 30, MDE < 25
     - Propreté : IP < 6 ET ES >= 45 — sauf pour les matériaux qui utilisent le VB
       (Valeur au Bleu) au lieu de l'IP (ex: GNF, GNA), auquel cas VB < 1,2.
+    - check_es=False : l'ES n'est pas mesuré pour ce matériau, seul IP < 6 est vérifié.
     """
     ok_la = la < 30
     ok_mde = mde < 25
@@ -190,7 +196,7 @@ def verifier_cpc_grave(la, mde, es, ip, vb, has_vb):
     if has_vb:
         ok_proprete = vb < 1.2
         proprete_txt = f"VB {'<' if ok_proprete else '>='} 1,2 ({vb:.2f})"
-    else:
+    elif check_es:
         ok_ip = ip < 6
         ok_es = es >= 45
         ok_proprete = ok_ip and ok_es
@@ -198,6 +204,10 @@ def verifier_cpc_grave(la, mde, es, ip, vb, has_vb):
             f"IP {'<' if ok_ip else '>='} 6 ({ip:.1f}%) et "
             f"ES {'>=' if ok_es else '<'} 45 ({es:.1f}%)"
         )
+    else:
+        ok_ip = ip < 6
+        ok_proprete = ok_ip
+        proprete_txt = f"IP {'<' if ok_ip else '>='} 6 ({ip:.1f}%)"
 
     conforme = ok_la and ok_mde and ok_proprete
     detail = (
@@ -378,9 +388,15 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
     if family == "REMBLAI":
         normes_txt = " Normes : A.G: NM 00.8.082 | IP: NF P94-051 | VBS: NM 13.1.178"
     else:
-        normes_txt = " Normes : A.G: NM EN 933-1 | LA: NM EN 1097-2 | MDE: NM EN 1097-1 | Coef. Aplatissement: NM EN 933-3 | ES: NM EN 933-8"
+        normes_txt = " Normes : A.G: NM EN 933-1 | LA: NM EN 1097-2 | MDE: NM EN 1097-1"
+        if not mat_config.get("hide_coeff_apl"):
+            normes_txt += " | Coef. Aplatissement: NM EN 933-3"
+        if not mat_config.get("hide_es"):
+            normes_txt += " | ES: NM EN 933-8"
         if mat_config["has_vbs"]:
             normes_txt += " | VB: NM EN 933-9"
+        if mat_config.get("use_vbs_for_gtr"):
+            normes_txt += " | VBS: NM EN 933-9"
     pdf.cell(190, 4.5, normes_txt, 1, 1, "L")
     pdf.ln(2)
 
@@ -425,10 +441,11 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
         pdf.cell(130, 5, val_class, 1, 1, "C")
 
     else:
+        exigence_col_label = mat_config.get("exigence_col_label", "Exigence marché et CPC")
         pdf.set_font("Helvetica", "B", 7.5)
         pdf.cell(60, 5.5, "", 1, 0, "C", fill=True)
         pdf.cell(65, 5.5, str(ech_label), 1, 0, "C", fill=True)
-        pdf.cell(65, 5.5, "Exigence marché et CPC", 1, 1, "C", fill=True)
+        pdf.cell(65, 5.5, exigence_col_label, 1, 1, "C", fill=True)
 
         def _row3(label, value, exigence="-"):
             pdf.set_font("Helvetica", "", 7.5)
@@ -444,10 +461,15 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
         _row3("Micro-Deval MDE (%)", data_dict.get('MDE (%)', '-'), "< 25")
         if "LA+MDE (%)" in data_dict:
             _row3("LA + MDE (%)", data_dict.get('LA+MDE (%)', '-'), "< 80")
-        _row3("Coefficient d'aplatissement (%)", data_dict.get('Coefficient Aplatissement (%)', '-'))
-        _row3("Équivalent de Sable ES (%)", data_dict.get('ES (%)', '-'), "-" if mat_config["has_vbs"] else ">= 45")
+        if not mat_config.get("hide_coeff_apl"):
+            _row3("Coefficient d'aplatissement (%)", data_dict.get('Coefficient Aplatissement (%)', '-'))
+        if not mat_config.get("hide_es"):
+            _row3("Équivalent de Sable ES (%)", data_dict.get('ES (%)', '-'), "-" if mat_config["has_vbs"] else ">= 45")
         if mat_config["has_vbs"]:
             _row3("VB", data_dict.get('VB', data_dict.get('VBS', '-')), "< 1,2")
+            _row3("Indice de Plasticité (IP)", data_dict.get('IP (%)', '-'), "-")
+        elif mat_config.get("use_vbs_for_gtr"):
+            _row3("VBS", data_dict.get('VBS', '-'), "-")
             _row3("Indice de Plasticité (IP)", data_dict.get('IP (%)', '-'), "-")
         else:
             _row3("Indice de Plasticité (IP)", data_dict.get('IP (%)', '-'), "< 6")
@@ -746,12 +768,23 @@ def show(supabase_client):
                 f_st.markdown(f"###### Essais spécifiques — {mat_code} (Grave non traitée)")
                 la_val = f_st.number_input("Los Angeles LA (%)", value=22.0, step=0.5, disabled=not user_can_edit, key=f"la_{mat_code}")
                 mde_val = f_st.number_input("Micro-Deval MDE (%)", value=15.0, step=0.5, disabled=not user_can_edit, key=f"mde_{mat_code}")
-                coeff_apl_val = f_st.number_input("Coefficient d'aplatissement (%)", value=18.0, step=0.5, disabled=not user_can_edit, key=f"apl_{mat_code}")
-                es_val = f_st.number_input("Équivalent de Sable ES (%)", value=45.0, step=0.5, disabled=not user_can_edit, key=f"es_{mat_code}")
+
+                coeff_apl_val = 0.0
+                if not mat_config.get("hide_coeff_apl"):
+                    coeff_apl_val = f_st.number_input("Coefficient d'aplatissement (%)", value=18.0, step=0.5, disabled=not user_can_edit, key=f"apl_{mat_code}")
+
+                es_val = 0.0
+                if not mat_config.get("hide_es"):
+                    es_val = f_st.number_input("Équivalent de Sable ES (%)", value=45.0, step=0.5, disabled=not user_can_edit, key=f"es_{mat_code}")
+
                 ip = f_st.number_input("Indice de Plasticité (IP)", value=0.0, step=0.5, disabled=not user_can_edit, key=f"ip_{mat_code}")
                 vbs_val = 0.0
                 if mat_config["has_vbs"]:
                     vbs_val = f_st.number_input("VB (Valeur au Bleu)", value=0.5, step=0.01, format="%.2f", disabled=not user_can_edit, key=f"vbs_{mat_code}")
+
+                vbs_gtr_val = 0.0
+                if mat_config.get("use_vbs_for_gtr"):
+                    vbs_gtr_val = f_st.number_input("VBS (pour classification GTR)", value=0.30, step=0.01, format="%.2f", disabled=not user_can_edit, key=f"vbsgtr_{mat_code}")
 
             work_df = edited_sieve_df.sort_values(by="Tamis (mm)", ascending=False).reset_index(drop=True)
             work_df["Refus Cumulé R (g)"] = np.round(work_df["Refus partiel Ri (g)"].cumsum(), 1)
@@ -768,6 +801,17 @@ def show(supabase_client):
             fines_label_grave = "VB" if mat_config["has_vbs"] else "IP"
             fines_display_grave = f"{vbs_val:.2f}" if mat_config["has_vbs"] else f"{ip:.1f}%"
 
+            extra_lines = ""
+            if not mat_config.get("hide_coeff_apl") or not mat_config.get("hide_es"):
+                parts = []
+                if not mat_config.get("hide_coeff_apl"):
+                    parts.append(f"<b>Coef. Aplatissement</b> : {coeff_apl_val:.1f}%")
+                if not mat_config.get("hide_es"):
+                    parts.append(f"<b>ES</b> : {es_val:.1f}%")
+                extra_lines += " &nbsp; | &nbsp; ".join(parts) + "<br>"
+            if mat_config.get("use_vbs_for_gtr"):
+                extra_lines += f"<b>VBS (GTR)</b> : {vbs_gtr_val:.2f}<br>"
+
             f_st.markdown(
                 f"""
                 <div style="background-color: #f0f2f6; padding: 10px; border-radius: 6px; font-size: 0.85em;">
@@ -776,7 +820,7 @@ def show(supabase_client):
                     <b>Écart de tamisage</b> : {ecart_tamisage:.2f}% (doit être &lt;1%)<br>
                     <b>Proctor Wopt</b> : {w_opt:.1f}%<br>
                     <b>LA</b> : {la_val:.1f}% &nbsp; | &nbsp; <b>MDE</b> : {mde_val:.1f}%<br>
-                    <b>Coef. Aplatissement</b> : {coeff_apl_val:.1f}% &nbsp; | &nbsp; <b>ES</b> : {es_val:.1f}%<br>
+                    {extra_lines}
                     <b>{fines_label_grave}</b> : {fines_display_grave}
                 </div>
                 """,
@@ -863,26 +907,37 @@ def show(supabase_client):
         else:
             classe_auto = classer_grave(la_val, mde_val, coeff_apl_val, es_val, pass_fines_val)
 
-            cpc_conforme, cpc_detail = verifier_cpc_grave(la_val, mde_val, es_val, ip, vbs_val, mat_config["has_vbs"])
+            cpc_conforme, cpc_detail = verifier_cpc_grave(
+                la_val, mde_val, es_val, ip, vbs_val, mat_config["has_vbs"],
+                check_es=not mat_config.get("hide_es", False)
+            )
             cpc_badge = "✅ Conforme CPC" if cpc_conforme else "❌ Non Conforme CPC"
-            f_st.metric(f"Exigence marché et CPC — {mat_code}", cpc_badge)
+            f_st.metric(f"Exigence — {mat_code}", cpc_badge)
             f_st.caption(f"Détail : {cpc_detail}")
 
             classe_gtr_extra = None
             qualite_rt = None
             somme_la_mde = None
             if mat_config.get("show_gtr_extra"):
-                classe_gtr_extra = classer_gtr(dmax_detected, pass_fines_val, ip, vbs_val, pass_2mm_val)
+                vbs_pour_gtr = vbs_gtr_val if mat_config.get("use_vbs_for_gtr") else vbs_val
+                classe_gtr_extra = classer_gtr(dmax_detected, pass_fines_val, ip, vbs_pour_gtr, pass_2mm_val)
                 f_st.metric(f"Classification GTR — {mat_code}", classe_gtr_extra)
             if mat_config.get("show_rt_extra"):
                 qualite_rt, somme_la_mde = classer_qualite_rt(la_val, mde_val)
                 f_st.metric(f"Qualité RT (LA+MDE) — {mat_code}", qualite_rt, delta=f"LA+MDE = {somme_la_mde:.1f}")
 
-            is_conf = cpc_conforme
-            if is_conf:
-                obs = f"Les résultats d'identification de la {selected_mat_sub} sont conformes aux spécifications du marché."
+            if mat_config.get("obs_mode") == "gtr_rt":
+                is_conf = (classe_gtr_extra in ("D2", "D3")) and (qualite_rt == "RT2")
+                if is_conf:
+                    obs = f"Les résultats d'identification de la {selected_mat_sub} permettent de la classer en qualité RT2, conformément aux spécifications du CCTP."
+                else:
+                    obs = f"Les résultats d'identification de la {selected_mat_sub} ne permettent pas de la classer en qualité RT2, conformément aux spécifications du CCTP."
             else:
-                obs = f"Les résultats d'identification de la {selected_mat_sub} ne sont pas conformes aux spécifications du marché."
+                is_conf = cpc_conforme
+                if is_conf:
+                    obs = f"Les résultats d'identification de la {selected_mat_sub} sont conformes aux spécifications du marché."
+                else:
+                    obs = f"Les résultats d'identification de la {selected_mat_sub} ne sont pas conformes aux spécifications du marché."
 
         f_st.info(f"Observation automatique : **{obs}** | Dmax: **{dmax_detected} mm** | Passant 50mm: **{pass_50mm_val:.1f}%** | Passant {fine_sieve_label}: **{pass_fines_val:.1f}%**{ecart_tamisage_txt}")
 
@@ -920,8 +975,10 @@ def show(supabase_client):
             data_dict["Ecart Tamisage (%)"] = f"{ecart_tamisage:.2f}".replace('.', ',')
             data_dict["LA (%)"] = f"{la_val:.1f}".replace('.', ',')
             data_dict["MDE (%)"] = f"{mde_val:.1f}".replace('.', ',')
-            data_dict["Coefficient Aplatissement (%)"] = f"{coeff_apl_val:.1f}".replace('.', ',')
-            data_dict["ES (%)"] = f"{es_val:.1f}".replace('.', ',')
+            if not mat_config.get("hide_coeff_apl"):
+                data_dict["Coefficient Aplatissement (%)"] = f"{coeff_apl_val:.1f}".replace('.', ',')
+            if not mat_config.get("hide_es"):
+                data_dict["ES (%)"] = f"{es_val:.1f}".replace('.', ',')
             data_dict["IP (%)"] = f"{ip:.1f}".replace('.', ',')
             if mat_config["has_vbs"]:
                 data_dict["VB"] = f"{vbs_val:.2f}".replace('.', ',')
@@ -929,6 +986,8 @@ def show(supabase_client):
             data_dict["Detail CPC"] = cpc_detail
             if classe_gtr_extra is not None:
                 data_dict["Classification GTR (Extra)"] = classe_gtr_extra
+            if mat_config.get("use_vbs_for_gtr"):
+                data_dict["VBS"] = f"{vbs_gtr_val:.2f}".replace('.', ',')
             if qualite_rt is not None:
                 data_dict["LA+MDE (%)"] = f"{somme_la_mde:.1f}".replace('.', ',')
                 data_dict["Qualite RT"] = qualite_rt
