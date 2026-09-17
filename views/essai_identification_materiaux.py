@@ -65,7 +65,12 @@ def classer_gtr(dmax, pass_80um, ip, vbs=0.5, pass_2mm=70.0, is_roche=False, roc
 # =====================================================================
 MATERIAL_TYPES = {
     "REM-ORD": {"label": "Remblai ordinaire", "family": "REMBLAI", "has_vbs": True},
-    "REM-CTG2": {"label": "Remblai contigu type 2", "family": "REMBLAI", "has_vbs": True},
+    "REM-CTG2": {
+        "label": "Remblai contigu type 2", "family": "REMBLAI", "has_vbs": False,
+        "force_granulats_sheet": True,
+        "hide_es": True, "hide_coeff_apl": True, "hide_la_mde": True,
+        "use_vbs_for_gtr": True, "fine_sieve_override": 0.08,
+    },
     "CDF": {"label": "Couche de forme", "family": "GRAVE", "has_vbs": False},
     "SC-031": {"label": "Sous couche 0/31.5", "family": "GRAVE", "has_vbs": False},
     "GNF-040": {"label": "GNF 0/40", "family": "GRAVE", "has_vbs": True},
@@ -99,6 +104,13 @@ def get_material_code(selected_label):
         if norm_label in key or key in norm_label:
             return code
     return "REM-ORD"
+
+
+def uses_granulats_sheet(mat_code, mat_config):
+    """Détermine si ce matériau utilise la feuille de tamisage NM EN 933-1 (granulats,
+    tamisage à sec après lavage) plutôt que NM 00.8.082 (sols, avec prise réduite Me),
+    indépendamment de sa famille de classification (GTR ou grave)."""
+    return mat_config["family"] == "GRAVE" or mat_config.get("force_granulats_sheet", False)
 
 
 def get_material_config(selected_label):
@@ -407,10 +419,11 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
     pdf.ln(2)
 
     pdf.set_font("Helvetica", "B", 7)
+    ag_norme = "NM EN 933-1" if uses_granulats_sheet(mat_code, mat_config) else "NM 00.8.082"
     if family == "REMBLAI":
-        normes_txt = " Normes : A.G: NM 00.8.082 | IP: NF P94-051 | VBS: NM 13.1.178"
+        normes_txt = f" Normes : A.G: {ag_norme} | IP: NF P94-051 | VBS: NM 13.1.178"
     else:
-        normes_txt = " Normes : A.G: NM EN 933-1 | LA: NM EN 1097-2 | MDE: NM EN 1097-1"
+        normes_txt = f" Normes : A.G: {ag_norme} | LA: NM EN 1097-2 | MDE: NM EN 1097-1"
         if not mat_config.get("hide_coeff_apl"):
             normes_txt += " | Coef. Aplatissement: NM EN 933-3"
         if not mat_config.get("hide_es"):
@@ -664,12 +677,7 @@ def show(supabase_client):
 
         ecart_tamisage_txt = ""
 
-        if mat_config["family"] == "REMBLAI":
-            # =====================================================================
-            # MOTEUR 1 : NM 00.8.082 (sols) — tamisage/sédimentation avec prise
-            # réduite Me pour la fraction fine, contrôle de bilan massique M6.
-            # =====================================================================
-            f_st.caption("Méthode NM 00.8.082 (sols) — tamisage + sédimentation, prise réduite Me pour la fraction fine")
+        if not uses_granulats_sheet(mat_code, mat_config):
 
             col_e1, col_e2, col_e3, col_e4 = f_st.columns(4)
             with col_e1:
@@ -819,8 +827,11 @@ def show(supabase_client):
                 dens_val = f_st.number_input("Proctor Densité OPN", value=2.10, step=0.01, disabled=not user_can_edit, key=f"dens_{mat_code}")
 
                 f_st.markdown(f"###### Essais spécifiques — {mat_code} (Grave non traitée)")
-                la_val = f_st.number_input("Los Angeles LA (%)", value=22.0, step=0.5, disabled=not user_can_edit, key=f"la_{mat_code}")
-                mde_val = f_st.number_input("Micro-Deval MDE (%)", value=15.0, step=0.5, disabled=not user_can_edit, key=f"mde_{mat_code}")
+                la_val = 0.0
+                mde_val = 0.0
+                if not mat_config.get("hide_la_mde"):
+                    la_val = f_st.number_input("Los Angeles LA (%)", value=22.0, step=0.5, disabled=not user_can_edit, key=f"la_{mat_code}")
+                    mde_val = f_st.number_input("Micro-Deval MDE (%)", value=15.0, step=0.5, disabled=not user_can_edit, key=f"mde_{mat_code}")
 
                 coeff_apl_val = 0.0
                 if not mat_config.get("hide_coeff_apl"):
@@ -872,7 +883,7 @@ def show(supabase_client):
                     <b>Σ Refus partiels (tamisage à sec)</b> : {somme_ri:.1f} g + Fond de tamis {fond_tamis_val:.1f} g = {somme_ri_avec_fond:.1f} g (à comparer à M2 = {m2_val:.1f} g)<br>
                     <b>Écart de tamisage</b> : {ecart_tamisage:.2f}% (doit être &lt;1%)<br>
                     <b>Proctor Wopt</b> : {w_opt:.1f}%<br>
-                    <b>LA</b> : {la_val:.1f}% &nbsp; | &nbsp; <b>MDE</b> : {mde_val:.1f}%<br>
+                    {'' if mat_config.get('hide_la_mde') else f'<b>LA</b> : {la_val:.1f}% &nbsp; | &nbsp; <b>MDE</b> : {mde_val:.1f}%<br>'}
                     {extra_lines}
                     <b>{fines_label_grave}</b> : {fines_display_grave}
                 </div>
@@ -881,8 +892,8 @@ def show(supabase_client):
             )
 
             m3_val = m4_val = m5_val = m6_val = 0.0
-            fine_sieve_ref = 0.063
-            fine_sieve_label = "0,063 mm"
+            fine_sieve_ref = mat_config.get("fine_sieve_override", 0.063)
+            fine_sieve_label = "0,08 mm" if fine_sieve_ref == 0.08 else "0,063 mm"
 
         f_st.markdown("#### Courbe Granulométrique & Résultats")
         col_tbl_res, col_plt = f_st.columns([1.1, 0.9])
@@ -937,7 +948,7 @@ def show(supabase_client):
             f_st.pyplot(fig, use_container_width=True)
             plt.close(fig)
 
-        if mat_config["family"] == "REMBLAI":
+        if not uses_granulats_sheet(mat_code, mat_config):
             dmax_detected = float(result_df[(result_df["R_i (g) [≥10mm]"] > 0) | (result_df["r_i (g) [<10mm]"] > 0)]["Tamis (mm)"].max()) if any((result_df["R_i (g) [≥10mm]"] > 0) | (result_df["r_i (g) [<10mm]"] > 0)) else 50.0
         else:
             dmax_detected = float(result_df[result_df["Refus partiel Ri (g)"] > 0]["Tamis (mm)"].max()) if any(result_df["Refus partiel Ri (g)"] > 0) else 40.0
@@ -952,7 +963,8 @@ def show(supabase_client):
         pass_50mm_val = float(row_50mm["% Passant"].values[0]) if not row_50mm.empty else 100.0
 
         if mat_config["family"] == "REMBLAI":
-            classe_auto = classer_gtr(dmax_detected, pass_fines_val, ip, vbs_val, pass_2mm_val)
+            vbs_pour_gtr_ctg = vbs_gtr_val if mat_config.get("use_vbs_for_gtr") else vbs_val
+            classe_auto = classer_gtr(dmax_detected, pass_fines_val, ip, vbs_pour_gtr_ctg, pass_2mm_val)
             f_st.metric(f"Classe GTR (Auto) — {mat_code}", classe_auto)
 
             if mat_code == "REM-CTG2":
@@ -1029,7 +1041,7 @@ def show(supabase_client):
             "Courbe Passant (%)": result_df["% Passant"].astype(float).round(2).tolist()
         }
 
-        if mat_config["family"] == "REMBLAI":
+        if not uses_granulats_sheet(mat_code, mat_config):
             data_dict["M3 (g)"] = f"{m3_val}"
             data_dict["M4 (g)"] = f"{m4_val}"
             data_dict["M5 (g)"] = f"{m5_val:.2f}"
@@ -1037,14 +1049,12 @@ def show(supabase_client):
             data_dict["M6 (g)"] = f"{m6_val:.2f}"
             data_dict["IP (%)"] = f"{ip:.1f}".replace('.', ',')
             data_dict["VBS"] = f"{vbs_val:.2f}".replace('.', ',')
-            if mat_code == "REM-CTG2":
-                data_dict["Conforme CPC"] = "OUI" if cpc_conforme else "NON"
-                data_dict["Detail CPC"] = cpc_detail
         else:
             data_dict["Fond de tamis (g)"] = f"{fond_tamis_val}"
             data_dict["Ecart Tamisage (%)"] = f"{ecart_tamisage:.2f}".replace('.', ',')
-            data_dict["LA (%)"] = f"{la_val:.1f}".replace('.', ',')
-            data_dict["MDE (%)"] = f"{mde_val:.1f}".replace('.', ',')
+            if not mat_config.get("hide_la_mde"):
+                data_dict["LA (%)"] = f"{la_val:.1f}".replace('.', ',')
+                data_dict["MDE (%)"] = f"{mde_val:.1f}".replace('.', ',')
             if not mat_config.get("hide_coeff_apl"):
                 data_dict["Coefficient Aplatissement (%)"] = f"{coeff_apl_val:.1f}".replace('.', ',')
             if not mat_config.get("hide_es"):
@@ -1052,12 +1062,18 @@ def show(supabase_client):
             data_dict["IP (%)"] = f"{ip:.1f}".replace('.', ',')
             if mat_config["has_vbs"]:
                 data_dict["VB"] = f"{vbs_val:.2f}".replace('.', ',')
+            if mat_config.get("use_vbs_for_gtr"):
+                data_dict["VBS"] = f"{vbs_gtr_val:.2f}".replace('.', ',')
+
+        if mat_config["family"] == "REMBLAI":
+            if mat_code == "REM-CTG2":
+                data_dict["Conforme CPC"] = "OUI" if cpc_conforme else "NON"
+                data_dict["Detail CPC"] = cpc_detail
+        else:
             data_dict["Conforme CPC"] = "OUI" if cpc_conforme else "NON"
             data_dict["Detail CPC"] = cpc_detail
             if classe_gtr_extra is not None:
                 data_dict["Classification GTR (Extra)"] = classe_gtr_extra
-            if mat_config.get("use_vbs_for_gtr"):
-                data_dict["VBS"] = f"{vbs_gtr_val:.2f}".replace('.', ',')
             if qualite_rt is not None:
                 data_dict["LA+MDE (%)"] = f"{somme_la_mde:.1f}".replace('.', ',')
                 data_dict["Qualite RT"] = qualite_rt
