@@ -230,6 +230,28 @@ def classer_qualite_rt(la, mde):
     return "Hors classe RT2", somme
 
 
+# Classes GTR admises pour le Remblai contigu type 2 (exigence spécifique à ce matériau)
+GTR_CLASSES_AUTORISEES_CTG2 = {"D3", "C2B3", "C2", "B4", "B5", "R21", "R22"}
+
+
+def verifier_exigence_remblai_ctg2(classe_gtr, pass_fines, dmax):
+    """
+    Vérifie l'exigence spécifique au Remblai contigu type 2 :
+    Classification GTR parmi {D3, C2B3, C2, B4, B5, R21, R22}, %< 0,08mm < 15%, Dmax <= 300mm.
+    """
+    classe_txt = str(classe_gtr).strip().upper()
+    ok_gtr = classe_txt in GTR_CLASSES_AUTORISEES_CTG2
+    ok_fines = pass_fines < 15.0
+    ok_dmax = dmax <= 300.0
+    conforme = ok_gtr and ok_fines and ok_dmax
+    detail = (
+        f"GTR {'OK' if ok_gtr else 'NON admise'} ({classe_gtr}) | "
+        f"%< 0,08mm {'<' if ok_fines else '>='} 15% ({pass_fines:.1f}%) | "
+        f"Dmax {'<=' if ok_dmax else '>'} 300mm ({dmax:.0f}mm)"
+    )
+    return conforme, detail
+
+
 def classer_grave(la, mde, coeff_apl, es, pass_80um):
     """
     Classification indicative des graves non traitées (GNF/GNA/GNT/Couche de forme)
@@ -409,7 +431,38 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
     val_dens = str(data_dict.get('Densité OPN', '1,73'))
     val_class = str(data_dict.get('Classification (Auto)', data_dict.get('Classe GTR (Auto)', 'B5')))
 
-    if family == "REMBLAI":
+    if family == "REMBLAI" and mat_code == "REM-CTG2":
+        pdf.set_font("Helvetica", "B", 7.5)
+        pdf.cell(60, 5.5, "", 1, 0, "C", fill=True)
+        pdf.cell(65, 5.5, str(ech_label), 1, 0, "C", fill=True)
+        pdf.cell(65, 5.5, "Exigence", 1, 1, "C", fill=True)
+
+        def _row3r(label, value, exigence="-"):
+            pdf.set_font("Helvetica", "", 7.5)
+            pdf.cell(60, 5, f" {label}", 1, 0, "L")
+            pdf.cell(65, 5, str(_zero_to_star(value)), 1, 0, "C")
+            pdf.cell(65, 5, str(exigence), 1, 1, "C")
+
+        _row3r("%< 80 µm", data_dict.get('Passant Fines (%)', data_dict.get('Passant 80um (%)', '22,3')), "< 15%")
+        _row3r("%< 2 mm", data_dict.get('Passant 2mm (%)', '66'))
+        _row3r("%< 50 mm", data_dict.get('Passant 50mm (%)', '100'))
+        _row3r("D MAX", data_dict.get('Dmax (mm)', '50'), "<= 300 mm")
+        _row3r("VBS", data_dict.get('VBS', '0,42'))
+        _row3r("Indice de Plasticité (IP)", data_dict.get('IP (%)', '4,2'))
+
+        pdf.cell(60, 5, " Proctor", 1, 0, "L")
+        pdf.set_font("Helvetica", "B", 7)
+        pdf.cell(26, 5, " Wopt", 1, 0, "C", fill=True)
+        pdf.set_font("Helvetica", "", 7.5)
+        pdf.cell(26, 5, val_wopt, 1, 0, "C")
+        pdf.set_font("Helvetica", "B", 7)
+        pdf.cell(34, 5, " Densité OPN", 1, 0, "C", fill=True)
+        pdf.set_font("Helvetica", "", 7.5)
+        pdf.cell(44, 5, val_dens, 1, 1, "C")
+
+        _row3r("Classification GTR", val_class, "D3,C2B3,C2,B4,B5,R21,R22")
+
+    elif family == "REMBLAI":
         pdf.set_font("Helvetica", "B", 7.5)
         pdf.cell(60, 5.5, "", 1, 0, "C", fill=True)
         pdf.cell(130, 5.5, str(ech_label), 1, 1, "C", fill=True)
@@ -901,9 +954,23 @@ def show(supabase_client):
         if mat_config["family"] == "REMBLAI":
             classe_auto = classer_gtr(dmax_detected, pass_fines_val, ip, vbs_val, pass_2mm_val)
             f_st.metric(f"Classe GTR (Auto) — {mat_code}", classe_auto)
-            is_conf = pass_fines_val <= 35.0
-            cpc_conforme, cpc_detail = None, None
-            obs = f"Le matériau peut être utilisé. ({mat_code} - {selected_mat_sub})" if is_conf else f"Non Conforme / Hors fuseau ({mat_code} - {selected_mat_sub})"
+
+            if mat_code == "REM-CTG2":
+                ctg2_conforme, ctg2_detail = verifier_exigence_remblai_ctg2(classe_auto, pass_fines_val, dmax_detected)
+                ctg2_badge = "✅ Conforme" if ctg2_conforme else "❌ Non Conforme"
+                f_st.metric(f"Exigence — {mat_code}", ctg2_badge)
+                f_st.caption(f"Détail : {ctg2_detail}")
+
+                is_conf = ctg2_conforme
+                cpc_conforme, cpc_detail = ctg2_conforme, ctg2_detail
+                if is_conf:
+                    obs = f"Les résultats d'identification de la {selected_mat_sub} sont conformes aux spécifications du marché."
+                else:
+                    obs = f"Les résultats d'identification de la {selected_mat_sub} ne sont pas conformes aux spécifications du marché."
+            else:
+                is_conf = pass_fines_val <= 35.0
+                cpc_conforme, cpc_detail = None, None
+                obs = f"Le matériau peut être utilisé. ({mat_code} - {selected_mat_sub})" if is_conf else f"Non Conforme / Hors fuseau ({mat_code} - {selected_mat_sub})"
         else:
             classe_auto = classer_grave(la_val, mde_val, coeff_apl_val, es_val, pass_fines_val)
 
@@ -970,6 +1037,9 @@ def show(supabase_client):
             data_dict["M6 (g)"] = f"{m6_val:.2f}"
             data_dict["IP (%)"] = f"{ip:.1f}".replace('.', ',')
             data_dict["VBS"] = f"{vbs_val:.2f}".replace('.', ',')
+            if mat_code == "REM-CTG2":
+                data_dict["Conforme CPC"] = "OUI" if cpc_conforme else "NON"
+                data_dict["Detail CPC"] = cpc_detail
         else:
             data_dict["Fond de tamis (g)"] = f"{fond_tamis_val}"
             data_dict["Ecart Tamisage (%)"] = f"{ecart_tamisage:.2f}".replace('.', ',')
