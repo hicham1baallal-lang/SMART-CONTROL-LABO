@@ -2,12 +2,19 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
-from datetime import datetime
+from datetime import date, datetime
 import json
 import copy
 import io
 import os
 import base64
+
+try:
+    import xlsxwriter
+    XLSXWRITER_AVAILABLE = True
+except ImportError:
+    xlsxwriter = None
+    XLSXWRITER_AVAILABLE = False
 
 import matplotlib
 matplotlib.use('Agg')
@@ -202,6 +209,345 @@ def compute_MF(sieves, passings):
         if not np.isnan(passant):
             sum_refus_cum += (100.0 - passant)
     return round(sum_refus_cum / 100.0, 2)
+
+def _as_synthesis_mapping(value):
+    """Convertit un dictionnaire ou un JSON stocké en texte en dictionnaire."""
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str):
+        try:
+            decoded = json.loads(value)
+            return decoded if isinstance(decoded, dict) else {}
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return {}
+    return {}
+
+def _parse_synthesis_date(value):
+    """Convertit les formats de date utilisés par les PV en objet datetime."""
+    if not value:
+        return None
+    if isinstance(value, date) and not isinstance(value, datetime):
+        return datetime(value.year, value.month, value.day)
+    if isinstance(value, datetime):
+        return value
+
+    value_text = str(value).strip()
+    if not value_text:
+        return None
+
+    # Les dates Supabase sont souvent renvoyées en ISO 8601, par exemple
+    # 2026-07-23T00:00:00+00:00 ou 2026-07-23T00:00:00Z.
+    iso_text = value_text.replace('Z', '+00:00')
+    try:
+        return datetime.fromisoformat(iso_text).replace(tzinfo=None)
+    except ValueError:
+        pass
+
+    for date_format in (
+        '%d/%m/%Y',
+        '%d-%m-%Y',
+        '%Y-%m-%d %H:%M:%S',
+        '%Y-%m-%d',
+        '%d/%m/%Y %H:%M:%S',
+        '%d/%m/%Y %H:%M',
+        '%d-%m-%Y %H:%M:%S',
+        '%d-%m-%Y %H:%M',
+        '%Y/%m/%d',
+    ):
+        try:
+            return datetime.strptime(value_text, date_format)
+        except ValueError:
+            continue
+    return None
+
+def _synthesis_context(pv_item):
+    """Normalise la structure d'un PV venant de la session ou de Supabase."""
+    item = _as_synthesis_mapping(pv_item)
+    payload = _as_synthesis_mapping(item.get('data') or item.get('pv_data'))
+    pv_info = _as_synthesis_mapping(item.get('pv_info'))
+    info_prelevement = _as_synthesis_mapping(item.get('info_prelevement'))
+
+    if not pv_info:
+        pv_info = _as_synthesis_mapping(payload.get('pv_info'))
+    if not info_prelevement:
+        info_prelevement = _as_synthesis_mapping(payload.get('info_prelevement'))
+
+    return item, payload, pv_info, info_prelevement
+
+def _synthesis_month_info(pv_item):
+    """Retourne la clé et le libellé du mois de prélèvement d'un PV."""
+    item, payload, pv_info, info_prelevement = _synthesis_context(pv_item)
+    date_value = (
+        pv_info.get('date')
+        or info_prelevement.get('date_prelevement')
+        or item.get('date_prelevement')
+        or item.get('date')
+        or payload.get('date_prelevement')
+        or payload.get('date')
+        or item.get('date_creation')
+        or payload.get('date_creation')
+    )
+    parsed_date = _parse_synthesis_date(date_value)
+    if parsed_date is None:
+        return None, None, date_value
+
+    months_fr = (
+        'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+        'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'
+    )
+    month_key = (parsed_date.year, parsed_date.month)
+    month_label = f"{months_fr[parsed_date.month - 1]} {parsed_date.year}"
+    return month_key, month_label, date_value
+
+def _normalize_loaded_pv_record(row):
+    """Convertit les anciens schémas de stockage en snapshot de PV uniforme."""
+    source = _as_synthesis_mapping(row)
+    payload = _as_synthesis_mapping(source.get('data') or source.get('pv_data'))
+    item = copy.deepcopy(payload) if payload else copy.deepcopy(source)
+
+    # Les colonnes d'identification de la table restent utiles lorsque le JSON
+    # historique est incomplet ou que la base utilise l'ancien schéma.
+    for key in ('id', 'ref_pv', 'client', 'projet', 'date_creation'):
+        if key in source and source.get(key) is not None:
+            item.setdefault(key, source.get(key))
+
+    pv_info = _as_synthesis_mapping(item.get('pv_info'))
+    info_prelevement = _as_synthesis_mapping(item.get('info_prelevement'))
+    data_granulats = _as_synthesis_mapping(item.get('data_granulats'))
+
+    # Anciennes colonnes parfois présentes directement dans la table.
+    reference = (
+        item.get('ref_pv')
+        or source.get('ref_pv')
+        or source.get('num_rapport')
+        or source.get('reference')
+    )
+    if reference and not item.get('ref_pv'):
+        item['ref_pv'] = reference
+
+    for key in ('client', 'projet'):
+        if not item.get(key) and source.get(key):
+            item[key] = source.get(key)
+
+    date_value = (
+        pv_info.get('date')
+        or info_prelevement.get('date_prelevement')
+        or item.get('date_prelevement')
+        or source.get('date_prelevement')
+        or item.get('date')
+        or source.get('date')
+    )
+    if date_value and not pv_info.get('date'):
+        pv_info['date'] = date_value
+
+    for key in ('client', 'projet', 'commentaires', 'coord_essais', 'chef_labo'):
+        if not pv_info.get(key) and source.get(key):
+            pv_info[key] = source.get(key)
+
+    for key in ('date_prelevement', 'lieu_prelevement', 'provenance', 'dossier_no'):
+        if not info_prelevement.get(key) and source.get(key):
+            info_prelevement[key] = source.get(key)
+
+    item['pv_info'] = pv_info
+    item['info_prelevement'] = info_prelevement
+    item['data_granulats'] = data_granulats
+    return item
+
+def _find_synthesis_logo_path():
+    """Recherche le logo utilisé pour l'en-tête du fichier Excel de synthèse."""
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    candidates = [
+        os.path.join(base_dir, 'logo.png'),
+        os.path.join(base_dir, 'logo.jpg'),
+        os.path.join(base_dir, 'logo.jpeg'),
+        os.path.join(base_dir, 'logo.png.jpg'),
+        os.path.join(base_dir, 'assets', 'logo.png'),
+        os.path.join(base_dir, 'assets', 'logo.jpg'),
+    ]
+    return next((path for path in candidates if os.path.isfile(path)), None)
+
+def generate_synthesis_excel(filtered_pvs, selected_month):
+    """Génère le classeur Excel coloré et imprimable de la synthèse mensuelle."""
+    if not XLSXWRITER_AVAILABLE:
+        raise ImportError(
+            "Le module xlsxwriter est nécessaire pour générer le fichier Excel."
+        )
+
+    output = io.BytesIO()
+    workbook = xlsxwriter.Workbook(output, {'in_memory': True})
+    worksheet = workbook.add_worksheet("Synthèse mensuelle")
+
+    # Mise en page A4 portrait, couleur, ajustée à une page en largeur.
+    worksheet.set_portrait()
+    worksheet.set_paper(9)  # A4
+    worksheet.fit_to_pages(1, 0)
+    worksheet.set_margins(left=0.25, right=0.25, top=0.35, bottom=0.45)
+    worksheet.hide_gridlines(2)
+    worksheet.repeat_rows(5, 5)
+    worksheet.set_header('&C&"Arial,Bold"&10 Synthèse mensuelle des PV')
+    worksheet.set_footer('&L LPEE&CPage &P sur &N&R&D')
+
+    navy = '#1E3A8A'
+    blue = '#2563EB'
+    light_blue = '#DBEAFE'
+    pale_blue = '#EFF6FF'
+    border = '#CBD5E1'
+    dark = '#0F172A'
+
+    title_format = workbook.add_format({
+        'bold': True, 'font_name': 'Arial', 'font_size': 13,
+        'font_color': navy, 'align': 'center', 'valign': 'vcenter',
+    })
+    subtitle_format = workbook.add_format({
+        'bold': True, 'font_name': 'Arial', 'font_size': 9,
+        'font_color': navy, 'align': 'center', 'valign': 'vcenter',
+    })
+    period_format = workbook.add_format({
+        'bold': True, 'font_name': 'Arial', 'font_size': 9,
+        'font_color': dark, 'bg_color': pale_blue, 'border': 1,
+        'border_color': border, 'align': 'left', 'valign': 'vcenter',
+    })
+    header_format = workbook.add_format({
+        'bold': True, 'font_name': 'Arial', 'font_size': 8,
+        'font_color': '#FFFFFF', 'bg_color': blue, 'border': 1,
+        'border_color': '#1D4ED8', 'align': 'center',
+        'valign': 'vcenter', 'text_wrap': True,
+    })
+    cell_format = workbook.add_format({
+        'font_name': 'Arial', 'font_size': 8, 'font_color': dark,
+        'border': 1, 'border_color': border, 'valign': 'top',
+        'text_wrap': True,
+    })
+    cell_center_format = workbook.add_format({
+        'font_name': 'Arial', 'font_size': 8, 'font_color': dark,
+        'border': 1, 'border_color': border, 'align': 'center',
+        'valign': 'top', 'text_wrap': True,
+    })
+    alternate_format = workbook.add_format({
+        'font_name': 'Arial', 'font_size': 8, 'font_color': dark,
+        'bg_color': '#F8FAFC', 'border': 1, 'border_color': border,
+        'valign': 'top', 'text_wrap': True,
+    })
+    alternate_center_format = workbook.add_format({
+        'font_name': 'Arial', 'font_size': 8, 'font_color': dark,
+        'bg_color': '#F8FAFC', 'border': 1, 'border_color': border,
+        'align': 'center', 'valign': 'top', 'text_wrap': True,
+    })
+
+    worksheet.set_column('A:A', 18)
+    worksheet.set_column('B:B', 15)
+    worksheet.set_column('C:C', 24)
+    worksheet.set_column('D:D', 25)
+    worksheet.set_column('E:E', 25)
+    worksheet.set_column('F:F', 38)
+
+    logo_path = _find_synthesis_logo_path()
+    if logo_path:
+        worksheet.insert_image(
+            'A1',
+            logo_path,
+            {'x_scale': 0.20, 'y_scale': 0.20, 'x_offset': 4, 'y_offset': 4}
+        )
+    else:
+        worksheet.write('A1', 'L.P.E.E', title_format)
+
+    worksheet.merge_range('B1:F1', "LABORATOIRE PUBLIC D'ESSAIS ET D'ÉTUDES (LPEE)", title_format)
+    worksheet.merge_range(
+        'B2:F2',
+        'CENTRE TECHNIQUE REGIONAL DE CASABLANCA-SETTAT BENI MELLAL',
+        subtitle_format
+    )
+    worksheet.merge_range(
+        'A4:F4',
+        f"SYNTHÈSE DES PV — PÉRIODE : {selected_month}",
+        period_format
+    )
+    worksheet.set_row(0, 30)
+    worksheet.set_row(1, 22)
+    worksheet.set_row(3, 22)
+
+    headers = [
+        "Référence PV",
+        "Date de prélèvement",
+        "Lieu de prélèvement",
+        "Provenance échantillon",
+        "Fraction des échantillons",
+        "Commentaire",
+    ]
+    header_row = 5
+    for column, header in enumerate(headers):
+        worksheet.write(header_row, column, header, header_format)
+    worksheet.set_row(header_row, 30)
+
+    rows = []
+    for pv_item in filtered_pvs:
+        item_synth, payload_synth, pv_info_synth, info_synth = _synthesis_context(pv_item)
+        reference = (
+            item_synth.get('ref_pv')
+            or pv_info_synth.get('ref_pv')
+            or payload_synth.get('ref_pv')
+            or '-'
+        )
+        date_value = (
+            pv_info_synth.get('date')
+            or info_synth.get('date_prelevement')
+            or item_synth.get('date_prelevement')
+            or item_synth.get('date')
+            or payload_synth.get('date_prelevement')
+            or payload_synth.get('date')
+            or item_synth.get('date_creation')
+            or payload_synth.get('date_creation')
+            or '-'
+        )
+        lieu = info_synth.get('lieu_prelevement') or '-'
+        provenance = info_synth.get('provenance') or '-'
+        commentaire = pv_info_synth.get('commentaires') or '-'
+        materials = (
+            item_synth.get('data_granulats')
+            or payload_synth.get('data_granulats')
+            or {}
+        )
+        materials = _as_synthesis_mapping(materials)
+
+        if materials:
+            for fraction_key, material in materials.items():
+                material = material or {}
+                fraction_label = material.get('nom') or fraction_key
+                classe = material.get('classe')
+                if classe:
+                    fraction_label = f"{fraction_key} — {fraction_label} ({classe})"
+                else:
+                    fraction_label = f"{fraction_key} — {fraction_label}"
+                rows.append([
+                    reference, date_value, lieu, provenance,
+                    fraction_label, commentaire
+                ])
+        else:
+            rows.append([reference, date_value, lieu, provenance, '-', commentaire])
+
+    for row_index, row_values in enumerate(rows, start=header_row + 1):
+        is_alternate = (row_index - header_row) % 2 == 0
+        formats = (
+            [alternate_center_format, alternate_center_format,
+             alternate_format, alternate_format,
+             alternate_format, alternate_format]
+            if is_alternate else
+            [cell_center_format, cell_center_format,
+             cell_format, cell_format,
+             cell_format, cell_format]
+        )
+        for column, value in enumerate(row_values):
+            worksheet.write(row_index, column, value, formats[column])
+        worksheet.set_row(row_index, 34)
+
+    last_row = header_row + max(len(rows), 1)
+    worksheet.autofilter(header_row, 0, last_row, len(headers) - 1)
+    worksheet.freeze_panes(header_row + 1, 0)
+    worksheet.print_area(0, 0, last_row, len(headers) - 1)
+
+    workbook.close()
+    output.seek(0)
+    return output.getvalue()
 
 def _find_lpee_logo_path():
     """Cherche le logo LPEE à quelques emplacements usuels du dépôt.
@@ -966,34 +1312,47 @@ def fetch_pvs_from_supabase(supabase_client):
         except Exception:
             pass
         return None
+    loaded_records = []
+    loaded_tables = []
     for table_name in ['pv_granulats', 'historique_pv']:
         try:
             res = supabase_client.table(table_name).select('*').execute()
             n_rows = len(res.data) if res and hasattr(res, 'data') and res.data else 0
             debug['attempts'].append({'table': table_name, 'ok': True, 'rows_found': n_rows})
             if res and hasattr(res, 'data') and res.data:
-                loaded = []
                 for row in res.data:
-                    if 'data' in row and isinstance(row['data'], dict):
-                        item = copy.deepcopy(row['data'])
-                        if 'id' in row: item['id'] = row['id']
-                        loaded.append(item)
-                    elif 'pv_data' in row and isinstance(row['pv_data'], dict):
-                        item = copy.deepcopy(row['pv_data'])
-                        if 'id' in row: item['id'] = row['id']
-                        loaded.append(item)
-                    else:
-                        loaded.append(row)
-                debug['loaded_from'] = table_name
-                debug['loaded_count'] = len(loaded)
-                try:
-                    st.session_state['_pv_db_debug_fetch'] = debug
-                except Exception:
-                    pass
-                return loaded
+                    loaded_records.append(_normalize_loaded_pv_record(row))
+                loaded_tables.append(table_name)
         except Exception as e:
             debug['attempts'].append({'table': table_name, 'ok': False, 'error': str(e)})
             continue
+
+    if loaded_records:
+        # Les deux tables peuvent contenir le même PV. On déduplique par
+        # référence tout en conservant les anciennes fiches sans référence.
+        unique_records = {}
+        for index, item in enumerate(loaded_records):
+            ref = str(item.get('ref_pv') or '').strip().lower()
+            dedup_key = f"ref:{ref}" if ref else f"row:{index}"
+            if dedup_key not in unique_records:
+                unique_records[dedup_key] = item
+            else:
+                # Une ligne d'une table peut compléter une ligne ancienne
+                # partiellement remplie dans l'autre table.
+                existing = unique_records[dedup_key]
+                for key, value in item.items():
+                    if not existing.get(key) and value:
+                        existing[key] = value
+
+        loaded = list(unique_records.values())
+        debug['loaded_from'] = ', '.join(loaded_tables)
+        debug['loaded_count'] = len(loaded)
+        try:
+            st.session_state['_pv_db_debug_fetch'] = debug
+        except Exception:
+            pass
+        return loaded
+
     try:
         st.session_state['_pv_db_debug_fetch'] = debug
     except Exception:
@@ -1232,6 +1591,13 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
             st.session_state['historique_pv'] = db_pvs
         st.session_state['pvs_loaded_from_db'] = True
 
+    # Normalise aussi les fiches déjà présentes en session, notamment après
+    # une mise à jour de l'application sans redémarrage complet.
+    st.session_state['historique_pv'] = [
+        _normalize_loaded_pv_record(pv)
+        for pv in st.session_state.get('historique_pv', [])
+    ]
+
     if 'pv_info' not in st.session_state:
         st.session_state['pv_info'] = {}
 
@@ -1295,7 +1661,8 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
     tabs = st.tabs([
         "1️⃣ Feuilles d'Essais Complets",
         "2️⃣ PV d'Identification / Synthèse",
-        "3️⃣ Historique & Téléchargement de PV"
+        "3️⃣ Historique & Téléchargement de PV",
+        "4️⃣ Synthèse mensuelle"
     ])
 
     # ------------------------------------------------------------------------------
@@ -1890,3 +2257,144 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                     st.markdown(f"**Référence Rapport :** `{ref_pv_disp}`")
         else:
             st.info("Aucun PV n'est enregistré dans l'historique pour le moment. Réalisez un essai et validez-le en Phase 1.")
+
+    # ------------------------------------------------------------------------------
+    # FENÊTRE 4 : SYNTHÈSE DES PV PAR MOIS
+    # ------------------------------------------------------------------------------
+    with tabs[3]:
+        st.header("📊 Synthèse des rapports d'essais")
+        st.caption(
+            "Filtrez les PV enregistrés par mois de prélèvement. "
+            "La date de création est utilisée uniquement si la date de prélèvement est absente."
+        )
+
+        historique_synthese = st.session_state.get('historique_pv', [])
+        month_groups = {}
+        invalid_date_count = 0
+
+        for pv_item in historique_synthese:
+            month_key, month_label, _ = _synthesis_month_info(pv_item)
+            if month_key is None:
+                invalid_date_count += 1
+                continue
+            month_groups[month_key] = month_label
+
+        ordered_months = [
+            month_groups[key]
+            for key in sorted(month_groups)
+        ]
+
+        if not historique_synthese:
+            st.info("Aucun PV disponible pour effectuer une synthèse.")
+        elif not ordered_months:
+            st.warning("Aucune date exploitable n'a été trouvée dans les PV enregistrés.")
+        else:
+            selected_month = st.selectbox(
+                "📅 Mois à afficher",
+                ["Tous les mois"] + ordered_months,
+                key=f"{prefix}_synth_month_filter"
+            )
+
+            filtered_pvs = []
+            for pv_item in historique_synthese:
+                _, month_label, _ = _synthesis_month_info(pv_item)
+                if selected_month == "Tous les mois" or month_label == selected_month:
+                    filtered_pvs.append(pv_item)
+
+            clients = {
+                str(
+                    _synthesis_context(item)[0].get('client')
+                    or _synthesis_context(item)[2].get('client')
+                    or _synthesis_context(item)[1].get('client')
+                    or ''
+                ).strip()
+                for item in filtered_pvs
+            }
+            clients.discard('')
+
+            col_s1, col_s2, col_s3 = st.columns(3)
+            col_s1.metric("Nombre de PV", len(filtered_pvs))
+            col_s2.metric("Clients concernés", len(clients))
+            col_s3.metric("Mois sélectionné", selected_month)
+
+            synthesis_rows = []
+            for pv_item in filtered_pvs:
+                item_synth, payload_synth, pv_info_synth, info_synth = _synthesis_context(pv_item)
+                reference = (
+                    item_synth.get('ref_pv')
+                    or pv_info_synth.get('ref_pv')
+                    or payload_synth.get('ref_pv')
+                    or '-'
+                )
+                date_value = (
+                    pv_info_synth.get('date')
+                    or info_synth.get('date_prelevement')
+                    or item_synth.get('date_prelevement')
+                    or item_synth.get('date')
+                    or payload_synth.get('date_prelevement')
+                    or payload_synth.get('date')
+                    or item_synth.get('date_creation')
+                    or payload_synth.get('date_creation')
+                    or '-'
+                )
+                lieu = info_synth.get('lieu_prelevement') or '-'
+                provenance = info_synth.get('provenance') or '-'
+                commentaire = pv_info_synth.get('commentaires') or '-'
+                materials = (
+                    item_synth.get('data_granulats')
+                    or payload_synth.get('data_granulats')
+                    or {}
+                )
+                materials = _as_synthesis_mapping(materials)
+
+                if materials:
+                    for fraction_key, material in materials.items():
+                        material = material or {}
+                        fraction_label = material.get('nom') or fraction_key
+                        classe = material.get('classe')
+                        if classe:
+                            fraction_label = f"{fraction_key} — {fraction_label} ({classe})"
+                        else:
+                            fraction_label = f"{fraction_key} — {fraction_label}"
+                        synthesis_rows.append({
+                            "Référence PV": reference,
+                            "Date de prélèvement": date_value,
+                            "Lieu de prélèvement": lieu,
+                            "Provenance échantillon": provenance,
+                            "Fraction des échantillons": fraction_label,
+                            "Commentaire": commentaire,
+                        })
+                else:
+                    synthesis_rows.append({
+                        "Référence PV": reference,
+                        "Date de prélèvement": date_value,
+                        "Lieu de prélèvement": lieu,
+                        "Provenance échantillon": provenance,
+                        "Fraction des échantillons": '-',
+                        "Commentaire": commentaire,
+                    })
+
+            df_synthesis = pd.DataFrame(synthesis_rows)
+            st.dataframe(df_synthesis, use_container_width=True, hide_index=True)
+
+            if XLSXWRITER_AVAILABLE:
+                excel_synthesis = generate_synthesis_excel(
+                    filtered_pvs,
+                    selected_month
+                )
+                st.download_button(
+                    label=f"📥 Télécharger la synthèse ({selected_month}) en fichier Excel",
+                    data=excel_synthesis,
+                    file_name=f"Synthese_PV_{selected_month.replace(' ', '_')}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key=f"{prefix}_dl_excel_synthese"
+                )
+            else:
+                st.error(
+                    "Le module xlsxwriter n'est pas installé : l'export Excel est indisponible."
+                )
+
+            if invalid_date_count:
+                st.caption(
+                    f"{invalid_date_count} PV sans date exploitable ne sont pas inclus dans le filtre mensuel."
+                )
