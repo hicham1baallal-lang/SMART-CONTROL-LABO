@@ -1378,27 +1378,110 @@ def save_pv_to_supabase(supabase_client, pv_snapshot):
         except Exception:
             pass
         return
-    payload = {
-        'ref_pv': pv_snapshot.get('ref_pv'),
-        'client': pv_snapshot.get('client'),
-        'projet': pv_snapshot.get('projet'),
-        'date_creation': pv_snapshot.get('date_creation'),
-        'data': pv_snapshot
+    # Force un contenu JSON simple : les anciennes fiches peuvent contenir des
+    # valeurs numpy/date que le client Supabase ne sait pas sérialiser.
+    try:
+        safe_snapshot = json.loads(
+            json.dumps(pv_snapshot, ensure_ascii=False, default=str)
+        )
+    except (TypeError, ValueError):
+        safe_snapshot = copy.deepcopy(pv_snapshot)
+
+    common_payload = {
+        'ref_pv': str(safe_snapshot.get('ref_pv') or ''),
+        'client': safe_snapshot.get('client'),
+        'projet': safe_snapshot.get('projet'),
+        'date_creation': safe_snapshot.get('date_creation'),
     }
+
+    # Deux schémas ont été utilisés au fil des versions : la colonne JSON
+    # s'appelle soit data, soit pv_data. On essaie d'abord le schéma actuel,
+    # puis l'ancien uniquement si la table le refuse.
+    payload_variants = [
+        ('data', {**common_payload, 'data': safe_snapshot}),
+        ('pv_data', {**common_payload, 'pv_data': safe_snapshot}),
+    ]
+
     for table_name in ['pv_granulats', 'historique_pv']:
-        try:
-            supabase_client.table(table_name).upsert(payload, on_conflict='ref_pv').execute()
-            debug['attempts'].append({'table': table_name, 'ok': True})
-            debug['saved'] = True
-            debug['saved_to'] = table_name
+        for payload_name, payload in payload_variants:
             try:
-                st.session_state['_pv_db_debug_save'] = debug
-            except Exception:
-                pass
-            return
-        except Exception as e:
-            debug['attempts'].append({'table': table_name, 'ok': False, 'error': str(e)})
-            continue
+                (
+                    supabase_client
+                    .table(table_name)
+                    .upsert(payload, on_conflict='ref_pv')
+                    .execute()
+                )
+                debug['attempts'].append({
+                    'table': table_name,
+                    'payload': payload_name,
+                    'ok': True
+                })
+                debug['saved'] = True
+                debug['saved_to'] = table_name
+                debug['saved_payload'] = payload_name
+                try:
+                    st.session_state['_pv_db_debug_save'] = debug
+                except Exception:
+                    pass
+                return
+            except Exception as e:
+                debug['attempts'].append({
+                    'table': table_name,
+                    'payload': payload_name,
+                    'ok': False,
+                    'error': str(e)
+                })
+
+        # Repli pour les anciennes tables où ref_pv n'est pas déclaré UNIQUE :
+        # recherche par référence, puis UPDATE ou INSERT selon le résultat.
+        for payload_name, payload in payload_variants:
+            try:
+                lookup = (
+                    supabase_client
+                    .table(table_name)
+                    .select('id,ref_pv')
+                    .eq('ref_pv', common_payload['ref_pv'])
+                    .limit(1)
+                    .execute()
+                )
+                existing_rows = getattr(lookup, 'data', None) or []
+                if existing_rows:
+                    existing_id = existing_rows[0].get('id')
+                    update_query = supabase_client.table(table_name).update(payload)
+                    if existing_id is not None:
+                        update_query = update_query.eq('id', existing_id)
+                    else:
+                        update_query = update_query.eq('ref_pv', common_payload['ref_pv'])
+                    update_query.execute()
+                    operation = 'update'
+                else:
+                    supabase_client.table(table_name).insert(payload).execute()
+                    operation = 'insert'
+
+                debug['attempts'].append({
+                    'table': table_name,
+                    'payload': payload_name,
+                    'operation': operation,
+                    'ok': True
+                })
+                debug['saved'] = True
+                debug['saved_to'] = table_name
+                debug['saved_payload'] = payload_name
+                debug['saved_operation'] = operation
+                try:
+                    st.session_state['_pv_db_debug_save'] = debug
+                except Exception:
+                    pass
+                return
+            except Exception as e:
+                debug['attempts'].append({
+                    'table': table_name,
+                    'payload': payload_name,
+                    'operation': 'update_or_insert',
+                    'ok': False,
+                    'error': str(e)
+                })
+
     try:
         st.session_state['_pv_db_debug_save'] = debug
     except Exception:
@@ -2161,8 +2244,18 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
             )
         elif _save_failed:
             st.warning(
-                "⚠️ La dernière tentative d'enregistrement d'un PV en base a échoué sur les deux tables testées."
+                "⚠️ L'enregistrement du PV en base a échoué avec les schémas disponibles."
             )
+            if is_baallal_admin and _dbg_save.get('attempts'):
+                error_lines = [
+                    f"{attempt.get('table')} / {attempt.get('payload', '-')}: "
+                    f"{attempt.get('error', 'erreur inconnue')}"
+                    for attempt in _dbg_save['attempts']
+                    if not attempt.get('ok')
+                ]
+                if error_lines:
+                    st.caption("Détail technique de la base :")
+                    st.code("\n".join(error_lines))
         elif is_baallal_admin and supabase_client and _dbg_fetch and _dbg_fetch.get('loaded_from'):
             st.caption(f"✅ Connexion base de données OK — historique chargé depuis `{_dbg_fetch['loaded_from']}` ({_dbg_fetch.get('loaded_count', 0)} PV).")
 
