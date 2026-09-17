@@ -330,6 +330,9 @@ def _normalize_loaded_pv_record(row):
     if reference and not item.get('ref_pv'):
         item['ref_pv'] = reference
 
+    if item.get('ref_pv') is not None:
+        item['ref_pv'] = str(item['ref_pv']).strip()
+
     for key in ('client', 'projet'):
         if not item.get(key) and source.get(key):
             item[key] = source.get(key)
@@ -348,6 +351,8 @@ def _normalize_loaded_pv_record(row):
     for key in ('client', 'projet', 'commentaires', 'coord_essais', 'chef_labo'):
         if not pv_info.get(key) and source.get(key):
             pv_info[key] = source.get(key)
+    if pv_info.get('ref_pv') is not None:
+        pv_info['ref_pv'] = str(pv_info['ref_pv']).strip()
 
     for key in ('date_prelevement', 'lieu_prelevement', 'provenance', 'dossier_no'):
         if not info_prelevement.get(key) and source.get(key):
@@ -1646,12 +1651,19 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
 
     def _build_pv_snapshot():
         """Construit un instantané complet du PV courant pour l'historique."""
-        existing_ids = [p.get('id', 0) for p in st.session_state['historique_pv']]
-        next_id = (max(existing_ids) + 1) if existing_ids else 1
+        numeric_ids = []
+        for previous_pv in st.session_state.get('historique_pv', []):
+            raw_id = previous_pv.get('id') if isinstance(previous_pv, dict) else None
+            try:
+                if raw_id is not None and str(raw_id).strip():
+                    numeric_ids.append(int(float(raw_id)))
+            except (TypeError, ValueError):
+                continue
+        next_id = max(numeric_ids, default=0) + 1
         return {
             'id': next_id,
             'date_creation': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            'ref_pv': st.session_state['pv_info'].get('ref_pv', '').strip(),
+            'ref_pv': str(st.session_state['pv_info'].get('ref_pv', '') or '').strip(),
             'projet': st.session_state['pv_info'].get('projet', ''),
             'client': st.session_state['pv_info'].get('client', ''),
             'info_prelevement': copy.deepcopy(st.session_state['info_prelevement']),
@@ -1665,7 +1677,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         st.info("👁️ **Mode Consultation** : Vous êtes en lecture seule.")
 
     saved_num_rapports = [
-        pv.get('ref_pv', '').strip().lower() 
+        str(pv.get('ref_pv', '') or '').strip().lower()
         for pv in st.session_state.get('historique_pv', []) 
         if pv.get('ref_pv')
     ]
@@ -1984,7 +1996,7 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                 # Mise à jour ou ajout dans la liste locale de session
                 existing_idx = None
                 for idx_pv, p_item in enumerate(st.session_state['historique_pv']):
-                    if p_item.get('ref_pv', '').strip().lower() == new_num_rapport.strip().lower():
+                    if str(p_item.get('ref_pv', '') or '').strip().lower() == new_num_rapport.strip().lower():
                         existing_idx = idx_pv
                         break
 
