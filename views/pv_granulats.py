@@ -302,7 +302,12 @@ def _synthesis_month_info(pv_item):
 def _normalize_loaded_pv_record(row):
     """Convertit les anciens schémas de stockage en snapshot de PV uniforme."""
     source = _as_synthesis_mapping(row)
-    payload = _as_synthesis_mapping(source.get('data') or source.get('pv_data'))
+    payload = {}
+    for payload_key in ('data', 'pv_data', 'payload', 'snapshot', 'pv', 'json_data'):
+        candidate = _as_synthesis_mapping(source.get(payload_key))
+        if candidate:
+            payload = candidate
+            break
     item = copy.deepcopy(payload) if payload else copy.deepcopy(source)
 
     # Les colonnes d'identification de la table restent utiles lorsque le JSON
@@ -1585,11 +1590,18 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
         st.session_state['historique_pv'] = []
 
     # Chargement initial automatique depuis Supabase si reconnecté / déconnecté au préalable
-    if supabase_client and not st.session_state.get('pvs_loaded_from_db', False):
+    # Version de lecture : elle force une nouvelle lecture après une mise à
+    # jour du schéma de l'historique, même si Streamlit conserve la session.
+    history_load_version = 'history-loader-v3'
+    if (
+        supabase_client
+        and st.session_state.get('_pvs_loaded_from_db_version') != history_load_version
+    ):
         db_pvs = fetch_pvs_from_supabase(supabase_client)
         if db_pvs is not None:
             st.session_state['historique_pv'] = db_pvs
         st.session_state['pvs_loaded_from_db'] = True
+        st.session_state['_pvs_loaded_from_db_version'] = history_load_version
 
     # Normalise aussi les fiches déjà présentes en session, notamment après
     # une mise à jour de l'application sans redémarrage complet.
@@ -2100,6 +2112,15 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
     # ------------------------------------------------------------------------------
     with tabs[2]:
         st.header("Historique et Sauvegarde des PV")
+
+        if supabase_client:
+            if st.button(
+                "🔄 Recharger l'historique depuis la base",
+                key=f"{prefix}_reload_history"
+            ):
+                st.session_state.pop('_pvs_loaded_from_db_version', None)
+                st.session_state.pop('pvs_loaded_from_db', None)
+                st.rerun()
 
         # Diagnostic : le message d'alerte reste visible pour tout le monde
         # UNIQUEMENT s'il y a un vrai problème (ça affecte la sécurité de leurs
