@@ -66,6 +66,11 @@ REFERENTIEL_MATERIAUX = {
         "exigence_mc": 98.0, 
         "exigence_fc": 98.0
     },
+    "GNF1 -Couche de base": {
+        "exigence_str": ">= 98 % OPM", 
+        "exigence_mc": 98.0, 
+        "exigence_fc": 98.0
+    },
     "couche de forme 0/60": {
         "exigence_str": "q3 : pdmc >= 98,5 % OPN ; pdfc >= 96 % OPN", 
         "exigence_mc": 98.5, 
@@ -163,7 +168,7 @@ def generate_pv_compacite_pdf(header_info, points_data, signataire_coord="O. IKE
     pdf.set_font("Helvetica", "B", 9.5)
     pdf.cell(190, 8, clean_text(" II - Résultats des Essais de Compacité"), 1, 1, "L", fill=True)
 
-    is_gnf1 = type_materiau in ["GNF 1 (1ère couche)", "GNF 1 (2ème couche)"]
+    is_gnf1 = type_materiau in ["GNF 1 (1ère couche)", "GNF 1 (2ème couche)", "GNF1 -Couche de base"]
 
     if is_gnf1:
         headers = ["Réf", "Désignation", "D. Sèche", "D. Réf", "w (%)", "% > 20mm", "IC (%)", "Commentaire"]
