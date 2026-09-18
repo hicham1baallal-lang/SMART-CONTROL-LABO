@@ -1,3 +1,4 @@
+name=essai_compacite.py
 import datetime
 import io
 import os
@@ -56,7 +57,12 @@ REFERENTIEL_MATERIAUX = {
         "exigence_mc": 95.0, 
         "exigence_fc": 95.0
     },
-    "GNF 1": {
+    "GNF 1 (1ère couche)": {
+        "exigence_str": "95 % OPM", 
+        "exigence_mc": 95.0, 
+        "exigence_fc": 95.0
+    },
+    "GNF 1 (2ème couche)": {
         "exigence_str": "98 % OPM", 
         "exigence_mc": 98.0, 
         "exigence_fc": 98.0
