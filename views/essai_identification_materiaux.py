@@ -42,10 +42,11 @@ def _get_subclass_1st_table(pass_80um, ip, vbs, pass_2mm):
 def classer_gtr(dmax, pass_80um, ip, vbs=0.5, pass_2mm=70.0, pass_50mm=80.0, is_roche=False, roche_type=None, is_organique=False):
     """
     Classification GTR officielle.
-    - dmax > 50 mm : D3 si fines à 80µm < 12% et VBS entre 0 et 0,1 ; sinon C1/C2 selon
-      le passant à 50mm (0/50) — C1 si 0/50 > 60% (matériaux roulés/peu charpentés),
-      C2 si 0/50 <= 60% (matériaux anguleux très charpentés) — combiné à la sous-classe
-      fine du diagramme dmax <= 50mm (ex: C2B3).
+    - dmax > 50 mm : D3 strictement si le passant à 80µm ramené à la fraction 0/50mm
+      (pass_80um / pass_50mm * 100) est < 12% ET VBS < 0,1 ; sinon C1/C2 selon le passant
+      à 50mm (0/50) — C1 si 0/50 > 60% (matériaux roulés/peu charpentés), C2 si 0/50 <= 60%
+      (matériaux anguleux très charpentés) — combiné à la sous-classe fine du diagramme
+      dmax <= 50mm (ex: C2B3).
     - dmax <= 50 mm : cf. _get_subclass_1st_table.
     """
     if is_organique:
@@ -63,7 +64,8 @@ def classer_gtr(dmax, pass_80um, ip, vbs=0.5, pass_2mm=70.0, pass_50mm=80.0, is_
     if dmax <= 50:
         return _get_subclass_1st_table(pass_80um, ip, vbs, pass_2mm)
     else:
-        if pass_80um < 12.0 and vbs <= 0.1:
+        pass_80um_dans_050 = (pass_80um / pass_50mm * 100.0) if pass_50mm > 0 else pass_80um
+        if pass_80um_dans_050 < 12.0 and vbs < 0.1:
             return "D3"
         c_base = "C1" if pass_50mm > 60.0 else "C2"
         sub_comp = _get_subclass_1st_table(pass_80um, ip, vbs, pass_2mm)
