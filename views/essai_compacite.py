@@ -42,7 +42,7 @@ REFERENTIEL_MATERIAUX = {
         "exigence_fc": 92.0
     },
     "Remblai contigu (> 1.50m de mur)": {
-        "exigence_str": "q3 : pdmc >= 98.5 % OPN ; pdfc >= 96 % OPN", 
+        "exigence_str": "q3 : pdmc >= 98,5 % OPN ; pdfc >= 96 % OPN", 
         "exigence_mc": 98.5, 
         "exigence_fc": 96.0
     },
@@ -148,7 +148,8 @@ def generate_pv_compacite_pdf(header_info, points_data, signataire_coord="O. IKE
 
     pdf.cell(190, 7, clean_text(f"  Lieu de prélèvement : {header_info.get('lieu_prelevement', '')}"), 1, 1, "L")
 
-    type_mat_str = clean_text(str(header_info.get('type_materiau', ''))[:48])
+    type_materiau = str(header_info.get('type_materiau', ''))
+    type_mat_str = clean_text(type_materiau[:48])
     pdf.cell(95, 7, f"  Type de materiau : {type_mat_str}", 1, 0, "L")
     pdf.cell(95, 7, clean_text(f"  Densité Proctor OPN/OPM : {header_info.get('densite_opn', '2.09')} t/m3"), 1, 1, "L")
 
@@ -162,8 +163,14 @@ def generate_pv_compacite_pdf(header_info, points_data, signataire_coord="O. IKE
     pdf.set_font("Helvetica", "B", 9.5)
     pdf.cell(190, 8, clean_text(" II - Résultats des Essais de Compacité"), 1, 1, "L", fill=True)
 
-    headers = ["Réf", "Désignation", "Niveau", "D. Sèche", "D. Réf", "w (%)", "% > 20mm", "IC (%)", "Commentaire"]
-    widths = [8, 58, 14, 18, 20, 16, 18, 16, 22]
+    is_gnf1 = type_materiau in ["GNF 1 (1ère couche)", "GNF 1 (2ème couche)"]
+
+    if is_gnf1:
+        headers = ["Réf", "Désignation", "D. Sèche", "D. Réf", "w (%)", "% > 20mm", "IC (%)", "Commentaire"]
+        widths = [8, 72, 18, 20, 16, 18, 16, 22]
+    else:
+        headers = ["Réf", "Désignation", "Niveau", "D. Sèche", "D. Réf", "w (%)", "% > 20mm", "IC (%)", "Commentaire"]
+        widths = [8, 58, 14, 18, 20, 16, 18, 16, 22]
 
     pdf.set_fill_color(31, 78, 121)
     pdf.set_text_color(255, 255, 255)
@@ -188,18 +195,28 @@ def generate_pv_compacite_pdf(header_info, points_data, signataire_coord="O. IKE
             fill_row = False
 
         pdf.cell(widths[0], row_height, clean_text(str(p.get("ref_num", ""))), 1, 0, "C", fill=fill_row)
-        pdf.cell(widths[1], row_height, clean_text(desig[:40]), 1, 0, "L", fill=fill_row)
-        pdf.cell(widths[2], row_height, clean_text(niveau), 1, 0, "C", fill=fill_row)
-        pdf.cell(widths[3], row_height, f"{float(p.get('densite_seche', 0.0)):.3f}", 1, 0, "C", fill=fill_row)
-        pdf.cell(widths[4], row_height, f"{float(p.get('densite_ref', 0.0)):.3f}", 1, 0, "C", fill=fill_row)
-        pdf.cell(widths[5], row_height, f"{float(p.get('w_mesure', 0.0)):.1f}%", 1, 0, "C", fill=fill_row)
-        pdf.cell(widths[6], row_height, f"{float(p.get('refus_20mm', 0.0)):.1f}%", 1, 0, "C", fill=fill_row)
-        pdf.cell(widths[7], row_height, f"{float(p.get('ic', 0.0)):.1f}%", 1, 0, "C", fill=fill_row)
-        pdf.cell(widths[8], row_height, clean_text(str(p.get("observation", "Conforme"))), 1, 1, "C", fill=fill_row)
+        pdf.cell(widths[1], row_height, clean_text(desig[:45 if is_gnf1 else 40]), 1, 0, "L", fill=fill_row)
+        
+        if not is_gnf1:
+            pdf.cell(widths[2], row_height, clean_text(niveau), 1, 0, "C", fill=fill_row)
+            pdf.cell(widths[3], row_height, f"{float(p.get('densite_seche', 0.0)):.3f}", 1, 0, "C", fill=fill_row)
+            pdf.cell(widths[4], row_height, f"{float(p.get('densite_ref', 0.0)):.3f}", 1, 0, "C", fill=fill_row)
+            pdf.cell(widths[5], row_height, f"{float(p.get('w_mesure', 0.0)):.1f}%", 1, 0, "C", fill=fill_row)
+            pdf.cell(widths[6], row_height, f"{float(p.get('refus_20mm', 0.0)):.1f}%", 1, 0, "C", fill=fill_row)
+            pdf.cell(widths[7], row_height, f"{float(p.get('ic', 0.0)):.1f}%", 1, 0, "C", fill=fill_row)
+            pdf.cell(widths[8], row_height, clean_text(str(p.get("observation", "Conforme"))), 1, 1, "C", fill=fill_row)
+        else:
+            pdf.cell(widths[2], row_height, f"{float(p.get('densite_seche', 0.0)):.3f}", 1, 0, "C", fill=fill_row)
+            pdf.cell(widths[3], row_height, f"{float(p.get('densite_ref', 0.0)):.3f}", 1, 0, "C", fill=fill_row)
+            pdf.cell(widths[4], row_height, f"{float(p.get('w_mesure', 0.0)):.1f}%", 1, 0, "C", fill=fill_row)
+            pdf.cell(widths[5], row_height, f"{float(p.get('refus_20mm', 0.0)):.1f}%", 1, 0, "C", fill=fill_row)
+            pdf.cell(widths[6], row_height, f"{float(p.get('ic', 0.0)):.1f}%", 1, 0, "C", fill=fill_row)
+            pdf.cell(widths[7], row_height, clean_text(str(p.get("observation", "Conforme"))), 1, 1, "C", fill=fill_row)
 
-    pdf.ln(5)
-    pdf.set_font("Helvetica", "I", 7.5)
-    pdf.cell(0, 5, clean_text("Légende : fc = fond de couche de la couche compactée | mc = moyenne sur toute l'épaisseur de la couche compactée"), 0, 1, "L")
+    if not is_gnf1:
+        pdf.ln(5)
+        pdf.set_font("Helvetica", "I", 7.5)
+        pdf.cell(0, 5, clean_text("Légende : fc = fond de couche de la couche compactée | mc = moyenne sur toute l'épaisseur de la couche compactée"), 0, 1, "L")
 
     if pdf.get_y() < 215:
         pdf.set_y(215)
