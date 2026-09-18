@@ -13,7 +13,12 @@ from fpdf import FPDF
 
 
 def _get_subclass_1st_table(pass_80um, ip, vbs, pass_2mm):
-    """Sous-classification fine issue du diagramme dmax <= 50 mm."""
+    """
+    Sous-classification fine du sol (issue du diagramme GTR dmax <= 50 mm) :
+    - fines à 80µm >= 35% : classe A1-A4 selon l'IP
+    - 12% <= fines < 35% : classe B5/B6 selon le VBS
+    - fines < 12% : classe D1/D2/B1/B2/B3/B4 selon le passant à 2mm et le VBS
+    """
     if pass_80um >= 35.0:
         if ip < 12: return "A1"
         elif ip < 25: return "A2"
@@ -22,18 +27,27 @@ def _get_subclass_1st_table(pass_80um, ip, vbs, pass_2mm):
     elif pass_80um >= 12.0:
         return "B5" if vbs < 1.5 else "B6"
     else:
-        if vbs < 0.1:
-            return "D1" if pass_2mm >= 70.0 else "D2"
-        elif vbs <= 0.2:
-            return "B1"
-        elif vbs <= 6.0:
-            return "B2"
+        # Fines à 80µm < 12%
+        if pass_2mm < 70.0:
+            if vbs < 0.1: return "D2"
+            elif vbs <= 0.2: return "B3"
+            else: return "B4"
         else:
-            return "B4"
+            # Passant à 2mm entre 70 et 100%
+            if vbs < 0.1: return "D1"
+            elif vbs <= 0.2: return "B1"
+            else: return "B2"
 
 
-def classer_gtr(dmax, pass_80um, ip, vbs=0.5, pass_2mm=70.0, is_roche=False, roche_type=None, is_organique=False):
-    """Classification GTR officielle avec complément C1/C2 pour dmax > 50 mm."""
+def classer_gtr(dmax, pass_80um, ip, vbs=0.5, pass_2mm=70.0, pass_50mm=80.0, is_roche=False, roche_type=None, is_organique=False):
+    """
+    Classification GTR officielle.
+    - dmax > 50 mm : D3 si fines à 80µm < 12% et VBS entre 0 et 0,1 ; sinon C1/C2 selon
+      le passant à 50mm (0/50) — C1 si 0/50 > 60% (matériaux roulés/peu charpentés),
+      C2 si 0/50 <= 60% (matériaux anguleux très charpentés) — combiné à la sous-classe
+      fine du diagramme dmax <= 50mm (ex: C2B3).
+    - dmax <= 50 mm : cf. _get_subclass_1st_table.
+    """
     if is_organique:
         return "F"
     
@@ -49,9 +63,9 @@ def classer_gtr(dmax, pass_80um, ip, vbs=0.5, pass_2mm=70.0, is_roche=False, roc
     if dmax <= 50:
         return _get_subclass_1st_table(pass_80um, ip, vbs, pass_2mm)
     else:
-        if pass_80um < 12.0 and vbs < 0.1:
+        if pass_80um < 12.0 and vbs <= 0.1:
             return "D3"
-        c_base = "C1" if pass_2mm <= 80.0 else "C2"
+        c_base = "C1" if pass_50mm > 60.0 else "C2"
         sub_comp = _get_subclass_1st_table(pass_80um, ip, vbs, pass_2mm)
         return f"{c_base}{sub_comp}"
 
@@ -970,7 +984,7 @@ def show(supabase_client):
 
         if mat_config["family"] == "REMBLAI":
             vbs_pour_gtr_ctg = vbs_gtr_val if mat_config.get("use_vbs_for_gtr") else vbs_val
-            classe_auto = classer_gtr(dmax_detected, pass_fines_val, ip, vbs_pour_gtr_ctg, pass_2mm_val)
+            classe_auto = classer_gtr(dmax_detected, pass_fines_val, ip, vbs_pour_gtr_ctg, pass_2mm_val, pass_50mm_val)
             f_st.metric(f"Classe GTR (Auto) — {mat_code}", classe_auto)
 
             if mat_code == "REM-CTG2":
@@ -1005,7 +1019,7 @@ def show(supabase_client):
             somme_la_mde = None
             if mat_config.get("show_gtr_extra"):
                 vbs_pour_gtr = vbs_gtr_val if mat_config.get("use_vbs_for_gtr") else vbs_val
-                classe_gtr_extra = classer_gtr(dmax_detected, pass_fines_val, ip, vbs_pour_gtr, pass_2mm_val)
+                classe_gtr_extra = classer_gtr(dmax_detected, pass_fines_val, ip, vbs_pour_gtr, pass_2mm_val, pass_50mm_val)
                 f_st.metric(f"Classification GTR — {mat_code}", classe_gtr_extra)
             if mat_config.get("show_rt_extra"):
                 qualite_rt, somme_la_mde = classer_qualite_rt(la_val, mde_val)
