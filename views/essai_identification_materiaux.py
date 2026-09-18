@@ -228,7 +228,7 @@ def verifier_cpc_grave(la, mde, es, ip, vb, has_vb, check_es=True, la_max=30.0, 
     Vérifie l'exigence CPC pour les graves non traitées :
     - Caractéristiques mécaniques : LA < la_max, MDE < mde_max
     - Propreté : IP < 6 ET ES >= 45 — sauf pour les matériaux qui utilisent le VB
-      (Valeur au Bleu) au lieu de l'IP (ex: GNF, GNA), auquel cas VB < 1,2.
+      (Valeur au Bleu) au lieu de l'IP (ex: GNF, GNA), auquel cas VB < 1,0.
     - es_min_with_vb : si défini, un ES minimal (souvent mesuré sur 0/5mm) est en plus
       exigé même pour les matériaux qui utilisent le VB (ex: GNA : VB<1,0 ET ES 0/5>30).
     - check_es=False : l'ES n'est pas mesuré pour ce matériau, seul IP < 6 est vérifié.
