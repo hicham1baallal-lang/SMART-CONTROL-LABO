@@ -1,4 +1,3 @@
-name=essai_compacite.py
 import datetime
 import io
 import os
