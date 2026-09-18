@@ -98,7 +98,19 @@ MATERIAL_TYPES = {
         "obs_mode": "cdf",
         "gtr_classes_autorisees": {"B3", "C1B3", "D2", "D3", "R21", "R41", "R61", "F31", "F71"},
     },
-    "SC-031": {"label": "Sous couche 0/31.5", "family": "GRAVE", "has_vbs": False},
+    "SC-031": {
+        "label": "Sous couche 0/31.5", "family": "GRAVE", "has_vbs": False,
+        "hide_es": True, "show_gtr_extra": True, "use_vbs_for_gtr": True,
+        "show_mb": True,
+        "fi_max": 25.0, "mb_max": 3.0, "vbs_gtr_max": 0.1, "la_mde_max": 40.0,
+        "check_mde": False, "la_mde_strict": True,
+        "la_exigence_txt": "-", "mde_exigence_txt": "-",
+        "la_mde_exigence_txt": "< 40",
+        "coeff_apl_exigence_txt": "< 25", "mb_exigence_txt": "< 3", "vbs_gtr_exigence_txt": "< 0,1",
+        "exigence_col_label": "Exigence Marché (Fiche N°01-IN0091)",
+        "obs_mode": "cdf",
+        "gtr_classes_autorisees": {"D2", "D3", "R21", "R41", "R61"},
+    },
     "GNF-040": {"label": "GNF 0/40", "family": "GRAVE", "has_vbs": True},
     "GNA-031": {
         "label": "GNA 0/31.5", "family": "GRAVE", "has_vbs": True,
@@ -243,6 +255,17 @@ FUSEAUX_GRANULO = {
         (63, 99, 100),
         (100, 100, 100),
     ],
+    "SC-031": [
+        (0.063, 4, 8),
+        (0.5, 10, 22),
+        (1, 14, 31),
+        (2, 19, 39),
+        (4, 26, 49),
+        (8, 37, 63),
+        (16, 55, 81),
+        (31.5, 85, 99),
+        (63, 100, 100),
+    ],
 }
 
 
@@ -312,30 +335,33 @@ GTR_CLASSES_AUTORISEES_CTG2 = {"D3", "C2B3", "C2", "B4", "B5", "R21", "R22"}
 
 def verifier_exigence_couche_forme(classe_gtr, mde, coeff_apl, mb, vbs_gtr, la_mde_sum,
                                     gtr_classes, mde_max=40.0, fi_max=25.0, mb_max=5.0,
-                                    vbs_max=0.2, la_mde_max=80.0):
+                                    vbs_max=0.2, la_mde_max=80.0, check_mde=True, la_mde_strict=False):
     """
-    Vérifie l'exigence Marché (Fiche N°04-IN0091) pour la Couche de forme 0/50 :
-    Classification GTR dans une liste donnée, MDE <= mde_max, Coefficient d'aplatissement
+    Vérifie l'exigence Marché (fiche produit) pour les graves de type couche de forme /
+    sous-couche : Classification GTR dans une liste donnée, Coefficient d'aplatissement
     (FI) < fi_max, Bleu de méthylène (MB, sur 0/2mm) < mb_max, VBS < vbs_max,
-    et LA+MDE <= la_mde_max.
+    LA+MDE < ou <= la_mde_max (selon la_mde_strict), et en option MDE <= mde_max seul.
     """
     classe_txt = str(classe_gtr).strip().upper()
     ok_gtr = classe_txt in gtr_classes
-    ok_mde = mde <= mde_max
     ok_fi = coeff_apl < fi_max
     ok_mb = mb < mb_max
     ok_vbs = vbs_gtr < vbs_max
-    ok_la_mde = la_mde_sum <= la_mde_max
+    ok_la_mde = (la_mde_sum < la_mde_max) if la_mde_strict else (la_mde_sum <= la_mde_max)
 
-    conforme = ok_gtr and ok_mde and ok_fi and ok_mb and ok_vbs and ok_la_mde
-    detail = (
-        f"GTR {'admise' if ok_gtr else 'NON admise'} ({classe_gtr}) | "
-        f"MDE {'<=' if ok_mde else '>'} {mde_max:.0f} ({mde:.1f}%) | "
-        f"FI {'<' if ok_fi else '>='} {fi_max:.0f} ({coeff_apl:.1f}%) | "
-        f"MB {'<' if ok_mb else '>='} {mb_max:.0f} ({mb:.1f}) | "
-        f"VBS {'<' if ok_vbs else '>='} {vbs_max:.1f} ({vbs_gtr:.2f}) | "
-        f"LA+MDE {'<=' if ok_la_mde else '>'} {la_mde_max:.0f} ({la_mde_sum:.1f})"
-    )
+    conforme = ok_gtr and ok_fi and ok_mb and ok_vbs and ok_la_mde
+    parts = [
+        f"GTR {'admise' if ok_gtr else 'NON admise'} ({classe_gtr})",
+    ]
+    if check_mde:
+        ok_mde = mde <= mde_max
+        conforme = conforme and ok_mde
+        parts.append(f"MDE {'<=' if ok_mde else '>'} {mde_max:.0f} ({mde:.1f}%)")
+    parts.append(f"FI {'<' if ok_fi else '>='} {fi_max:.0f} ({coeff_apl:.1f}%)")
+    parts.append(f"MB {'<' if ok_mb else '>='} {mb_max:.0f} ({mb:.1f})")
+    parts.append(f"VBS {'<' if ok_vbs else '>='} {vbs_max:.2f} ({vbs_gtr:.2f})")
+    parts.append(f"LA+MDE {'<' if la_mde_strict else '<='} {la_mde_max:.0f} ({la_mde_sum:.1f})")
+    detail = " | ".join(parts)
     return conforme, detail
 
 
@@ -1140,6 +1166,8 @@ def show(supabase_client):
                     mb_max=mat_config.get("mb_max", 5.0),
                     vbs_max=mat_config.get("vbs_gtr_max", 0.2),
                     la_mde_max=mat_config.get("la_mde_max", 80.0),
+                    check_mde=mat_config.get("check_mde", True),
+                    la_mde_strict=mat_config.get("la_mde_strict", False),
                 )
                 cdf_badge = "✅ Conforme" if cpc_conforme else "❌ Non Conforme"
                 f_st.metric(f"Exigence Marché — {mat_code}", cdf_badge)
