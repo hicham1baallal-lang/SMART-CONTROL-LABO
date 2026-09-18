@@ -88,7 +88,16 @@ MATERIAL_TYPES = {
         "use_vbs_for_gtr": True, "fine_sieve_override": 0.08,
         "extra_tamis": [100],
     },
-    "CDF": {"label": "Couche de forme", "family": "GRAVE", "has_vbs": False},
+    "CDF": {
+        "label": "Couche de forme", "family": "GRAVE", "has_vbs": False,
+        "hide_es": True, "show_gtr_extra": True, "use_vbs_for_gtr": True,
+        "show_mb": True, "extra_tamis": [100],
+        "mde_max": 40.0, "fi_max": 25.0, "mb_max": 5.0, "vbs_gtr_max": 0.2, "la_mde_max": 80.0,
+        "la_exigence_txt": "-", "coeff_apl_exigence_txt": "< 25", "mb_exigence_txt": "< 5", "vbs_gtr_exigence_txt": "< 0,2",
+        "exigence_col_label": "Exigence Marché (Fiche N°04-IN0091)",
+        "obs_mode": "cdf",
+        "gtr_classes_autorisees": {"B3", "C1B3", "D2", "D3", "R21", "R41", "R61", "F31", "F71"},
+    },
     "SC-031": {"label": "Sous couche 0/31.5", "family": "GRAVE", "has_vbs": False},
     "GNF-040": {"label": "GNF 0/40", "family": "GRAVE", "has_vbs": True},
     "GNA-031": {
@@ -221,6 +230,19 @@ FUSEAUX_GRANULO = {
         (20, 62, 90),
         (31.5, 85, 100),
     ],
+    "CDF": [
+        (0.063, 2, 6),
+        (0.1, 3, 9),
+        (0.25, 6, 16),
+        (0.5, 8, 22),
+        (1, 11, 30),
+        (2.5, 17, 40),
+        (10, 31, 60),
+        (25, 55, 84),
+        (50, 85, 99),
+        (63, 99, 100),
+        (100, 100, 100),
+    ],
 }
 
 
@@ -286,6 +308,35 @@ def classer_qualite_rt(la, mde):
 
 # Classes GTR admises pour le Remblai contigu type 2 (exigence spécifique à ce matériau)
 GTR_CLASSES_AUTORISEES_CTG2 = {"D3", "C2B3", "C2", "B4", "B5", "R21", "R22"}
+
+
+def verifier_exigence_couche_forme(classe_gtr, mde, coeff_apl, mb, vbs_gtr, la_mde_sum,
+                                    gtr_classes, mde_max=40.0, fi_max=25.0, mb_max=5.0,
+                                    vbs_max=0.2, la_mde_max=80.0):
+    """
+    Vérifie l'exigence Marché (Fiche N°04-IN0091) pour la Couche de forme 0/50 :
+    Classification GTR dans une liste donnée, MDE <= mde_max, Coefficient d'aplatissement
+    (FI) < fi_max, Bleu de méthylène (MB, sur 0/2mm) < mb_max, VBS < vbs_max,
+    et LA+MDE <= la_mde_max.
+    """
+    classe_txt = str(classe_gtr).strip().upper()
+    ok_gtr = classe_txt in gtr_classes
+    ok_mde = mde <= mde_max
+    ok_fi = coeff_apl < fi_max
+    ok_mb = mb < mb_max
+    ok_vbs = vbs_gtr < vbs_max
+    ok_la_mde = la_mde_sum <= la_mde_max
+
+    conforme = ok_gtr and ok_mde and ok_fi and ok_mb and ok_vbs and ok_la_mde
+    detail = (
+        f"GTR {'admise' if ok_gtr else 'NON admise'} ({classe_gtr}) | "
+        f"MDE {'<=' if ok_mde else '>'} {mde_max:.0f} ({mde:.1f}%) | "
+        f"FI {'<' if ok_fi else '>='} {fi_max:.0f} ({coeff_apl:.1f}%) | "
+        f"MB {'<' if ok_mb else '>='} {mb_max:.0f} ({mb:.1f}) | "
+        f"VBS {'<' if ok_vbs else '>='} {vbs_max:.1f} ({vbs_gtr:.2f}) | "
+        f"LA+MDE {'<=' if ok_la_mde else '>'} {la_mde_max:.0f} ({la_mde_sum:.1f})"
+    )
+    return conforme, detail
 
 
 def verifier_exigence_remblai_ctg2(classe_gtr, pass_fines=None, dmax=None):
@@ -571,9 +622,9 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
         _row3("Los Angeles LA (%)", data_dict.get('LA (%)', '-'), mat_config.get("la_exigence_txt", "< 30"))
         _row3("Micro-Deval MDE (%)", data_dict.get('MDE (%)', '-'), mat_config.get("mde_exigence_txt", f"< {mat_config.get('mde_max', 25):.0f}"))
         if "LA+MDE (%)" in data_dict:
-            _row3("LA + MDE (%)", data_dict.get('LA+MDE (%)', '-'), "< 80")
+            _row3("LA + MDE (%)", data_dict.get('LA+MDE (%)', '-'), mat_config.get("la_mde_exigence_txt", "< 80"))
         if not mat_config.get("hide_coeff_apl"):
-            _row3("Coefficient d'aplatissement (%)", data_dict.get('Coefficient Aplatissement (%)', '-'))
+            _row3("Coefficient d'aplatissement (%)", data_dict.get('Coefficient Aplatissement (%)', '-'), mat_config.get("coeff_apl_exigence_txt", "-"))
         if not mat_config.get("hide_es"):
             es_label = mat_config.get("es_row_label", "Équivalent de Sable ES (%)")
             if mat_config.get("es_exigence_txt"):
@@ -586,10 +637,13 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
             _row3("VB", data_dict.get('VB', data_dict.get('VBS', '-')), vb_max_txt)
             _row3("Indice de Plasticité (IP)", data_dict.get('IP (%)', '-'), "-")
         elif mat_config.get("use_vbs_for_gtr"):
-            _row3("VBS", data_dict.get('VBS', '-'), "-")
+            _row3("VBS", data_dict.get('VBS', '-'), mat_config.get("vbs_gtr_exigence_txt", "-"))
             _row3("Indice de Plasticité (IP)", data_dict.get('IP (%)', '-'), "-")
         else:
             _row3("Indice de Plasticité (IP)", data_dict.get('IP (%)', '-'), "< 6")
+
+        if "MB (g/kg)" in data_dict:
+            _row3("Bleu de Méthylène MB (0/2mm)", data_dict.get('MB (g/kg)', '-'), mat_config.get("mb_exigence_txt", "-"))
 
         pdf.cell(60, 5, " Proctor", 1, 0, "L")
         pdf.set_font("Helvetica", "B", 7)
@@ -903,6 +957,10 @@ def show(supabase_client):
                 if mat_config.get("use_vbs_for_gtr"):
                     vbs_gtr_val = f_st.number_input("VBS (pour classification GTR)", value=0.30, step=0.01, format="%.2f", disabled=not user_can_edit, key=f"vbsgtr_{mat_code}")
 
+                mb_val = 0.0
+                if mat_config.get("show_mb"):
+                    mb_val = f_st.number_input("Bleu de Méthylène MB (0/2mm, g/kg)", value=2.0, step=0.1, disabled=not user_can_edit, key=f"mb_{mat_code}")
+
             work_df = edited_sieve_df.sort_values(by="Tamis (mm)", ascending=False).reset_index(drop=True)
             work_df["Refus Cumulé R (g)"] = np.round(work_df["Refus partiel Ri (g)"].cumsum(), 1)
             work_df["% Refus Cumulé"] = np.round((work_df["Refus Cumulé R (g)"] / m1_val) * 100.0, 1) if m1_val > 0 else 0.0
@@ -1039,16 +1097,20 @@ def show(supabase_client):
         else:
             classe_auto = classer_grave(la_val, mde_val, coeff_apl_val, es_val, pass_fines_val)
 
-            cpc_conforme, cpc_detail = verifier_cpc_grave(
-                la_val, mde_val, es_val, ip, vbs_val, mat_config["has_vbs"],
-                check_es=not mat_config.get("hide_es", False),
-                mde_max=mat_config.get("mde_max", 25.0),
-                es_min_with_vb=mat_config.get("es_min_with_vb"),
-                vb_max=mat_config.get("vb_max", 1.2),
-            )
-            cpc_badge = "✅ Conforme CPC" if cpc_conforme else "❌ Non Conforme CPC"
-            f_st.metric(f"Exigence — {mat_code}", cpc_badge)
-            f_st.caption(f"Détail : {cpc_detail}")
+            obs_mode = mat_config.get("obs_mode")
+
+            cpc_conforme, cpc_detail = None, None
+            if obs_mode != "cdf":
+                cpc_conforme, cpc_detail = verifier_cpc_grave(
+                    la_val, mde_val, es_val, ip, vbs_val, mat_config["has_vbs"],
+                    check_es=not mat_config.get("hide_es", False),
+                    mde_max=mat_config.get("mde_max", 25.0),
+                    es_min_with_vb=mat_config.get("es_min_with_vb"),
+                    vb_max=mat_config.get("vb_max", 1.2),
+                )
+                cpc_badge = "✅ Conforme CPC" if cpc_conforme else "❌ Non Conforme CPC"
+                f_st.metric(f"Exigence — {mat_code}", cpc_badge)
+                f_st.caption(f"Détail : {cpc_detail}")
 
             classe_gtr_extra = None
             qualite_rt = None
@@ -1060,13 +1122,33 @@ def show(supabase_client):
             if mat_config.get("show_rt_extra"):
                 qualite_rt, somme_la_mde = classer_qualite_rt(la_val, mde_val)
                 f_st.metric(f"Qualité RT (LA+MDE) — {mat_code}", qualite_rt, delta=f"LA+MDE = {somme_la_mde:.1f}")
+            elif mat_config.get("la_mde_max") is not None:
+                somme_la_mde = la_val + mde_val
 
-            if mat_config.get("obs_mode") == "gtr_rt":
+            if obs_mode == "gtr_rt":
                 is_conf = (classe_gtr_extra in ("D2", "D3")) and (qualite_rt == "RT2")
                 if is_conf:
                     obs = f"Les résultats d'identification de la {selected_mat_sub} permettent de la classer en qualité RT2, conformément aux spécifications du CCTP."
                 else:
                     obs = f"Les résultats d'identification de la {selected_mat_sub} ne permettent pas de la classer en qualité RT2, conformément aux spécifications du CCTP."
+            elif obs_mode == "cdf":
+                cpc_conforme, cpc_detail = verifier_exigence_couche_forme(
+                    classe_gtr_extra, mde_val, coeff_apl_val, mb_val, vbs_gtr_val, somme_la_mde,
+                    mat_config.get("gtr_classes_autorisees", set()),
+                    mde_max=mat_config.get("mde_max", 40.0),
+                    fi_max=mat_config.get("fi_max", 25.0),
+                    mb_max=mat_config.get("mb_max", 5.0),
+                    vbs_max=mat_config.get("vbs_gtr_max", 0.2),
+                    la_mde_max=mat_config.get("la_mde_max", 80.0),
+                )
+                cdf_badge = "✅ Conforme" if cpc_conforme else "❌ Non Conforme"
+                f_st.metric(f"Exigence Marché — {mat_code}", cdf_badge)
+                f_st.caption(f"Détail : {cpc_detail}")
+                is_conf = cpc_conforme
+                if is_conf:
+                    obs = f"Les résultats d'identification de la {selected_mat_sub} sont conformes aux spécifications du marché."
+                else:
+                    obs = f"Les résultats d'identification de la {selected_mat_sub} ne sont pas conformes aux spécifications du marché."
             else:
                 is_conf = cpc_conforme
                 if is_conf:
@@ -1120,6 +1202,8 @@ def show(supabase_client):
                 data_dict["VB"] = f"{vbs_val:.2f}".replace('.', ',')
             if mat_config.get("use_vbs_for_gtr"):
                 data_dict["VBS"] = f"{vbs_gtr_val:.2f}".replace('.', ',')
+            if mat_config.get("show_mb"):
+                data_dict["MB (g/kg)"] = f"{mb_val:.1f}".replace('.', ',')
 
         if mat_config["family"] == "REMBLAI":
             if mat_code == "REM-CTG2":
@@ -1130,8 +1214,9 @@ def show(supabase_client):
             data_dict["Detail CPC"] = cpc_detail
             if classe_gtr_extra is not None:
                 data_dict["Classification GTR (Extra)"] = classe_gtr_extra
-            if qualite_rt is not None:
+            if somme_la_mde is not None:
                 data_dict["LA+MDE (%)"] = f"{somme_la_mde:.1f}".replace('.', ',')
+            if qualite_rt is not None:
                 data_dict["Qualite RT"] = qualite_rt
 
         if f_st.button("💾 Enregistrer le PV dans l'Historique", type="primary", use_container_width=True, disabled=not user_can_edit):
