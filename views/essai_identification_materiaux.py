@@ -91,7 +91,11 @@ MATERIAL_TYPES = {
     "CDF": {"label": "Couche de forme", "family": "GRAVE", "has_vbs": False},
     "SC-031": {"label": "Sous couche 0/31.5", "family": "GRAVE", "has_vbs": False},
     "GNF-040": {"label": "GNF 0/40", "family": "GRAVE", "has_vbs": True},
-    "GNA-031": {"label": "GNA 0/31.5", "family": "GRAVE", "has_vbs": True},
+    "GNA-031": {
+        "label": "GNA 0/31.5", "family": "GRAVE", "has_vbs": True,
+        "mde_max": 20.0, "es_min_with_vb": 30.0,
+        "es_row_label": "Équivalent de Sable ES 0/5 (%)", "es_exigence_txt": "> 30",
+    },
     "GNT-060": {
         "label": "GNT 0/60", "family": "GRAVE", "has_vbs": False,
         "show_gtr_extra": True, "show_rt_extra": True,
@@ -208,23 +212,42 @@ FUSEAUX_GRANULO = {
         (31.5, 80, 100),
         (40, 85, 100),
     ],
+    "GNA-031": [
+        (0.08, 2, 10),
+        (2, 14, 34),
+        (6.3, 25, 50),
+        (10, 35, 62),
+        (20, 62, 90),
+        (31.5, 85, 100),
+    ],
 }
 
 
-def verifier_cpc_grave(la, mde, es, ip, vb, has_vb, check_es=True):
+def verifier_cpc_grave(la, mde, es, ip, vb, has_vb, check_es=True, la_max=30.0, mde_max=25.0, es_min_with_vb=None):
     """
     Vérifie l'exigence CPC pour les graves non traitées :
-    - Caractéristiques mécaniques : LA < 30, MDE < 25
+    - Caractéristiques mécaniques : LA < la_max, MDE < mde_max
     - Propreté : IP < 6 ET ES >= 45 — sauf pour les matériaux qui utilisent le VB
       (Valeur au Bleu) au lieu de l'IP (ex: GNF, GNA), auquel cas VB < 1,2.
+    - es_min_with_vb : si défini, un ES minimal (souvent mesuré sur 0/5mm) est en plus
+      exigé même pour les matériaux qui utilisent le VB (ex: GNA : VB<1,2 ET ES 0/5>30).
     - check_es=False : l'ES n'est pas mesuré pour ce matériau, seul IP < 6 est vérifié.
     """
-    ok_la = la < 30
-    ok_mde = mde < 25
+    ok_la = la < la_max
+    ok_mde = mde < mde_max
 
     if has_vb:
-        ok_proprete = vb < 1.2
-        proprete_txt = f"VB {'<' if ok_proprete else '>='} 1,2 ({vb:.2f})"
+        ok_vb = vb < 1.2
+        if es_min_with_vb is not None:
+            ok_es_vb = es >= es_min_with_vb
+            ok_proprete = ok_vb and ok_es_vb
+            proprete_txt = (
+                f"VB {'<' if ok_vb else '>='} 1,2 ({vb:.2f}) et "
+                f"ES 0/5 {'>=' if ok_es_vb else '<'} {es_min_with_vb:.0f}% ({es:.1f}%)"
+            )
+        else:
+            ok_proprete = ok_vb
+            proprete_txt = f"VB {'<' if ok_vb else '>='} 1,2 ({vb:.2f})"
     elif check_es:
         ok_ip = ip < 6
         ok_es = es >= 45
@@ -240,8 +263,8 @@ def verifier_cpc_grave(la, mde, es, ip, vb, has_vb, check_es=True):
 
     conforme = ok_la and ok_mde and ok_proprete
     detail = (
-        f"LA {'<' if ok_la else '>='} 30 ({la:.1f}%) | "
-        f"MDE {'<' if ok_mde else '>='} 25 ({mde:.1f}%) | "
+        f"LA {'<' if ok_la else '>='} {la_max:.0f} ({la:.1f}%) | "
+        f"MDE {'<' if ok_mde else '>='} {mde_max:.0f} ({mde:.1f}%) | "
         f"Propreté : {proprete_txt}"
     )
     return conforme, detail
@@ -543,14 +566,19 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
         _row3("%< 2 mm", data_dict.get('Passant 2mm (%)', '66'))
         _row3("%< 50 mm", data_dict.get('Passant 50mm (%)', '100'))
         _row3("D MAX", data_dict.get('Dmax (mm)', '50'))
-        _row3("Los Angeles LA (%)", data_dict.get('LA (%)', '-'), "< 30")
-        _row3("Micro-Deval MDE (%)", data_dict.get('MDE (%)', '-'), "< 25")
+        _row3("Los Angeles LA (%)", data_dict.get('LA (%)', '-'), mat_config.get("la_exigence_txt", "< 30"))
+        _row3("Micro-Deval MDE (%)", data_dict.get('MDE (%)', '-'), mat_config.get("mde_exigence_txt", f"< {mat_config.get('mde_max', 25):.0f}"))
         if "LA+MDE (%)" in data_dict:
             _row3("LA + MDE (%)", data_dict.get('LA+MDE (%)', '-'), "< 80")
         if not mat_config.get("hide_coeff_apl"):
             _row3("Coefficient d'aplatissement (%)", data_dict.get('Coefficient Aplatissement (%)', '-'))
         if not mat_config.get("hide_es"):
-            _row3("Équivalent de Sable ES (%)", data_dict.get('ES (%)', '-'), "-" if mat_config["has_vbs"] else ">= 45")
+            es_label = mat_config.get("es_row_label", "Équivalent de Sable ES (%)")
+            if mat_config.get("es_exigence_txt"):
+                es_exigence = mat_config["es_exigence_txt"]
+            else:
+                es_exigence = "-" if mat_config["has_vbs"] else ">= 45"
+            _row3(es_label, data_dict.get('ES (%)', '-'), es_exigence)
         if mat_config["has_vbs"]:
             _row3("VB", data_dict.get('VB', data_dict.get('VBS', '-')), "< 1,2")
             _row3("Indice de Plasticité (IP)", data_dict.get('IP (%)', '-'), "-")
@@ -1010,7 +1038,9 @@ def show(supabase_client):
 
             cpc_conforme, cpc_detail = verifier_cpc_grave(
                 la_val, mde_val, es_val, ip, vbs_val, mat_config["has_vbs"],
-                check_es=not mat_config.get("hide_es", False)
+                check_es=not mat_config.get("hide_es", False),
+                mde_max=mat_config.get("mde_max", 25.0),
+                es_min_with_vb=mat_config.get("es_min_with_vb"),
             )
             cpc_badge = "✅ Conforme CPC" if cpc_conforme else "❌ Non Conforme CPC"
             f_st.metric(f"Exigence — {mat_code}", cpc_badge)
