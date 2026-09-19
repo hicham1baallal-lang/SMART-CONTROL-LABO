@@ -400,25 +400,22 @@ def calc_fuseau_gnt_pra(dmax):
 
 def calc_dx_from_curve(result_df, x_percent):
     """
-    Interpole le diamètre Dx (mm) correspondant à x% de passant sur la courbe
-    granulométrique (interpolation log-linéaire entre les deux points encadrants).
+    Retourne Dx (mm) : le tamis (parmi les tamis effectivement testés) dont le % passant
+    est le plus proche de x_percent. Ex: D60 = le tamis équivalent au passant à 60% (ou
+    le plus proche), D10 = passant à 10% (ou le plus proche), D30 = passant à 30% (ou le
+    plus proche).
     """
     try:
-        df = result_df[["Tamis (mm)", "% Passant"]].dropna().sort_values("Tamis (mm)").reset_index(drop=True)
-        tamis = df["Tamis (mm)"].astype(float).values
-        passant = df["% Passant"].astype(float).values
+        df = result_df[["Tamis (mm)", "% Passant"]].dropna().copy()
+        df["Tamis (mm)"] = df["Tamis (mm)"].astype(float)
+        df["% Passant"] = df["% Passant"].astype(float)
     except Exception:
         return None
-    for i in range(len(passant) - 1):
-        p1, p2 = passant[i], passant[i + 1]
-        t1, t2 = tamis[i], tamis[i + 1]
-        if (p1 - x_percent) * (p2 - x_percent) <= 0 and p1 != p2:
-            if t1 <= 0 or t2 <= 0:
-                return t2
-            frac = (x_percent - p1) / (p2 - p1)
-            log_tx = np.log10(t1) + frac * (np.log10(t2) - np.log10(t1))
-            return float(10 ** log_tx)
-    return None
+    if df.empty:
+        return None
+    df["ecart"] = (df["% Passant"] - x_percent).abs()
+    row = df.loc[df["ecart"].idxmin()]
+    return float(row["Tamis (mm)"])
 
 
 def calc_cu_cc(result_df):
