@@ -231,6 +231,69 @@ def build_flat_hist_df(combined_records):
     return df
 
 
+def _to_float_safe(value, default=0.0):
+    try:
+        return float(str(value).replace(',', '.').replace('*', '0'))
+    except (TypeError, ValueError):
+        return default
+
+
+def load_pv_into_session(record):
+    """
+    Charge un PV existant (issu de l'historique) dans les champs de saisie pour permettre
+    sa modification : en-tête du PV et essais spécifiques (LA, MDE, ES, VB/VBS, IP, Proctor,
+    Coefficient d'aplatissement, MB...). Le tableau de tamisage (refus par tamis) n'est PAS
+    restauré : seule la courbe % passant résultante est conservée par PV, pas les masses
+    brutes de refus par tamis — il devra être ressaisi si besoin.
+    """
+    details = record.get("details", {}) or {}
+    code = record.get("code_materiau") or get_material_code(record.get("type_materiau"))
+    mat_config = MATERIAL_TYPES.get(code, {})
+
+    f_st.session_state["pv_edit_data"] = record
+    f_st.session_state["sub_page_identification"] = record.get("type_materiau")
+
+    f_st.session_state["pv_num_rapport_input"] = record.get("num_rapport", "")
+    f_st.session_state["pv_lieu_input"] = record.get("lieu", "")
+    f_st.session_state["pv_pk_input"] = record.get("pk", "")
+    f_st.session_state["pv_ref_ech_input"] = details.get("Ref Echantillon", "Ech 1")
+    try:
+        f_st.session_state["pv_date_input"] = datetime.datetime.strptime(str(record.get("date_essai", "")), "%Y-%m-%d").date()
+    except (ValueError, TypeError):
+        pass
+
+    if not uses_granulats_sheet(code, mat_config):
+        f_st.session_state[f"wopt_{code}"] = _to_float_safe(details.get("wL (%)"), 13.2)
+        f_st.session_state[f"dens_{code}"] = _to_float_safe(details.get("Densité OPN"), 1.73)
+        f_st.session_state[f"ip_{code}"] = _to_float_safe(details.get("IP (%)"), 12.0)
+        f_st.session_state[f"vbs_{code}"] = _to_float_safe(details.get("VBS"), 1.45)
+        f_st.session_state[f"fond_tamis_{code}"] = _to_float_safe(details.get("Fond de tamis (g)"), 1.4)
+        f_st.session_state[f"m1_{code}"] = _to_float_safe(details.get("M1 (g)"), 14000.0)
+        f_st.session_state[f"m2_{code}"] = _to_float_safe(details.get("M2 (g)"), 13500.0)
+        f_st.session_state[f"m3_{code}"] = _to_float_safe(details.get("M3 (g)"), 11200.0)
+        f_st.session_state[f"m4_{code}"] = _to_float_safe(details.get("M4 (g)"), 2000.0)
+    else:
+        f_st.session_state[f"wopt_{code}"] = _to_float_safe(details.get("wL (%)"), 6.0)
+        f_st.session_state[f"dens_{code}"] = _to_float_safe(details.get("Densité OPN"), 2.10)
+        f_st.session_state[f"m1g_{code}"] = _to_float_safe(details.get("M1 (g)"), 5000.0)
+        f_st.session_state[f"m2g_{code}"] = _to_float_safe(details.get("M2 (g)"), 4850.0)
+        f_st.session_state[f"fond_tamis_g_{code}"] = _to_float_safe(details.get("Fond de tamis (g)"), 0.0)
+        if not mat_config.get("hide_la_mde"):
+            f_st.session_state[f"la_{code}"] = _to_float_safe(details.get("LA (%)"), 22.0)
+            f_st.session_state[f"mde_{code}"] = _to_float_safe(details.get("MDE (%)"), 15.0)
+        if not mat_config.get("hide_coeff_apl"):
+            f_st.session_state[f"apl_{code}"] = _to_float_safe(details.get("Coefficient Aplatissement (%)"), 18.0)
+        if not mat_config.get("hide_es"):
+            f_st.session_state[f"es_{code}"] = _to_float_safe(details.get("ES (%)"), 45.0)
+        f_st.session_state[f"ip_{code}"] = _to_float_safe(details.get("IP (%)"), 0.0)
+        if mat_config.get("has_vbs"):
+            f_st.session_state[f"vbs_{code}"] = _to_float_safe(details.get("VB", details.get("VBS")), 0.5)
+        if mat_config.get("use_vbs_for_gtr"):
+            f_st.session_state[f"vbsgtr_{code}"] = _to_float_safe(details.get("VBS"), 0.30)
+        if mat_config.get("show_mb"):
+            f_st.session_state[f"mb_{code}"] = _to_float_safe(details.get("MB (g/kg)"), 2.0)
+
+
 # =====================================================================
 # FUSEAUX GRANULOMÉTRIQUES DE SPÉCIFICATION (par code matériau)
 # Chaque entrée : (Tamis mm, VSI = Valeur Seuil Inférieure %, VSS = Valeur Seuil Supérieure %)
@@ -951,16 +1014,29 @@ def show(supabase_client):
     # ---------------------------------------------------------
     with tab_saisir:
         f_st.subheader(f"➕ Saisie PV d'identification — {selected_mat_sub}")
-        
+
+        edit_record = f_st.session_state.get("pv_edit_data")
+        editing_this_material = bool(edit_record) and edit_record.get("type_materiau") == selected_mat_sub
+        if editing_this_material:
+            f_st.info(f"✏️ Modification du PV **{edit_record.get('num_rapport')}**. Le tableau de tamisage n'est pas restauré automatiquement (seule la courbe résultante est conservée) : ressaisis les refus si besoin, puis réenregistre pour écraser ce PV.")
+            if f_st.button("🧹 Quitter le mode modification (nouveau PV vierge)"):
+                del f_st.session_state["pv_edit_data"]
+                f_st.rerun()
+
         c1, c2, c3 = f_st.columns(3)
         with c1:
-            num_rapport = f_st.text_input("N° Rapport", value="25/260/LGV/CS/1150", disabled=not user_can_edit)
-            lieu = f_st.text_input("Lieu / Zone", value="Stock sur chantier (Zone T4)", disabled=not user_can_edit)
+            f_st.session_state.setdefault("pv_num_rapport_input", "25/260/LGV/CS/1150")
+            f_st.session_state.setdefault("pv_lieu_input", "Stock sur chantier (Zone T4)")
+            num_rapport = f_st.text_input("N° Rapport", key="pv_num_rapport_input", disabled=not user_can_edit)
+            lieu = f_st.text_input("Lieu / Zone", key="pv_lieu_input", disabled=not user_can_edit)
         with c2:
-            pk = f_st.text_input("Provenance d'échantillon", value="PK 5+450 à PK 10+000", disabled=not user_can_edit)
-            date_essai = f_st.date_input("Date du prélèvement", value=datetime.date.today(), disabled=not user_can_edit)
+            f_st.session_state.setdefault("pv_pk_input", "PK 5+450 à PK 10+000")
+            f_st.session_state.setdefault("pv_date_input", datetime.date.today())
+            pk = f_st.text_input("Provenance d'échantillon", key="pv_pk_input", disabled=not user_can_edit)
+            date_essai = f_st.date_input("Date du prélèvement", key="pv_date_input", disabled=not user_can_edit)
         with c3:
-            ref_ech = f_st.text_input("Référence Échantillon", value="Ech 1", disabled=not user_can_edit)
+            f_st.session_state.setdefault("pv_ref_ech_input", "Ech 1")
+            ref_ech = f_st.text_input("Référence Échantillon", key="pv_ref_ech_input", disabled=not user_can_edit)
 
         f_st.markdown("---")
         
@@ -1457,31 +1533,43 @@ def show(supabase_client):
                 save_error = None
                 if supabase_client:
                     try:
-                        res = supabase_client.table("pv_identification_materiaux").insert(payload_record).execute()
+                        res = supabase_client.table("pv_identification_materiaux").upsert(payload_record, on_conflict="num_rapport").execute()
                         saved_to_db = True
                     except Exception as e:
                         save_error = str(e)
                         # Repli : la table Supabase n'a peut-être pas encore les colonnes
-                        # code_materiau / famille_materiau (schéma pas encore migré).
-                        # On retire ces colonnes en trop et on retente l'insertion, pour ne
-                        # jamais bloquer l'enregistrement d'un PV à cause de ça.
+                        # code_materiau / famille_materiau (schéma pas encore migré), ou pas
+                        # de contrainte unique sur num_rapport pour l'upsert. On retire les
+                        # colonnes en trop et on retente en upsert puis en insert simple, pour
+                        # ne jamais bloquer l'enregistrement d'un PV à cause de ça.
                         if "schema cache" in save_error or "PGRST204" in save_error or "code_materiau" in save_error or "famille_materiau" in save_error:
                             try:
                                 fallback_payload = {
                                     k: v for k, v in payload_record.items()
                                     if k not in ("code_materiau", "famille_materiau")
                                 }
-                                supabase_client.table("pv_identification_materiaux").insert(fallback_payload).execute()
+                                supabase_client.table("pv_identification_materiaux").upsert(fallback_payload, on_conflict="num_rapport").execute()
                                 saved_to_db = True
                                 save_error = None
                             except Exception as e2:
                                 save_error = str(e2)
+                        if not saved_to_db:
+                            try:
+                                supabase_client.table("pv_identification_materiaux").delete().eq("num_rapport", num_rapport).execute()
+                                supabase_client.table("pv_identification_materiaux").insert(payload_record).execute()
+                                saved_to_db = True
+                                save_error = None
+                            except Exception as e3:
+                                save_error = str(e3)
                 
                 f_st.session_state["pv_ident_local_db"] = [
                     r for r in f_st.session_state["pv_ident_local_db"] if r.get("num_rapport") != num_rapport
                 ]
                 f_st.session_state["pv_ident_local_db"].insert(0, payload_record)
-                
+
+                if f_st.session_state.get("pv_edit_data"):
+                    del f_st.session_state["pv_edit_data"]
+
                 if saved_to_db:
                     f_st.success("✅ PV enregistré avec succès dans Supabase !")
                 elif supabase_client is None:
@@ -1536,6 +1624,11 @@ def show(supabase_client):
                         key=f"dl_pdf_btn_{idx}_{row.get('num_rapport')}",
                         use_container_width=True
                     )
+
+                    if f_st.button(f"✏️ Modifier ce PV ({row.get('num_rapport')})", key=f"edit_pv_btn_{idx}_{row.get('num_rapport')}", disabled=not user_can_edit, use_container_width=True):
+                        load_pv_into_session(row)
+                        f_st.toast(f"PV {row.get('num_rapport')} chargé — ouvre l'onglet « ➕ Saisir Essai » pour le modifier.", icon="✏️")
+                        f_st.rerun()
 
             f_st.markdown("---")
             f_st.markdown("#### 📊 Tableau des résultats d'essai (valeurs à 0 affichées comme « * »)")
