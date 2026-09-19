@@ -695,8 +695,8 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
     pdf.cell(190, 5.5, " Résultats d'essais", 1, 1, "C", fill=True)
     
     ech_label = data_dict.get('Ref Echantillon', 'Ech 1')
-    val_wopt = str(data_dict.get('wL (%)', '14,2'))
-    val_dens = str(data_dict.get('Densité OPN', '1,73'))
+    val_wopt = str(_zero_to_star(data_dict.get('wL (%)', '14,2')))
+    val_dens = str(_zero_to_star(data_dict.get('Densité OPN', '1,73')))
     val_class = str(data_dict.get('Classification (Auto)', data_dict.get('Classe GTR (Auto)', 'B5')))
 
     if family == "REMBLAI" and mat_code == "REM-CTG2":
