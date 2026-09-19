@@ -1189,6 +1189,11 @@ def show(supabase_client):
             fine_sieve_ref = mat_config.get("fine_sieve_override", 0.063)
             fine_sieve_label = "0,08 mm" if fine_sieve_ref == 0.08 else "0,063 mm"
 
+        if not uses_granulats_sheet(mat_code, mat_config):
+            dmax_detected = float(result_df[(result_df["R_i (g) [≥10mm]"] > 0) | (result_df["r_i (g) [<10mm]"] > 0)]["Tamis (mm)"].max()) if any((result_df["R_i (g) [≥10mm]"] > 0) | (result_df["r_i (g) [<10mm]"] > 0)) else 50.0
+        else:
+            dmax_detected = float(result_df[result_df["Refus partiel Ri (g)"] > 0]["Tamis (mm)"].max()) if any(result_df["Refus partiel Ri (g)"] > 0) else 40.0
+
         f_st.markdown("#### Courbe Granulométrique & Résultats")
         col_tbl_res, col_plt = f_st.columns([1.1, 0.9])
         with col_tbl_res:
@@ -1244,11 +1249,6 @@ def show(supabase_client):
 
             f_st.pyplot(fig, use_container_width=True)
             plt.close(fig)
-
-        if not uses_granulats_sheet(mat_code, mat_config):
-            dmax_detected = float(result_df[(result_df["R_i (g) [≥10mm]"] > 0) | (result_df["r_i (g) [<10mm]"] > 0)]["Tamis (mm)"].max()) if any((result_df["R_i (g) [≥10mm]"] > 0) | (result_df["r_i (g) [<10mm]"] > 0)) else 50.0
-        else:
-            dmax_detected = float(result_df[result_df["Refus partiel Ri (g)"] > 0]["Tamis (mm)"].max()) if any(result_df["Refus partiel Ri (g)"] > 0) else 40.0
 
         row_fine = result_df[np.isclose(result_df["Tamis (mm)"].astype(float), fine_sieve_ref, atol=1e-3)]
         pass_fines_val = float(row_fine["% Passant"].values[0]) if not row_fine.empty else 22.3
