@@ -918,8 +918,14 @@ def _safe_supabase_fetch(supabase_client):
 def show(supabase_client):
     user_name = str(f_st.session_state.get("user_name", f_st.session_state.get("user", {}).get("username", ""))).upper()
     user_role = str(f_st.session_state.get("role", "")).upper()
-    is_admin = ("ADMIN" in user_role) or ("BAALLAL" in user_name)
-    user_can_edit = is_admin or ("LABO" in user_role)
+    is_baallal = "BAALLAL" in user_name
+    is_amina = "AMINA" in user_name
+    is_admin = ("ADMIN" in user_role) or is_baallal
+    # Modification des essais (tous types de matériaux) autorisée pour BAALLAL et AMINA,
+    # ainsi que pour les rôles Admin / Labo existants.
+    user_can_edit = is_admin or is_amina or ("LABO" in user_role)
+    # Suppression d'un PV strictement réservée à l'Admin BAALLAL.
+    user_can_delete = is_baallal
 
     if "pv_ident_local_db" not in f_st.session_state:
         f_st.session_state["pv_ident_local_db"] = []
@@ -1536,8 +1542,10 @@ def show(supabase_client):
             df_flat_hist = build_flat_hist_df(df_hist.to_dict("records"))
             f_st.dataframe(df_flat_hist, use_container_width=True)
 
-            selected_del = f_st.selectbox("Sélectionner un PV à supprimer (Admin/Labo)", options=[""] + df_hist["num_rapport"].tolist() if "num_rapport" in df_hist else [], key="del_pv_select")
-            if selected_del and f_st.button("🗑️ Supprimer ce PV", disabled=not user_can_edit, key="del_pv_btn"):
+            selected_del = f_st.selectbox("Sélectionner un PV à supprimer (Admin BAALLAL uniquement)", options=[""] + df_hist["num_rapport"].tolist() if "num_rapport" in df_hist else [], key="del_pv_select", disabled=not user_can_delete)
+            if not user_can_delete:
+                f_st.caption("🔒 La suppression d'un PV est strictement réservée à l'Admin BAALLAL.")
+            if selected_del and f_st.button("🗑️ Supprimer ce PV", disabled=not user_can_delete, key="del_pv_btn"):
                 if supabase_client:
                     try:
                         supabase_client.table("pv_identification_materiaux").delete().eq("num_rapport", selected_del).execute()
