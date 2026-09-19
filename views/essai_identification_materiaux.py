@@ -1,6 +1,7 @@
 import datetime
 import io
 import os
+import re
 import unicodedata
 import matplotlib.pyplot as plt
 import numpy as np
@@ -124,7 +125,18 @@ MATERIAL_TYPES = {
         "hide_es": True, "hide_coeff_apl": True, "use_vbs_for_gtr": True,
         "exigence_col_label": "Exigence", "obs_mode": "gtr_rt",
     },
-    "GNT-PRA": {"label": "GNT Bloc technique PRA", "family": "GRAVE", "has_vbs": False},
+    "GNT-PRA": {
+        "label": "GNT Bloc technique PRA", "family": "GRAVE", "has_vbs": False,
+        "hide_es": True, "show_gtr_extra": True, "use_vbs_for_gtr": True,
+        "fuseau_dynamic": "gnt_pra",
+        "fi_max": 25.0, "vbs_gtr_max": 0.2, "la_mde_max": 80.0,
+        "check_mde": False, "la_mde_strict": False,
+        "la_exigence_txt": "-", "mde_exigence_txt": "-",
+        "la_mde_exigence_txt": "<= 80",
+        "coeff_apl_exigence_txt": "< 25", "vbs_gtr_exigence_txt": "< 0,2",
+        "exigence_col_label": "Exigence Marché (Fiche N°09-IN0091)",
+        "obs_mode": "gnt_pra",
+    },
 }
 
 
@@ -224,6 +236,35 @@ def build_flat_hist_df(combined_records):
 # Chaque entrée : (Tamis mm, VSI = Valeur Seuil Inférieure %, VSS = Valeur Seuil Supérieure %)
 # Ajouter une entrée par code pour afficher son fuseau sur la courbe.
 # =====================================================================
+def _interp_x_position(tamis_value, plot_curve_df):
+    """
+    Retourne une position x (flottante) sur l'axe catégoriel des tamis testés pour une
+    valeur de tamis arbitraire (utile pour un fuseau dont les points ne correspondent pas
+    exactement à un tamis effectivement testé), par interpolation log-linéaire entre les
+    deux tamis testés encadrants.
+    """
+    try:
+        df = plot_curve_df.sort_values("Tamis (mm)").reset_index(drop=True)
+        tamis_arr = df["Tamis (mm)"].astype(float).values
+    except Exception:
+        return None
+    n = len(tamis_arr)
+    if n == 0 or tamis_value is None or tamis_value <= 0:
+        return None
+    if tamis_value <= tamis_arr[0]:
+        return 0.0
+    if tamis_value >= tamis_arr[-1]:
+        return float(n - 1)
+    for i in range(n - 1):
+        t1, t2 = tamis_arr[i], tamis_arr[i + 1]
+        if t1 <= tamis_value <= t2:
+            if t1 <= 0 or t2 <= 0 or t1 == t2:
+                return float(i)
+            frac = (np.log10(tamis_value) - np.log10(t1)) / (np.log10(t2) - np.log10(t1))
+            return i + frac
+    return None
+
+
 FUSEAUX_GRANULO = {
     "GNF-040": [
         (0.08, 2, 14),
@@ -333,6 +374,103 @@ def classer_qualite_rt(la, mde):
 GTR_CLASSES_AUTORISEES_CTG2 = {"D3", "C2B3", "C2", "B4", "B5", "R21", "R22"}
 
 
+def calc_fuseau_gnt_pra(dmax):
+    """
+    Fuseau granulométrique paramétrique pour GNT Bloc technique PRA (Fiche N°09-IN0091),
+    exprimé en fractions du Dmax mesuré D (valable pour Dmax entre 20 et 63mm).
+    Retourne une liste de (tamis_mm, VSI, VSS).
+    """
+    if not dmax or dmax <= 0:
+        return []
+    return [
+        (0.063, 0, 12),
+        (dmax / 500.0, 3, 9),
+        (dmax / 200.0, 6, 16),
+        (dmax / 100.0, 8, 22),
+        (dmax / 50.0, 11, 30),
+        (dmax / 20.0, 17, 40),
+        (dmax / 10.0, 23, 49),
+        (dmax / 5.0, 31, 60),
+        (dmax / 2.0, 55, 84),
+        (dmax, 85, 99),
+        (1.58 * dmax, 99, 100),
+        (2.0 * dmax, 100, 100),
+    ]
+
+
+def calc_dx_from_curve(result_df, x_percent):
+    """
+    Interpole le diamètre Dx (mm) correspondant à x% de passant sur la courbe
+    granulométrique (interpolation log-linéaire entre les deux points encadrants).
+    """
+    try:
+        df = result_df[["Tamis (mm)", "% Passant"]].dropna().sort_values("Tamis (mm)").reset_index(drop=True)
+        tamis = df["Tamis (mm)"].astype(float).values
+        passant = df["% Passant"].astype(float).values
+    except Exception:
+        return None
+    for i in range(len(passant) - 1):
+        p1, p2 = passant[i], passant[i + 1]
+        t1, t2 = tamis[i], tamis[i + 1]
+        if (p1 - x_percent) * (p2 - x_percent) <= 0 and p1 != p2:
+            if t1 <= 0 or t2 <= 0:
+                return t2
+            frac = (x_percent - p1) / (p2 - p1)
+            log_tx = np.log10(t1) + frac * (np.log10(t2) - np.log10(t1))
+            return float(10 ** log_tx)
+    return None
+
+
+def calc_cu_cc(result_df):
+    """Calcule Cu = D60/D10 et Cc = D30² / (D10 x D60) à partir de la courbe granulométrique."""
+    d10 = calc_dx_from_curve(result_df, 10.0)
+    d30 = calc_dx_from_curve(result_df, 30.0)
+    d60 = calc_dx_from_curve(result_df, 60.0)
+    cu = (d60 / d10) if (d10 and d60 and d10 > 0) else None
+    cc = ((d30 ** 2) / (d10 * d60)) if (d10 and d30 and d60 and d10 > 0 and d60 > 0) else None
+    return cu, cc, d10, d30, d60
+
+
+GTR_CLASSES_GNT_PRA = {"B3", "D2", "D3", "R21", "R22", "R41", "R42", "R61", "R62", "F31", "F71"}
+
+
+def _gtr_admis_gnt_pra(classe_gtr):
+    """La classe GTR est admise si elle est dans la liste exacte, ou de la forme CiBj (C1/C2 + B1-B6)."""
+    classe_txt = str(classe_gtr).strip().upper()
+    if classe_txt in GTR_CLASSES_GNT_PRA:
+        return True
+    return bool(re.fullmatch(r"C[12]B[1-6]", classe_txt))
+
+
+def verifier_exigence_gnt_pra(classe_gtr, coeff_apl, vbs, la_mde_sum, cu, cc,
+                               fi_max=25.0, vbs_max=0.2, la_mde_max=80.0, cu_min=4.0, cc_min=1.0, cc_max=4.0):
+    """
+    Vérifie l'exigence Marché (Fiche N°09-IN0091) pour la GNT Bloc technique PRA :
+    Classification GTR admise, FI (coeff. aplatissement) < fi_max, VBS < vbs_max,
+    LA+MDE <= la_mde_max, coefficient d'uniformité Cu > cu_min,
+    coefficient de courbure Cc entre cc_min et cc_max.
+    """
+    ok_gtr = _gtr_admis_gnt_pra(classe_gtr)
+    ok_fi = coeff_apl < fi_max
+    ok_vbs = vbs < vbs_max
+    ok_la_mde = la_mde_sum <= la_mde_max
+    ok_cu = (cu is not None) and (cu > cu_min)
+    ok_cc = (cc is not None) and (cc_min <= cc <= cc_max)
+    conforme = ok_gtr and ok_fi and ok_vbs and ok_la_mde and ok_cu and ok_cc
+
+    cu_txt = f"{cu:.2f}" if cu is not None else "N/A"
+    cc_txt = f"{cc:.2f}" if cc is not None else "N/A"
+    detail = (
+        f"GTR {'admise' if ok_gtr else 'NON admise'} ({classe_gtr}) | "
+        f"FI {'<' if ok_fi else '>='} {fi_max:.0f} ({coeff_apl:.1f}%) | "
+        f"VBS {'<' if ok_vbs else '>='} {vbs_max:.1f} ({vbs:.2f}) | "
+        f"LA+MDE {'<=' if ok_la_mde else '>'} {la_mde_max:.0f} ({la_mde_sum:.1f}) | "
+        f"Cu {'>' if ok_cu else '<='} {cu_min:.0f} ({cu_txt}) | "
+        f"Cc {'entre ' + str(cc_min) + ' et ' + str(cc_max) if ok_cc else 'hors plage'} ({cc_txt})"
+    )
+    return conforme, detail
+
+
 def verifier_exigence_couche_forme(classe_gtr, mde, coeff_apl, mb, vbs_gtr, la_mde_sum,
                                     gtr_classes, mde_max=40.0, fi_max=25.0, mb_max=5.0,
                                     vbs_max=0.2, la_mde_max=80.0, check_mde=True, la_mde_strict=False):
@@ -432,9 +570,9 @@ def _build_curve_png_bytes(tamis_vals, passant_vals, ech_label="Ech1", fuseau_de
         if fuseau_def:
             fuseau_x, fuseau_vsi, fuseau_vss = [], [], []
             for tamis_f, vsi_f, vss_f in fuseau_def:
-                row_f = plot_df[np.isclose(plot_df["Tamis (mm)"].astype(float), tamis_f, atol=1e-3)]
-                if not row_f.empty:
-                    fuseau_x.append(int(row_f.index[0]))
+                x_pos = _interp_x_position(tamis_f, plot_df)
+                if x_pos is not None:
+                    fuseau_x.append(x_pos)
                     fuseau_vsi.append(vsi_f)
                     fuseau_vss.append(vss_f)
             if len(fuseau_x) >= 2:
@@ -693,6 +831,18 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
             pdf.set_font("Helvetica", "B", 8)
             pdf.cell(130, 5, str(data_dict.get("Qualite RT")), 1, 1, "C")
 
+        if "Cu" in data_dict:
+            pdf.set_font("Helvetica", "", 7.5)
+            pdf.cell(60, 5, " Coeff. uniformité Cu (D60/D10)", 1, 0, "L")
+            pdf.cell(65, 5, str(data_dict.get("Cu")), 1, 0, "C")
+            pdf.cell(65, 5, "> 4", 1, 1, "C")
+
+        if "Cc" in data_dict:
+            pdf.set_font("Helvetica", "", 7.5)
+            pdf.cell(60, 5, " Coeff. courbure Cc (D30²/D10.D60)", 1, 0, "L")
+            pdf.cell(65, 5, str(data_dict.get("Cc")), 1, 0, "C")
+            pdf.cell(65, 5, "1 à 4", 1, 1, "C")
+
     pdf.ln(2)
 
     pdf.set_font("Helvetica", "B", 8)
@@ -703,7 +853,14 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
     passant_stored = data_dict.get("Courbe Passant (%)")
     curve_buf = None
     if tamis_stored and passant_stored and len(tamis_stored) == len(passant_stored):
-        fuseau_def_pdf = FUSEAUX_GRANULO.get(mat_code) if family == "GRAVE" else None
+        if family == "GRAVE" and mat_config.get("fuseau_dynamic") == "gnt_pra":
+            try:
+                dmax_pdf = float(str(data_dict.get("Dmax (mm)", "0")).replace(',', '.'))
+            except (ValueError, TypeError):
+                dmax_pdf = 0.0
+            fuseau_def_pdf = calc_fuseau_gnt_pra(dmax_pdf)
+        else:
+            fuseau_def_pdf = FUSEAUX_GRANULO.get(mat_code) if family == "GRAVE" else None
         curve_buf = _build_curve_png_bytes(
             tamis_stored, passant_stored,
             ech_label=str(data_dict.get('Ref Echantillon', 'Ech 1')),
@@ -1056,13 +1213,16 @@ def show(supabase_client):
             )
 
             # --- Fuseau de spécification (si défini pour ce code matériau) ---
-            fuseau_def = FUSEAUX_GRANULO.get(mat_code)
+            if mat_config.get("fuseau_dynamic") == "gnt_pra":
+                fuseau_def = calc_fuseau_gnt_pra(dmax_detected)
+            else:
+                fuseau_def = FUSEAUX_GRANULO.get(mat_code)
             if fuseau_def:
                 fuseau_x, fuseau_vsi, fuseau_vss = [], [], []
                 for tamis_f, vsi_f, vss_f in fuseau_def:
-                    row_f = plot_curve_df[np.isclose(plot_curve_df["Tamis (mm)"].astype(float), tamis_f, atol=1e-3)]
-                    if not row_f.empty:
-                        fuseau_x.append(int(row_f.index[0]))
+                    x_pos = _interp_x_position(tamis_f, plot_curve_df)
+                    if x_pos is not None:
+                        fuseau_x.append(x_pos)
                         fuseau_vsi.append(vsi_f)
                         fuseau_vss.append(vss_f)
                 if len(fuseau_x) >= 2:
@@ -1177,6 +1337,25 @@ def show(supabase_client):
                     obs = f"Les résultats d'identification de la {selected_mat_sub} sont conformes aux spécifications du marché."
                 else:
                     obs = f"Les résultats d'identification de la {selected_mat_sub} ne sont pas conformes aux spécifications du marché."
+            elif obs_mode == "gnt_pra":
+                cu_val, cc_val, d10_val, d30_val, d60_val = calc_cu_cc(result_df)
+                cpc_conforme, cpc_detail = verifier_exigence_gnt_pra(
+                    classe_gtr_extra, coeff_apl_val, vbs_gtr_val, somme_la_mde, cu_val, cc_val,
+                    fi_max=mat_config.get("fi_max", 25.0),
+                    vbs_max=mat_config.get("vbs_gtr_max", 0.2),
+                    la_mde_max=mat_config.get("la_mde_max", 80.0),
+                )
+                pra_badge = "✅ Conforme" if cpc_conforme else "❌ Non Conforme"
+                f_st.metric(f"Exigence Marché — {mat_code}", pra_badge)
+                f_st.caption(
+                    f"Détail : {cpc_detail} | D10={d10_val:.3f}mm | D30={d30_val:.3f}mm | D60={d60_val:.3f}mm"
+                    if d10_val and d30_val and d60_val else f"Détail : {cpc_detail}"
+                )
+                is_conf = cpc_conforme
+                if is_conf:
+                    obs = f"Les résultats d'identification de la {selected_mat_sub} sont conformes aux spécifications du marché."
+                else:
+                    obs = f"Les résultats d'identification de la {selected_mat_sub} ne sont pas conformes aux spécifications du marché."
             else:
                 is_conf = cpc_conforme
                 if is_conf:
@@ -1246,6 +1425,9 @@ def show(supabase_client):
                 data_dict["LA+MDE (%)"] = f"{somme_la_mde:.1f}".replace('.', ',')
             if qualite_rt is not None:
                 data_dict["Qualite RT"] = qualite_rt
+            if obs_mode == "gnt_pra":
+                data_dict["Cu"] = f"{cu_val:.2f}".replace('.', ',') if cu_val is not None else "-"
+                data_dict["Cc"] = f"{cc_val:.2f}".replace('.', ',') if cc_val is not None else "-"
 
         if f_st.button("💾 Enregistrer le PV dans l'Historique", type="primary", use_container_width=True, disabled=not user_can_edit):
             existing_records = _safe_supabase_fetch(supabase_client)
