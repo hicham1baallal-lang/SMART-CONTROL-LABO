@@ -480,8 +480,8 @@ def generate_synthesis_excel(filtered_pvs, selected_month):
         "Référence PV",
         "Date de prélèvement",
         "Lieu de prélèvement",
-        "Provenance échantillon",
-        "Fraction des échantillons",
+        "Provenance de l'échantillon",
+        "Fraction",
         "Commentaire",
     ]
     header_row = 5
@@ -2486,8 +2486,8 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                             "Référence PV": reference,
                             "Date de prélèvement": date_value,
                             "Lieu de prélèvement": lieu,
-                            "Provenance échantillon": provenance,
-                            "Fraction des échantillons": fraction_label,
+                            "Provenance de l'échantillon": provenance,
+                            "Fraction": fraction_label,
                             "Commentaire": commentaire,
                         })
                 else:
@@ -2495,8 +2495,8 @@ def show(supabase_client=None, can_edit=True, is_admin=False, **kwargs):
                         "Référence PV": reference,
                         "Date de prélèvement": date_value,
                         "Lieu de prélèvement": lieu,
-                        "Provenance échantillon": provenance,
-                        "Fraction des échantillons": '-',
+                        "Provenance de l'échantillon": provenance,
+                        "Fraction": '-',
                         "Commentaire": commentaire,
                     })
 
