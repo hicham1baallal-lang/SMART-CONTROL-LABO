@@ -1082,13 +1082,17 @@ def show(supabase_client):
 
             col_e1, col_e2, col_e3, col_e4 = f_st.columns(4)
             with col_e1:
-                m1_val = f_st.number_input("Masse totale M1 (g)", value=14000.0, step=0.1, disabled=not user_can_edit, key=f"m1_{mat_code}")
+                f_st.session_state.setdefault(f"m1_{mat_code}", 14000.0)
+                m1_val = f_st.number_input("Masse totale M1 (g)", step=0.1, disabled=not user_can_edit, key=f"m1_{mat_code}")
             with col_e2:
-                m2_val = f_st.number_input("Masse sèche étuve M2 (g)", value=13500.0, step=0.1, disabled=not user_can_edit, key=f"m2_{mat_code}")
+                f_st.session_state.setdefault(f"m2_{mat_code}", 13500.0)
+                m2_val = f_st.number_input("Masse sèche étuve M2 (g)", step=0.1, disabled=not user_can_edit, key=f"m2_{mat_code}")
             with col_e3:
-                m3_val = f_st.number_input("Masse après lavage M3 (g)", value=11200.0, step=0.1, disabled=not user_can_edit, key=f"m3_{mat_code}")
+                f_st.session_state.setdefault(f"m3_{mat_code}", 11200.0)
+                m3_val = f_st.number_input("Masse après lavage M3 (g)", step=0.1, disabled=not user_can_edit, key=f"m3_{mat_code}")
             with col_e4:
-                m4_val = f_st.number_input("Prise tamisage M4 (g)", value=2000.0, step=1.0, disabled=not user_can_edit, key=f"m4_{mat_code}")
+                f_st.session_state.setdefault(f"m4_{mat_code}", 2000.0)
+                m4_val = f_st.number_input("Prise tamisage M4 (g)", step=1.0, disabled=not user_can_edit, key=f"m4_{mat_code}")
 
             f_st.markdown("#### Tableau de Tamisage & Refus")
             default_sieves_desc = [
@@ -1133,7 +1137,8 @@ def show(supabase_client):
                 re_val = f_st.number_input("Refus R_e (10mm) (g)", value=re_val_calc, disabled=True, key=f"re_10mm_mat_{mat_code}")
                 me_val = f_st.number_input("Prise Me (g) [M3-Re]", value=me_val_calc, disabled=True, key=f"me_val_mat_{mat_code}")
 
-                fond_tamis_val = f_st.number_input("Fond de tamis (g)", value=1.4, step=0.1, disabled=not user_can_edit, key=f"fond_tamis_{mat_code}")
+                f_st.session_state.setdefault(f"fond_tamis_{mat_code}", 1.4)
+                fond_tamis_val = f_st.number_input("Fond de tamis (g)", step=0.1, disabled=not user_can_edit, key=f"fond_tamis_{mat_code}")
 
                 try:
                     row_008 = edited_sieve_df[np.isclose(edited_sieve_df["Tamis (mm)"].astype(float), 0.08, atol=1e-3)]
@@ -1144,11 +1149,15 @@ def show(supabase_client):
                 m5_calc = r_008_val + fond_tamis_val
                 m5_val = f_st.number_input("M5 (Total refus et passant sur 80µm)", value=m5_calc, disabled=True, key=f"m5_auto_val_{mat_code}")
 
-                w_opt = f_st.number_input("Proctor Wopt (%)", value=13.2, step=0.5, disabled=not user_can_edit, key=f"wopt_{mat_code}")
-                dens_val = f_st.number_input("Proctor Densité OPN", value=1.73, step=0.01, disabled=not user_can_edit, key=f"dens_{mat_code}")
+                f_st.session_state.setdefault(f"wopt_{mat_code}", 13.2)
+                w_opt = f_st.number_input("Proctor Wopt (%)", step=0.5, disabled=not user_can_edit, key=f"wopt_{mat_code}")
+                f_st.session_state.setdefault(f"dens_{mat_code}", 1.73)
+                dens_val = f_st.number_input("Proctor Densité OPN", step=0.01, disabled=not user_can_edit, key=f"dens_{mat_code}")
 
-                ip = f_st.number_input("Indice de Plasticité (IP)", value=12.0, step=0.5, disabled=not user_can_edit, key=f"ip_{mat_code}")
-                vbs_val = f_st.number_input("VBS (Bleu de Méthylène)", value=1.45, step=0.01, format="%.2f", disabled=not user_can_edit, key=f"vbs_{mat_code}")
+                f_st.session_state.setdefault(f"ip_{mat_code}", 12.0)
+                ip = f_st.number_input("Indice de Plasticité (IP)", step=0.5, disabled=not user_can_edit, key=f"ip_{mat_code}")
+                f_st.session_state.setdefault(f"vbs_{mat_code}", 1.45)
+                vbs_val = f_st.number_input("VBS (Bleu de Méthylène)", step=0.01, format="%.2f", disabled=not user_can_edit, key=f"vbs_{mat_code}")
                 la_val = mde_val = coeff_apl_val = es_val = 0.0
 
                 a_factor = me_val / m4_val if m4_val > 0 else 0
@@ -1198,9 +1207,11 @@ def show(supabase_client):
 
             col_e1, col_e2 = f_st.columns(2)
             with col_e1:
-                m1_val = f_st.number_input("Masse sèche avant lavage M1 (g)", value=5000.0, step=0.1, disabled=not user_can_edit, key=f"m1g_{mat_code}")
+                f_st.session_state.setdefault(f"m1g_{mat_code}", 5000.0)
+                m1_val = f_st.number_input("Masse sèche avant lavage M1 (g)", step=0.1, disabled=not user_can_edit, key=f"m1g_{mat_code}")
             with col_e2:
-                m2_val = f_st.number_input("Masse sèche après lavage 0,063mm M2 (g)", value=4850.0, step=0.1, disabled=not user_can_edit, key=f"m2g_{mat_code}")
+                f_st.session_state.setdefault(f"m2g_{mat_code}", 4850.0)
+                m2_val = f_st.number_input("Masse sèche après lavage 0,063mm M2 (g)", step=0.1, disabled=not user_can_edit, key=f"m2g_{mat_code}")
 
             f_st.markdown("#### Tableau de Tamisage à sec — Refus partiels")
             TAMIS_GRAVE_MM = [
@@ -1238,38 +1249,49 @@ def show(supabase_client):
                 pct_fines_lavage = 100.0 * fines_lavage_g / m1_val if m1_val > 0 else 0.0
                 f_st.metric("Fines < 0,063mm (par lavage)", f"{pct_fines_lavage:.1f} %")
 
-                fond_tamis_val = f_st.number_input("Fond de tamis (g)", value=0.0, step=0.1, disabled=not user_can_edit, key=f"fond_tamis_g_{mat_code}")
+                f_st.session_state.setdefault(f"fond_tamis_g_{mat_code}", 0.0)
+                fond_tamis_val = f_st.number_input("Fond de tamis (g)", step=0.1, disabled=not user_can_edit, key=f"fond_tamis_g_{mat_code}")
 
-                w_opt = f_st.number_input("Proctor Wopt (%)", value=6.0, step=0.5, disabled=not user_can_edit, key=f"wopt_{mat_code}")
-                dens_val = f_st.number_input("Proctor Densité OPN", value=2.10, step=0.01, disabled=not user_can_edit, key=f"dens_{mat_code}")
+                f_st.session_state.setdefault(f"wopt_{mat_code}", 6.0)
+                w_opt = f_st.number_input("Proctor Wopt (%)", step=0.5, disabled=not user_can_edit, key=f"wopt_{mat_code}")
+                f_st.session_state.setdefault(f"dens_{mat_code}", 2.10)
+                dens_val = f_st.number_input("Proctor Densité OPN", step=0.01, disabled=not user_can_edit, key=f"dens_{mat_code}")
 
                 f_st.markdown(f"###### Essais spécifiques — {mat_code} (Grave non traitée)")
                 la_val = 0.0
                 mde_val = 0.0
                 if not mat_config.get("hide_la_mde"):
-                    la_val = f_st.number_input("Los Angeles LA (%)", value=22.0, step=0.5, disabled=not user_can_edit, key=f"la_{mat_code}")
-                    mde_val = f_st.number_input("Micro-Deval MDE (%)", value=15.0, step=0.5, disabled=not user_can_edit, key=f"mde_{mat_code}")
+                    f_st.session_state.setdefault(f"la_{mat_code}", 22.0)
+                    la_val = f_st.number_input("Los Angeles LA (%)", step=0.5, disabled=not user_can_edit, key=f"la_{mat_code}")
+                    f_st.session_state.setdefault(f"mde_{mat_code}", 15.0)
+                    mde_val = f_st.number_input("Micro-Deval MDE (%)", step=0.5, disabled=not user_can_edit, key=f"mde_{mat_code}")
 
                 coeff_apl_val = 0.0
                 if not mat_config.get("hide_coeff_apl"):
-                    coeff_apl_val = f_st.number_input("Coefficient d'aplatissement (%)", value=18.0, step=0.5, disabled=not user_can_edit, key=f"apl_{mat_code}")
+                    f_st.session_state.setdefault(f"apl_{mat_code}", 18.0)
+                    coeff_apl_val = f_st.number_input("Coefficient d'aplatissement (%)", step=0.5, disabled=not user_can_edit, key=f"apl_{mat_code}")
 
                 es_val = 0.0
                 if not mat_config.get("hide_es"):
-                    es_val = f_st.number_input("Équivalent de Sable ES (%)", value=45.0, step=0.5, disabled=not user_can_edit, key=f"es_{mat_code}")
+                    f_st.session_state.setdefault(f"es_{mat_code}", 45.0)
+                    es_val = f_st.number_input("Équivalent de Sable ES (%)", step=0.5, disabled=not user_can_edit, key=f"es_{mat_code}")
 
-                ip = f_st.number_input("Indice de Plasticité (IP)", value=0.0, step=0.5, disabled=not user_can_edit, key=f"ip_{mat_code}")
+                f_st.session_state.setdefault(f"ip_{mat_code}", 0.0)
+                ip = f_st.number_input("Indice de Plasticité (IP)", step=0.5, disabled=not user_can_edit, key=f"ip_{mat_code}")
                 vbs_val = 0.0
                 if mat_config["has_vbs"]:
-                    vbs_val = f_st.number_input("VB (Valeur au Bleu)", value=0.5, step=0.01, format="%.2f", disabled=not user_can_edit, key=f"vbs_{mat_code}")
+                    f_st.session_state.setdefault(f"vbs_{mat_code}", 0.5)
+                    vbs_val = f_st.number_input("VB (Valeur au Bleu)", step=0.01, format="%.2f", disabled=not user_can_edit, key=f"vbs_{mat_code}")
 
                 vbs_gtr_val = 0.0
                 if mat_config.get("use_vbs_for_gtr"):
-                    vbs_gtr_val = f_st.number_input("VBS (pour classification GTR)", value=0.30, step=0.01, format="%.2f", disabled=not user_can_edit, key=f"vbsgtr_{mat_code}")
+                    f_st.session_state.setdefault(f"vbsgtr_{mat_code}", 0.30)
+                    vbs_gtr_val = f_st.number_input("VBS (pour classification GTR)", step=0.01, format="%.2f", disabled=not user_can_edit, key=f"vbsgtr_{mat_code}")
 
                 mb_val = 0.0
                 if mat_config.get("show_mb"):
-                    mb_val = f_st.number_input("Bleu de Méthylène MB (0/2mm, g/kg)", value=2.0, step=0.1, disabled=not user_can_edit, key=f"mb_{mat_code}")
+                    f_st.session_state.setdefault(f"mb_{mat_code}", 2.0)
+                    mb_val = f_st.number_input("Bleu de Méthylène MB (0/2mm, g/kg)", step=0.1, disabled=not user_can_edit, key=f"mb_{mat_code}")
 
             work_df = edited_sieve_df.sort_values(by="Tamis (mm)", ascending=False).reset_index(drop=True)
             work_df["Refus Cumulé R (g)"] = np.round(work_df["Refus partiel Ri (g)"].cumsum(), 1)
