@@ -443,6 +443,16 @@ def generate_synthesis_excel(filtered_pvs, selected_month):
         'bg_color': '#F8FAFC', 'border': 1, 'border_color': border,
         'align': 'center', 'valign': 'top', 'text_wrap': True,
     })
+    merged_format = workbook.add_format({
+        'font_name': 'Arial', 'font_size': 8, 'font_color': dark,
+        'border': 1, 'border_color': border, 'align': 'center',
+        'valign': 'vcenter', 'text_wrap': True,
+    })
+    alternate_merged_format = workbook.add_format({
+        'font_name': 'Arial', 'font_size': 8, 'font_color': dark,
+        'bg_color': '#F8FAFC', 'border': 1, 'border_color': border,
+        'align': 'center', 'valign': 'vcenter', 'text_wrap': True,
+    })
 
     worksheet.set_column('A:A', 18)
     worksheet.set_column('B:B', 15)
@@ -489,7 +499,7 @@ def generate_synthesis_excel(filtered_pvs, selected_month):
         worksheet.write(header_row, column, header, header_format)
     worksheet.set_row(header_row, 30)
 
-    rows = []
+    pv_groups = []
     for pv_item in filtered_pvs:
         item_synth, payload_synth, pv_info_synth, info_synth = _synthesis_context(pv_item)
         reference = (
@@ -519,6 +529,7 @@ def generate_synthesis_excel(filtered_pvs, selected_month):
         )
         materials = _as_synthesis_mapping(materials)
 
+        fractions = []
         if materials:
             for fraction_key, material in materials.items():
                 material = material or {}
@@ -528,29 +539,48 @@ def generate_synthesis_excel(filtered_pvs, selected_month):
                     fraction_label = f"{fraction_key} — {fraction_label} ({classe})"
                 else:
                     fraction_label = f"{fraction_key} — {fraction_label}"
-                rows.append([
-                    reference, date_value, lieu, provenance,
-                    fraction_label, commentaire
-                ])
+                fractions.append(fraction_label)
         else:
-            rows.append([reference, date_value, lieu, provenance, '-', commentaire])
+            fractions.append('-')
+        pv_groups.append({
+            'values': [reference, date_value, lieu, provenance, commentaire],
+            'fractions': fractions,
+        })
 
-    for row_index, row_values in enumerate(rows, start=header_row + 1):
-        is_alternate = (row_index - header_row) % 2 == 0
-        formats = (
-            [alternate_center_format, alternate_center_format,
-             alternate_format, alternate_format,
-             alternate_format, alternate_format]
-            if is_alternate else
-            [cell_center_format, cell_center_format,
-             cell_format, cell_format,
-             cell_format, cell_format]
-        )
-        for column, value in enumerate(row_values):
-            worksheet.write(row_index, column, value, formats[column])
-        worksheet.set_row(row_index, 34)
+    current_row = header_row + 1
+    data_row_count = 0
+    for group in pv_groups:
+        group_start = current_row
+        group_size = len(group['fractions'])
+        group_end = group_start + group_size - 1
+        is_alternate = data_row_count % 2 == 1
+        merged_cell_format = alternate_merged_format if is_alternate else merged_format
+        fraction_format = alternate_format if is_alternate else cell_format
 
-    last_row = header_row + max(len(rows), 1)
+        # Les informations communes ne sont affichées qu'une seule fois par PV.
+        # Elles sont fusionnées verticalement lorsque le PV a plusieurs fractions.
+        common_columns = {
+            0: group['values'][0],  # Référence PV
+            1: group['values'][1],  # Date de prélèvement
+            2: group['values'][2],  # Lieu de prélèvement
+            3: group['values'][3],  # Provenance de l'échantillon
+            5: group['values'][4],  # Commentaire
+        }
+        for column, value in common_columns.items():
+            if group_size > 1:
+                worksheet.merge_range(group_start, column, group_end, column, value, merged_cell_format)
+            else:
+                worksheet.write(group_start, column, value, merged_cell_format)
+
+        for offset, fraction in enumerate(group['fractions']):
+            row_index = group_start + offset
+            worksheet.write(row_index, 4, fraction, fraction_format)
+            worksheet.set_row(row_index, 34)
+
+        current_row = group_end + 1
+        data_row_count += group_size
+
+    last_row = header_row + max(data_row_count, 1)
     worksheet.autofilter(header_row, 0, last_row, len(headers) - 1)
     worksheet.freeze_panes(header_row + 1, 0)
     worksheet.print_area(0, 0, last_row, len(headers) - 1)
