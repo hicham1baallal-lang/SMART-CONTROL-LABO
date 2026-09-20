@@ -246,7 +246,7 @@ def request_pv_load(record):
     run courant — le chargement réel se fait via _apply_pending_pv_load(), appelée tout
     en haut de show(), avant que le moindre widget ne soit créé.
     """
-    f_st.session_state["pv_pending_load"] = record
+    f_st.session_state["pv_pending_load"] = dict(record) if not isinstance(record, dict) else record
 
 
 def _apply_pv_load(record):
@@ -257,8 +257,11 @@ def _apply_pv_load(record):
     quand celui-ci a été sauvegardé avec le PV. DOIT être appelée avant la création de
     tout widget de saisie (donc tout en haut de show()).
     """
-    details = record.get("details", {}) or {}
-    code = record.get("code_materiau") or get_material_code(record.get("type_materiau"))
+    details = record.get("details", {})
+    if not isinstance(details, dict):
+        details = {}
+    raw_code = record.get("code_materiau")
+    code = raw_code if isinstance(raw_code, str) and raw_code else get_material_code(record.get("type_materiau"))
     mat_config = MATERIAL_TYPES.get(code, {})
 
     f_st.session_state["pv_edit_data"] = record
@@ -1035,9 +1038,18 @@ def show(supabase_client):
         f_st.subheader(f"➕ Saisie PV d'identification — {selected_mat_sub}")
 
         edit_record = f_st.session_state.get("pv_edit_data")
-        editing_this_material = bool(edit_record) and edit_record.get("type_materiau") == selected_mat_sub
+        if edit_record is not None and not isinstance(edit_record, dict):
+            try:
+                edit_record = dict(edit_record)
+            except Exception:
+                edit_record = None
+        editing_this_material = (edit_record is not None) and (edit_record.get("type_materiau") == selected_mat_sub)
         if editing_this_material:
-            has_sieve_backup = bool((edit_record.get("details", {}) or {}).get("Tamisage Brut"))
+            edit_details = edit_record.get("details")
+            if not isinstance(edit_details, dict):
+                edit_details = {}
+            sieve_backup_rows = edit_details.get("Tamisage Brut")
+            has_sieve_backup = isinstance(sieve_backup_rows, list) and len(sieve_backup_rows) > 0
             sieve_msg = "Le tableau de tamisage a été restauré." if has_sieve_backup else "⚠️ Ce PV a été enregistré avant l'ajout de la sauvegarde du tamisage brut : le tableau n'a pas pu être restauré, ressaisis les refus si besoin."
             f_st.info(f"✏️ Modification du PV **{edit_record.get('num_rapport')}**. {sieve_msg} Réenregistre pour écraser ce PV.")
             if f_st.button("🧹 Quitter le mode modification (nouveau PV vierge)"):
@@ -1092,7 +1104,7 @@ def show(supabase_client):
             df_template = pd.DataFrame(default_sieves_desc, columns=["Tamis (mm)", "R_i (g) [≥10mm]", "r_i (g) [<10mm]"])
 
             _pending_rows = f_st.session_state.get("pv_edit_sieve_rows")
-            if _pending_rows and all("R_i (g) [≥10mm]" in r for r in _pending_rows):
+            if isinstance(_pending_rows, list) and len(_pending_rows) > 0 and all(isinstance(r, dict) and "R_i (g) [≥10mm]" in r for r in _pending_rows):
                 try:
                     df_template = pd.DataFrame(_pending_rows)[["Tamis (mm)", "R_i (g) [≥10mm]", "r_i (g) [<10mm]"]]
                 except Exception:
@@ -1204,7 +1216,7 @@ def show(supabase_client):
             })
 
             _pending_rows = f_st.session_state.get("pv_edit_sieve_rows")
-            if _pending_rows and all("Refus partiel Ri (g)" in r for r in _pending_rows):
+            if isinstance(_pending_rows, list) and len(_pending_rows) > 0 and all(isinstance(r, dict) and "Refus partiel Ri (g)" in r for r in _pending_rows):
                 try:
                     df_template_grave = pd.DataFrame(_pending_rows)[["Tamis (mm)", "Refus partiel Ri (g)"]]
                 except Exception:
@@ -1665,7 +1677,7 @@ def show(supabase_client):
                     )
 
                     if f_st.button(f"✏️ Modifier ce PV ({row.get('num_rapport')})", key=f"edit_pv_btn_{idx}_{row.get('num_rapport')}", disabled=not user_can_edit, use_container_width=True):
-                        request_pv_load(row)
+                        request_pv_load(row.to_dict())
                         f_st.toast(f"PV {row.get('num_rapport')} chargé — ouvre l'onglet « ➕ Saisir Essai » pour le modifier.", icon="✏️")
                         f_st.rerun()
 
