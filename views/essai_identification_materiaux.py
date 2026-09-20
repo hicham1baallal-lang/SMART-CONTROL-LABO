@@ -238,13 +238,24 @@ def _to_float_safe(value, default=0.0):
         return default
 
 
-def load_pv_into_session(record):
+def request_pv_load(record):
+    """
+    Appelée depuis un bouton (ex: « Modifier ce PV ») : ne fait que mémoriser le PV à
+    charger puis déclenche un rerun. Ne touche à AUCUNE clé de widget directement, car
+    Streamlit interdit de modifier st.session_state d'un widget déjà instancié dans le
+    run courant — le chargement réel se fait via _apply_pending_pv_load(), appelée tout
+    en haut de show(), avant que le moindre widget ne soit créé.
+    """
+    f_st.session_state["pv_pending_load"] = record
+
+
+def _apply_pv_load(record):
     """
     Charge un PV existant (issu de l'historique) dans les champs de saisie pour permettre
-    sa modification : en-tête du PV et essais spécifiques (LA, MDE, ES, VB/VBS, IP, Proctor,
-    Coefficient d'aplatissement, MB...). Le tableau de tamisage (refus par tamis) n'est PAS
-    restauré : seule la courbe % passant résultante est conservée par PV, pas les masses
-    brutes de refus par tamis — il devra être ressaisi si besoin.
+    sa modification : en-tête du PV, essais spécifiques (LA, MDE, ES, VB/VBS, IP, Proctor,
+    Coefficient d'aplatissement, MB...) et tableau de tamisage brut (refus par tamis),
+    quand celui-ci a été sauvegardé avec le PV. DOIT être appelée avant la création de
+    tout widget de saisie (donc tout en haut de show()).
     """
     details = record.get("details", {}) or {}
     code = record.get("code_materiau") or get_material_code(record.get("type_materiau"))
@@ -252,6 +263,10 @@ def load_pv_into_session(record):
 
     f_st.session_state["pv_edit_data"] = record
     f_st.session_state["sub_page_identification"] = record.get("type_materiau")
+    # Change la clé du data_editor du tamisage pour forcer sa réinitialisation avec les
+    # nouvelles données (Streamlit ignore un nouveau `data=` si la clé existe déjà).
+    f_st.session_state["pv_edit_reload_counter"] = f_st.session_state.get("pv_edit_reload_counter", 0) + 1
+    f_st.session_state["pv_edit_sieve_rows"] = details.get("Tamisage Brut")
 
     f_st.session_state["pv_num_rapport_input"] = record.get("num_rapport", "")
     f_st.session_state["pv_lieu_input"] = record.get("lieu", "")
@@ -993,6 +1008,10 @@ def show(supabase_client):
     if "pv_ident_local_db" not in f_st.session_state:
         f_st.session_state["pv_ident_local_db"] = []
 
+    # Doit s'exécuter avant la création de tout widget de saisie (cf. request_pv_load).
+    if f_st.session_state.get("pv_pending_load") is not None:
+        _apply_pv_load(f_st.session_state.pop("pv_pending_load"))
+
     selected_mat_sub = f_st.session_state.get("sub_page_identification", "Remblai ordinaire")
     mat_code, mat_config = get_material_config(selected_mat_sub)
 
@@ -1018,9 +1037,12 @@ def show(supabase_client):
         edit_record = f_st.session_state.get("pv_edit_data")
         editing_this_material = bool(edit_record) and edit_record.get("type_materiau") == selected_mat_sub
         if editing_this_material:
-            f_st.info(f"✏️ Modification du PV **{edit_record.get('num_rapport')}**. Le tableau de tamisage n'est pas restauré automatiquement (seule la courbe résultante est conservée) : ressaisis les refus si besoin, puis réenregistre pour écraser ce PV.")
+            has_sieve_backup = bool((edit_record.get("details", {}) or {}).get("Tamisage Brut"))
+            sieve_msg = "Le tableau de tamisage a été restauré." if has_sieve_backup else "⚠️ Ce PV a été enregistré avant l'ajout de la sauvegarde du tamisage brut : le tableau n'a pas pu être restauré, ressaisis les refus si besoin."
+            f_st.info(f"✏️ Modification du PV **{edit_record.get('num_rapport')}**. {sieve_msg} Réenregistre pour écraser ce PV.")
             if f_st.button("🧹 Quitter le mode modification (nouveau PV vierge)"):
                 del f_st.session_state["pv_edit_data"]
+                f_st.session_state["pv_edit_sieve_rows"] = None
                 f_st.rerun()
 
         c1, c2, c3 = f_st.columns(3)
@@ -1069,6 +1091,13 @@ def show(supabase_client):
             ]
             df_template = pd.DataFrame(default_sieves_desc, columns=["Tamis (mm)", "R_i (g) [≥10mm]", "r_i (g) [<10mm]"])
 
+            _pending_rows = f_st.session_state.get("pv_edit_sieve_rows")
+            if _pending_rows and all("R_i (g) [≥10mm]" in r for r in _pending_rows):
+                try:
+                    df_template = pd.DataFrame(_pending_rows)[["Tamis (mm)", "R_i (g) [≥10mm]", "r_i (g) [<10mm]"]]
+                except Exception:
+                    pass
+
             col_main_tbl, col_params_right = f_st.columns([1.3, 0.9])
 
             with col_main_tbl:
@@ -1077,7 +1106,7 @@ def show(supabase_client):
                     disabled=["Tamis (mm)"] if not user_can_edit else [],
                     use_container_width=True,
                     height=500,
-                    key=f"sieve_editor_{mat_code}"
+                    key=f"sieve_editor_{mat_code}_{f_st.session_state.get('pv_edit_reload_counter', 0)}"
                 )
 
             try:
@@ -1174,6 +1203,13 @@ def show(supabase_client):
                 "Refus partiel Ri (g)": [0.0] * len(TAMIS_GRAVE_MM)
             })
 
+            _pending_rows = f_st.session_state.get("pv_edit_sieve_rows")
+            if _pending_rows and all("Refus partiel Ri (g)" in r for r in _pending_rows):
+                try:
+                    df_template_grave = pd.DataFrame(_pending_rows)[["Tamis (mm)", "Refus partiel Ri (g)"]]
+                except Exception:
+                    pass
+
             col_main_tbl, col_params_right = f_st.columns([1.3, 0.9])
             with col_main_tbl:
                 edited_sieve_df = f_st.data_editor(
@@ -1181,7 +1217,7 @@ def show(supabase_client):
                     disabled=["Tamis (mm)"] if not user_can_edit else [],
                     use_container_width=True,
                     height=500,
-                    key=f"sieve_editor_{mat_code}"
+                    key=f"sieve_editor_{mat_code}_{f_st.session_state.get('pv_edit_reload_counter', 0)}"
                 )
 
             with col_params_right:
@@ -1462,7 +1498,10 @@ def show(supabase_client):
             # utilisée pour régénérer l'image à l'identique lors du téléchargement,
             # même après reconnexion / nouvelle session.
             "Courbe Tamis (mm)": result_df["Tamis (mm)"].astype(float).round(4).tolist(),
-            "Courbe Passant (%)": result_df["% Passant"].astype(float).round(2).tolist()
+            "Courbe Passant (%)": result_df["% Passant"].astype(float).round(2).tolist(),
+            # Sauvegarde du tableau de tamisage brut (refus par tamis), pour pouvoir le
+            # restaurer à l'identique si ce PV est rouvert en modification.
+            "Tamisage Brut": edited_sieve_df.to_dict("records"),
         }
 
         if not uses_granulats_sheet(mat_code, mat_config):
@@ -1626,7 +1665,7 @@ def show(supabase_client):
                     )
 
                     if f_st.button(f"✏️ Modifier ce PV ({row.get('num_rapport')})", key=f"edit_pv_btn_{idx}_{row.get('num_rapport')}", disabled=not user_can_edit, use_container_width=True):
-                        load_pv_into_session(row)
+                        request_pv_load(row)
                         f_st.toast(f"PV {row.get('num_rapport')} chargé — ouvre l'onglet « ➕ Saisir Essai » pour le modifier.", icon="✏️")
                         f_st.rerun()
 
