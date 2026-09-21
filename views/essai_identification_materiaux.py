@@ -1025,7 +1025,18 @@ def show(supabase_client):
     if f_st.session_state.get("pv_pending_load") is not None:
         _apply_pv_load(f_st.session_state.pop("pv_pending_load"))
 
-    selected_mat_sub = f_st.session_state.get("sub_page_identification", "Remblai ordinaire")
+    # Pendant une modification, le PV chargé est la source de vérité. Cette
+    # réaffectation protège le type sélectionné contre un éventuel reset de la
+    # navigation générale de l'application lors d'un rerun Streamlit.
+    active_edit_record = f_st.session_state.get("pv_edit_data")
+    if isinstance(active_edit_record, dict):
+        edit_code = active_edit_record.get("code_materiau")
+        edit_type = active_edit_record.get("type_materiau")
+        if edit_code not in MATERIAL_TYPES:
+            edit_code = edit_type if edit_type in MATERIAL_TYPES else get_material_code(edit_type)
+        selected_mat_sub = MATERIAL_TYPES.get(edit_code, MATERIAL_TYPES["REM-ORD"])["label"]
+    else:
+        selected_mat_sub = f_st.session_state.get("sub_page_identification", "Remblai ordinaire")
     mat_code, mat_config = get_material_config(selected_mat_sub)
 
     f_st.title("🔬 Identification & Granulométrie des Matériaux")
