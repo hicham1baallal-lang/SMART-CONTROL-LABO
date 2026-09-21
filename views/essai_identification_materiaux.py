@@ -261,11 +261,21 @@ def _apply_pv_load(record):
     if not isinstance(details, dict):
         details = {}
     raw_code = record.get("code_materiau")
-    code = raw_code if isinstance(raw_code, str) and raw_code else get_material_code(record.get("type_materiau"))
+    stored_type = record.get("type_materiau")
+    if raw_code in MATERIAL_TYPES:
+        code = raw_code
+    elif stored_type in MATERIAL_TYPES:
+        code = stored_type
+    else:
+        code = get_material_code(stored_type)
     mat_config = MATERIAL_TYPES.get(code, {})
+    # Les anciennes lignes de base peuvent stocker le code (ex. « GNT-060 »)
+    # dans type_materiau. La page attend le libellé, sinon elle retombe sur le
+    # défaut « Remblai ordinaire » au rerun.
+    selected_material_label = mat_config.get("label") or record.get("type_materiau") or MATERIAL_TYPES["REM-ORD"]["label"]
 
     f_st.session_state["pv_edit_data"] = record
-    f_st.session_state["sub_page_identification"] = record.get("type_materiau")
+    f_st.session_state["sub_page_identification"] = selected_material_label
     # Change la clé du data_editor du tamisage pour forcer sa réinitialisation avec les
     # nouvelles données (Streamlit ignore un nouveau `data=` si la clé existe déjà).
     f_st.session_state["pv_edit_reload_counter"] = f_st.session_state.get("pv_edit_reload_counter", 0) + 1
