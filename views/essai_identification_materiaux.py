@@ -1896,8 +1896,11 @@ def show(supabase_client):
                 f_st.markdown("---")
                 f_st.markdown("#### Aperçu du tableau de synthèse")
                 
-                # La classification ne fait pas partie de la synthèse GNF 0/40.
-                include_classification = mat_code != "GNF-040"
+                # La classification n'est pas demandée dans les synthèses GNF et GNA.
+                # Pour les matériaux à exigence GTR, le libellé doit être explicite.
+                include_classification = mat_code not in {"GNF-040", "GNA-031"}
+                use_gtr_classification = mat_code in {"CDF", "GNT-PRA", "GNT-060"}
+                classification_header = "Classification GTR" if use_gtr_classification else "Classification"
                 export_rows = []
                 for _, row in df_filtered.iterrows():
                     details = row.get("details", {})
@@ -1914,9 +1917,15 @@ def show(supabase_client):
                         "Observation": row.get("observation")
                     }
                     if include_classification:
-                        export_row["Classification"] = details.get(
-                            "Classification (Auto)", details.get("Classe GTR (Auto)", "N/A")
-                        )
+                        if use_gtr_classification:
+                            export_row[classification_header] = details.get(
+                                "Classification GTR (Extra)",
+                                details.get("Classification (Auto)", details.get("Classe GTR (Auto)", "N/A"))
+                            )
+                        else:
+                            export_row[classification_header] = details.get(
+                                "Classification (Auto)", details.get("Classe GTR (Auto)", "N/A")
+                            )
                     export_rows.append(export_row)
 
                 df_display_synth = pd.DataFrame(export_rows)
@@ -2002,7 +2011,7 @@ def show(supabase_client):
                     "Provenance d'échantillon"
                 ]
                 if include_classification:
-                    headers.append("Classification")
+                    headers.append(classification_header)
                 headers.append("Observation")
 
                 for col_num, h_text in enumerate(headers, 1):
@@ -2023,7 +2032,7 @@ def show(supabase_client):
                     ws.cell(row=current_row, column=6, value=row_dict.get("Provenance d'échantillon")).alignment = Alignment(horizontal='left', vertical='center')
                     observation_column = 7
                     if include_classification:
-                        ws.cell(row=current_row, column=7, value=row_dict.get("Classification")).alignment = Alignment(horizontal='center', vertical='center')
+                        ws.cell(row=current_row, column=7, value=row_dict.get(classification_header)).alignment = Alignment(horizontal='center', vertical='center')
                         observation_column = 8
                     ws.cell(row=current_row, column=observation_column, value=row_dict.get("Observation")).alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
 
