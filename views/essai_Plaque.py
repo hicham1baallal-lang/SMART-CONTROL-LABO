@@ -632,7 +632,16 @@ def show(supabase_client):
     can_edit = bool(st.session_state.get("can_edit", False)) or is_admin
 
     user_info_projet = st.session_state.get("user") or {}
-    projet_id_actif = projets_config.projet_actif(user_info_projet)
+    # Le personnel du laboratoire doit toujours pouvoir ouvrir ce module.
+    # Son accès ne dépend donc pas d'une valeur de projet périmée dans la
+    # session (par ex. « LGV CASA SUD » au lieu de l'identifiant technique).
+    if user_role == "LABORATOIRE":
+        projet_id_actif = getattr(projets_config, "PROJET_PAR_DEFAUT", None)
+        if not projet_id_actif:
+            projets = getattr(projets_config, "PROJETS", {})
+            projet_id_actif = next(iter(projets), None)
+    else:
+        projet_id_actif = projets_config.projet_actif(user_info_projet)
     if not projet_id_actif:
         st.error("⚠️ Aucun projet ne vous est autorisé. Contactez un administrateur.")
         return
