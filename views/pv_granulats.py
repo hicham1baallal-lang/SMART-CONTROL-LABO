@@ -371,6 +371,7 @@ def _find_synthesis_logo_path():
         os.path.join(base_dir, 'logo.jpg'),
         os.path.join(base_dir, 'logo.jpeg'),
         os.path.join(base_dir, 'logo.png.jpg'),
+        os.path.join(base_dir, '..', 'logo.png.jpg'),
         os.path.join(base_dir, 'assets', 'logo.png'),
         os.path.join(base_dir, 'assets', 'logo.jpg'),
     ]
