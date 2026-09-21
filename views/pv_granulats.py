@@ -857,7 +857,7 @@ def generate_pv_html(pv_info, info_p, data_granulats):
         font-size: 12px;
     }}
     .lpee-table th {{
-        background-color: #d9edf7;
+        background-color: #dbe5f1;
         color: #1e293b;
         border: 1px solid #808080;
         padding: 6px;
