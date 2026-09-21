@@ -2,7 +2,7 @@
 Gestion des Utilisateurs & Mots de Passe — module d'administration.
 
 Permet de consulter, ajouter, modifier et supprimer des utilisateurs de la
-plateforme, avec sauvegarde permanente sur la table Supabase `app_users`
+plateforme, avec sauvegarde permanente sur la table Supabase `users`
 (username, password, role, can_edit, projets_autorises).
 
 Réservé aux administrateurs (role == "admin").
@@ -13,11 +13,8 @@ import pandas as pd
 import re
 import projets_config
 
-# Cette table est aussi celle lue par app.py à chaque connexion.  Employer
-# une autre table faisait apparaître une sauvegarde réussie dans l'interface,
-# alors que les droits et le mot de passe utilisés par l'application restaient
-# inchangés.
-TABLE_USERS = "app_users"
+# La base Supabase déployée expose cette table sous le schéma public.
+TABLE_USERS = "users"
 
 ROLES_CONNUS = ["admin", "laboratoire", "restricted_betonnage"]
 
@@ -70,7 +67,7 @@ def _normaliser_projets(valeur):
 
 
 def _preparer_payload(payload):
-    """Adapte les valeurs de l'interface au schéma de ``app_users``.
+    """Adapte les valeurs de l'interface au schéma de ``users``.
 
     ``app.py`` stocke ``projets_autorises`` sous forme de texte séparé par
     des virgules ; Streamlit le manipule, lui, sous forme de liste.
