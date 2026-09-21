@@ -857,9 +857,9 @@ def generate_pv_html(pv_info, info_p, data_granulats):
         font-size: 12px;
     }}
     .lpee-table th {{
-        background-color: #2563eb;
-        color: #ffffff;
-        border: 1px solid #1d4ed8;
+        background-color: #a6a6a6;
+        color: #1e293b;
+        border: 1px solid #808080;
         padding: 6px;
         text-align: center;
         font-weight: bold;
@@ -1294,8 +1294,8 @@ def generate_pv_pdf(pv_info, info_p, data_granulats):
             t = Table(t_data, colWidths=col_w)
             t.setStyle(TableStyle([
                 ('SPAN', (0,0), (0,1)),
-                ('BACKGROUND', (0,0), (-1,1), colors.HexColor('#2563eb')),
-                ('TEXTCOLOR', (0,0), (-1,1), colors.white),
+                ('BACKGROUND', (0,0), (-1,1), colors.HexColor('#a6a6a6')),
+                ('TEXTCOLOR', (0,0), (-1,1), colors.HexColor('#1e293b')),
                 ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#cbd5e1')),
                 ('BACKGROUND', (0,2), (0,2), colors.HexColor('#f1f5f9')),
                 ('BACKGROUND', (0,3), (-1,3), colors.HexColor('#fafafa')),
