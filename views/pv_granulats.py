@@ -515,7 +515,7 @@ def generate_synthesis_excel(filtered_pvs, selected_month):
         worksheet.insert_image(
             'A1',
             logo_path,
-            {'x_scale': 0.20, 'y_scale': 0.20, 'x_offset': 4, 'y_offset': 4}
+            {'x_scale': 0.32, 'y_scale': 0.32, 'x_offset': 4, 'y_offset': 2}
         )
     else:
         worksheet.write('A1', 'L.P.E.E', title_format)
@@ -531,7 +531,7 @@ def generate_synthesis_excel(filtered_pvs, selected_month):
         f"SYNTHÈSE DES PV — PÉRIODE : {selected_month}",
         period_format
     )
-    worksheet.set_row(0, 30)
+    worksheet.set_row(0, 42)
     worksheet.set_row(1, 22)
     worksheet.set_row(3, 22)
 
