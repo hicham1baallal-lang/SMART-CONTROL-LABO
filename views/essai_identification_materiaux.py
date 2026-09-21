@@ -1,5 +1,6 @@
 import datetime
 import io
+import json
 import os
 import re
 import unicodedata
@@ -249,6 +250,65 @@ def request_pv_load(record):
     f_st.session_state["pv_pending_load"] = dict(record) if not isinstance(record, dict) else record
 
 
+def _restore_sieve_rows_from_curve(details, material_code):
+    """Reconstruit un tableau de tamisage ancien depuis la courbe sauvegardée."""
+    sieves = details.get("Courbe Tamis (mm)") or []
+    passants = details.get("Courbe Passant (%)") or []
+    if not isinstance(sieves, list) or not isinstance(passants, list) or len(sieves) != len(passants):
+        return None
+
+    try:
+        curve = sorted(
+            [(float(sieve), float(passant)) for sieve, passant in zip(sieves, passants)],
+            reverse=True
+        )
+    except (TypeError, ValueError):
+        return None
+    if not curve:
+        return None
+
+    if uses_granulats_sheet(material_code, MATERIAL_TYPES.get(material_code, MATERIAL_TYPES["REM-ORD"])):
+        mass = _to_float_safe(details.get("M1 (g)"), 0.0)
+        if mass <= 0:
+            return None
+        previous_cumulative = 0.0
+        rows = []
+        for sieve, passant in curve:
+            cumulative = max(0.0, (100.0 - passant) * mass / 100.0)
+            rows.append({
+                "Tamis (mm)": sieve,
+                "Refus partiel Ri (g)": round(max(0.0, cumulative - previous_cumulative), 1),
+            })
+            previous_cumulative = cumulative
+        return rows
+
+    m2 = _to_float_safe(details.get("M2 (g)"), 0.0)
+    m3 = _to_float_safe(details.get("M3 (g)"), 0.0)
+    m4 = _to_float_safe(details.get("M4 (g)"), 0.0)
+    if m2 <= 0:
+        return None
+    cumulative_by_sieve = {
+        sieve: max(0.0, (100.0 - passant) * m2 / 100.0)
+        for sieve, passant in curve
+    }
+    refusal_10 = cumulative_by_sieve.get(10.0, 0.0)
+    reduction_factor = (m3 - refusal_10) / m4 if m4 > 0 else 0.0
+    rows = []
+    for sieve, _ in curve:
+        cumulative = cumulative_by_sieve[sieve]
+        if sieve >= 10.0:
+            coarse_refusal, fine_refusal = cumulative, 0.0
+        else:
+            coarse_refusal = 0.0
+            fine_refusal = (cumulative - refusal_10) / reduction_factor if reduction_factor else 0.0
+        rows.append({
+            "Tamis (mm)": sieve,
+            "R_i (g) [≥10mm]": round(max(0.0, coarse_refusal), 1),
+            "r_i (g) [<10mm]": round(max(0.0, fine_refusal), 1),
+        })
+    return rows
+
+
 def _apply_pv_load(record):
     """
     Charge un PV existant (issu de l'historique) dans les champs de saisie pour permettre
@@ -258,8 +318,14 @@ def _apply_pv_load(record):
     tout widget de saisie (donc tout en haut de show()).
     """
     details = record.get("details", {})
+    if isinstance(details, str):
+        try:
+            details = json.loads(details)
+        except (TypeError, ValueError):
+            details = {}
     if not isinstance(details, dict):
         details = {}
+    record = {**record, "details": details}
     raw_code = record.get("code_materiau")
     stored_type = record.get("type_materiau")
     if raw_code in MATERIAL_TYPES:
@@ -279,7 +345,10 @@ def _apply_pv_load(record):
     # Change la clé du data_editor du tamisage pour forcer sa réinitialisation avec les
     # nouvelles données (Streamlit ignore un nouveau `data=` si la clé existe déjà).
     f_st.session_state["pv_edit_reload_counter"] = f_st.session_state.get("pv_edit_reload_counter", 0) + 1
-    f_st.session_state["pv_edit_sieve_rows"] = details.get("Tamisage Brut")
+    saved_sieve_rows = details.get("Tamisage Brut")
+    if not isinstance(saved_sieve_rows, list) or not saved_sieve_rows:
+        saved_sieve_rows = _restore_sieve_rows_from_curve(details, code)
+    f_st.session_state["pv_edit_sieve_rows"] = saved_sieve_rows
 
     f_st.session_state["pv_num_rapport_input"] = record.get("num_rapport", "")
     f_st.session_state["pv_lieu_input"] = record.get("lieu", "")
@@ -1623,7 +1692,20 @@ def show(supabase_client):
             if not existing_records:
                 existing_records = f_st.session_state["pv_ident_local_db"]
             
-            is_duplicate = any(str(r.get("num_rapport")).strip().lower() == str(num_rapport).strip().lower() for r in existing_records)
+            # En mode modification, le PV chargé garde son propre numéro : il
+            # doit être mis à jour et non traité comme un doublon. En revanche,
+            # un changement vers le numéro d'un AUTRE PV reste interdit.
+            edit_record_for_save = f_st.session_state.get("pv_edit_data")
+            original_report_number = (
+                str(edit_record_for_save.get("num_rapport", "")).strip().lower()
+                if isinstance(edit_record_for_save, dict) else ""
+            )
+            current_report_number = str(num_rapport).strip().lower()
+            updating_original_pv = bool(original_report_number and current_report_number == original_report_number)
+            is_duplicate = any(
+                str(record.get("num_rapport")).strip().lower() == current_report_number
+                for record in existing_records
+            ) and not updating_original_pv
             
             if is_duplicate:
                 f_st.error(f"❌ Erreur de blocage : Le numéro de rapport '{num_rapport}' existe déjà dans la base de données. Veuillez modifier le N° de rapport pour éviter les doublons.")
