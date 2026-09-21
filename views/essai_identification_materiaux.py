@@ -1108,11 +1108,19 @@ def show(supabase_client):
             df_template = pd.DataFrame(default_sieves_desc, columns=["Tamis (mm)", "R_i (g) [≥10mm]", "r_i (g) [<10mm]"])
 
             _pending_rows = f_st.session_state.get("pv_edit_sieve_rows")
-            if isinstance(_pending_rows, list) and len(_pending_rows) > 0 and all(isinstance(r, dict) and "R_i (g) [≥10mm]" in r for r in _pending_rows):
+            if isinstance(_pending_rows, list) and len(_pending_rows) > 0:
                 try:
-                    df_template = pd.DataFrame(_pending_rows)[["Tamis (mm)", "R_i (g) [≥10mm]", "r_i (g) [<10mm]"]]
-                except Exception:
-                    pass
+                    _df_pending = pd.DataFrame(_pending_rows)
+                    missing_cols = [c for c in ["Tamis (mm)", "R_i (g) [≥10mm]", "r_i (g) [<10mm]"] if c not in _df_pending.columns]
+                    if missing_cols:
+                        f_st.warning(f"⚠️ Le tamisage sauvegardé pour ce PV n'a pas pu être restauré (colonnes manquantes : {missing_cols}). Valeurs par défaut affichées.")
+                    else:
+                        for c in ["Tamis (mm)", "R_i (g) [≥10mm]", "r_i (g) [<10mm]"]:
+                            _df_pending[c] = pd.to_numeric(_df_pending[c], errors="coerce").fillna(0.0)
+                        df_template = _df_pending[["Tamis (mm)", "R_i (g) [≥10mm]", "r_i (g) [<10mm]"]]
+                        f_st.success(f"✅ Tableau de tamisage restauré ({len(df_template)} tamis).")
+                except Exception as e:
+                    f_st.warning(f"⚠️ Échec de la restauration du tamisage : {e}. Valeurs par défaut affichées.")
 
             col_main_tbl, col_params_right = f_st.columns([1.3, 0.9])
 
@@ -1227,11 +1235,19 @@ def show(supabase_client):
             })
 
             _pending_rows = f_st.session_state.get("pv_edit_sieve_rows")
-            if isinstance(_pending_rows, list) and len(_pending_rows) > 0 and all(isinstance(r, dict) and "Refus partiel Ri (g)" in r for r in _pending_rows):
+            if isinstance(_pending_rows, list) and len(_pending_rows) > 0:
                 try:
-                    df_template_grave = pd.DataFrame(_pending_rows)[["Tamis (mm)", "Refus partiel Ri (g)"]]
-                except Exception:
-                    pass
+                    _df_pending = pd.DataFrame(_pending_rows)
+                    missing_cols = [c for c in ["Tamis (mm)", "Refus partiel Ri (g)"] if c not in _df_pending.columns]
+                    if missing_cols:
+                        f_st.warning(f"⚠️ Le tamisage sauvegardé pour ce PV n'a pas pu être restauré (colonnes manquantes : {missing_cols}). Valeurs par défaut affichées.")
+                    else:
+                        for c in ["Tamis (mm)", "Refus partiel Ri (g)"]:
+                            _df_pending[c] = pd.to_numeric(_df_pending[c], errors="coerce").fillna(0.0)
+                        df_template_grave = _df_pending[["Tamis (mm)", "Refus partiel Ri (g)"]]
+                        f_st.success(f"✅ Tableau de tamisage restauré ({len(df_template_grave)} tamis).")
+                except Exception as e:
+                    f_st.warning(f"⚠️ Échec de la restauration du tamisage : {e}. Valeurs par défaut affichées.")
 
             col_main_tbl, col_params_right = f_st.columns([1.3, 0.9])
             with col_main_tbl:
