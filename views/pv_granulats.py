@@ -775,7 +775,7 @@ def generate_pv_html(pv_info, info_p, data_granulats):
     body {{
         font-family: Arial, sans-serif;
         color: #1e293b;
-        background-color: #000000;
+        background-color: #ffffff;
         margin: 0;
         padding: 20px;
     }}
