@@ -1229,7 +1229,7 @@ def generate_pv_pdf(pv_info, info_p, data_granulats):
     header_text = f"RAPPORT D'ESSAI N° : {pv_info.get('ref_pv', '')}<br/><font size=7.5>OBJET : IDENTIFICATION DES GRANULATS POUR BETON</font>"
     header_table = Table([[Paragraph(header_text, title_style)]], colWidths=[565])
     header_table.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#1e3a8a')),
+        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#e6e6e6')),
         ('ALIGN', (0,0), (-1,-1), 'CENTER'),
         ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
         ('BOTTOMPADDING', (0,0), (-1,-1), 5),
