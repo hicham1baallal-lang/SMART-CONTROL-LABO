@@ -789,7 +789,7 @@ def generate_pv_html(pv_info, info_p, data_granulats):
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
     }}
     .lpee-header-title {{
-        background-color: #1e3a8a;
+        background-color: #e6e6e6;
         color: #ffffff;
         text-align: center;
         font-weight: bold;
