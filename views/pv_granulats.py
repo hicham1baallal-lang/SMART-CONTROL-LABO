@@ -1294,7 +1294,7 @@ def generate_pv_pdf(pv_info, info_p, data_granulats):
             t = Table(t_data, colWidths=col_w)
             t.setStyle(TableStyle([
                 ('SPAN', (0,0), (0,1)),
-                ('BACKGROUND', (0,0), (-1,1), colors.HexColor('#a6a6a6')),
+                ('BACKGROUND', (0,0), (-1,1), colors.HexColor('#d9edf7')),
                 ('TEXTCOLOR', (0,0), (-1,1), colors.HexColor('#1e293b')),
                 ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#cbd5e1')),
                 ('BACKGROUND', (0,2), (0,2), colors.HexColor('#f1f5f9')),
