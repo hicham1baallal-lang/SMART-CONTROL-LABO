@@ -780,7 +780,7 @@ def generate_pv_html(pv_info, info_p, data_granulats):
         padding: 20px;
     }}
     .lpee-pv-card {{
-        background-color: #000000;
+        background-color: #ffffff;
         border: 2px solid #1e3a8a;
         border-radius: 8px;
         padding: 20px;
