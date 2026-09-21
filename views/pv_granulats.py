@@ -377,26 +377,29 @@ def _find_synthesis_logo_path():
     ]
     return next((path for path in candidates if os.path.isfile(path)), None)
 
-def _synthesis_fraction_results(fraction_key, material):
-    """Retourne les résultats à afficher pour une fraction dans la synthèse."""
+def _synthesis_fraction_metrics(fraction_key, material):
+    """Retourne les résultats numériques disponibles pour une fraction."""
     sieves = material.get('sieves') or []
     passants = material.get('passants') or []
     has_granulometry = bool(sieves and passants and len(sieves) == len(passants))
     passant_63 = (
         round(get_passant_at_sieve(sieves, passants, 0.063), 2)
-        if has_granulometry else '-'
+        if has_granulometry else None
     )
 
-    def value_or_dash(value):
-        return round(float(value), 2) if value is not None else '-'
+    def numeric_value(value):
+        try:
+            return round(float(value), 2) if value is not None else None
+        except (TypeError, ValueError):
+            return None
 
-    fines_f = '-'
+    fines_f = None
     if fraction_key in ('GII', 'GI'):
         try:
             m1 = float(material.get('M1'))
             m2 = float(material.get('M2'))
             p_value = float(material.get('P') or 0)
-            fines_f = round(100 * ((m1 - m2) + p_value) / m1, 2) if m1 else '-'
+            fines_f = round(100 * ((m1 - m2) + p_value) / m1, 2) if m1 else None
         except (TypeError, ValueError):
             pass
 
@@ -404,23 +407,52 @@ def _synthesis_fraction_results(fraction_key, material):
     if mf is None and has_granulometry and fraction_key == 'SC':
         mf = compute_MF(sieves, passants)
 
+    metrics = {}
+    if fraction_key in ('GII', 'GI'):
+        metrics = {
+            'f (%)': fines_f,
+            '% < 63 µm': passant_63,
+            'FI': numeric_value(material.get('fi')),
+            'LA': numeric_value(material.get('la')),
+        }
+    elif fraction_key == 'SC':
+        metrics = {
+            '% < 63 µm': passant_63,
+            'MF / CF': numeric_value(mf),
+            'SE (10)': numeric_value(material.get('se')),
+        }
+    elif fraction_key == 'SD':
+        metrics = {
+            '% < 63 µm': passant_63,
+            'MB': numeric_value(material.get('mb')),
+        }
+    return metrics
+
+def _synthesis_fraction_results(fraction_key, material, metrics=None):
+    """Formate les résultats d'une fraction pour la colonne Résultats."""
+    metrics = metrics if metrics is not None else _synthesis_fraction_metrics(fraction_key, material)
+
+    def display(metric_name):
+        value = metrics.get(metric_name)
+        return value if value is not None else '-'
+
     if fraction_key in ('GII', 'GI'):
         return (
-            f"f : {fines_f} %\n"
-            f"% < 63 µm : {passant_63} %\n"
-            f"FI : {value_or_dash(material.get('fi'))}\n"
-            f"LA : {value_or_dash(material.get('la'))}"
+            f"f : {display('f (%)')} %\n"
+            f"% < 63 µm : {display('% < 63 µm')} %\n"
+            f"FI : {display('FI')}\n"
+            f"LA : {display('LA')}"
         )
     if fraction_key == 'SC':
         return (
-            f"% < 63 µm : {passant_63} %\n"
-            f"MF / CF : {value_or_dash(mf)}\n"
-            f"SE (10) : {value_or_dash(material.get('se'))}"
+            f"% < 63 µm : {display('% < 63 µm')} %\n"
+            f"MF / CF : {display('MF / CF')}\n"
+            f"SE (10) : {display('SE (10)')}"
         )
     if fraction_key == 'SD':
         return (
-            f"% < 63 µm : {passant_63} %\n"
-            f"MB : {value_or_dash(material.get('mb'))}"
+            f"% < 63 µm : {display('% < 63 µm')} %\n"
+            f"MB : {display('MB')}"
         )
     return '-'
 
@@ -550,6 +582,7 @@ def generate_synthesis_excel(filtered_pvs, selected_month):
     worksheet.set_row(header_row, 30)
 
     pv_groups = []
+    summary_values = {}
     for pv_item in filtered_pvs:
         item_synth, payload_synth, pv_info_synth, info_synth = _synthesis_context(pv_item)
         reference = (
@@ -589,9 +622,13 @@ def generate_synthesis_excel(filtered_pvs, selected_month):
                     fraction_label = f"{fraction_key} — {fraction_label} ({classe})"
                 else:
                     fraction_label = f"{fraction_key} — {fraction_label}"
+                metrics = _synthesis_fraction_metrics(fraction_key, material)
+                for metric_name, metric_value in metrics.items():
+                    if metric_value is not None:
+                        summary_values.setdefault(fraction_key, {}).setdefault(metric_name, []).append(metric_value)
                 fractions.append({
                     'label': fraction_label,
-                    'results': _synthesis_fraction_results(fraction_key, material),
+                    'results': _synthesis_fraction_results(fraction_key, material, metrics),
                 })
         else:
             fractions.append({'label': '-', 'results': '-'})
@@ -634,8 +671,40 @@ def generate_synthesis_excel(filtered_pvs, selected_month):
         current_row = group_end + 1
         data_row_count += group_size
 
-    last_row = header_row + max(data_row_count, 1)
-    worksheet.autofilter(header_row, 0, last_row, len(headers) - 1)
+    data_last_row = header_row + max(data_row_count, 1)
+
+    # Tableau statistique pour comparer les résultats de chaque type de fraction.
+    summary_title_row = current_row + 1
+    worksheet.merge_range(
+        summary_title_row, 0, summary_title_row, 4,
+        'RÉSUMÉ STATISTIQUE DES RÉSULTATS', period_format
+    )
+    summary_header_row = summary_title_row + 1
+    summary_headers = ['Type de fraction', 'Indicateur', 'NB', 'Min', 'Max']
+    for column, header in enumerate(summary_headers):
+        worksheet.write(summary_header_row, column, header, header_format)
+
+    summary_row = summary_header_row + 1
+    fraction_order = ('GII', 'GI', 'SC', 'SD')
+    for fraction_key in fraction_order:
+        for metric_name, values in summary_values.get(fraction_key, {}).items():
+            worksheet.write(summary_row, 0, fraction_key, cell_center_format)
+            worksheet.write(summary_row, 1, metric_name, cell_format)
+            worksheet.write_number(summary_row, 2, len(values), cell_center_format)
+            worksheet.write_number(summary_row, 3, min(values), cell_center_format)
+            worksheet.write_number(summary_row, 4, max(values), cell_center_format)
+            summary_row += 1
+
+    if summary_row == summary_header_row + 1:
+        worksheet.merge_range(
+            summary_row, 0, summary_row, 4,
+            'Aucun résultat numérique disponible pour la période sélectionnée.',
+            cell_format
+        )
+        summary_row += 1
+
+    last_row = summary_row - 1
+    worksheet.autofilter(header_row, 0, data_last_row, len(headers) - 1)
     worksheet.freeze_panes(header_row + 1, 0)
     worksheet.print_area(0, 0, last_row, len(headers) - 1)
 
