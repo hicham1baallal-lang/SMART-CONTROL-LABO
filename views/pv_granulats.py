@@ -775,12 +775,12 @@ def generate_pv_html(pv_info, info_p, data_granulats):
     body {{
         font-family: Arial, sans-serif;
         color: #1e293b;
-        background-color: #ffffff;
+        background-color: #000000;
         margin: 0;
         padding: 20px;
     }}
     .lpee-pv-card {{
-        background-color: #ffffff;
+        background-color: #000000;
         border: 2px solid #1e3a8a;
         border-radius: 8px;
         padding: 20px;
