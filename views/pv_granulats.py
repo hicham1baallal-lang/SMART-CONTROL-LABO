@@ -790,7 +790,7 @@ def generate_pv_html(pv_info, info_p, data_granulats):
     }}
     .lpee-header-title {{
         background-color: #e6e6e6;
-        color: #ffffff;
+        color: #000000;
         text-align: center;
         font-weight: bold;
         font-size: 16px;
