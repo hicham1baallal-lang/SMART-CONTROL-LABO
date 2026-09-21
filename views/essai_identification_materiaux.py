@@ -1896,22 +1896,28 @@ def show(supabase_client):
                 f_st.markdown("---")
                 f_st.markdown("#### Aperçu du tableau de synthèse")
                 
+                # La classification ne fait pas partie de la synthèse GNF 0/40.
+                include_classification = mat_code != "GNF-040"
                 export_rows = []
                 for _, row in df_filtered.iterrows():
                     details = row.get("details", {})
                     if not isinstance(details, dict):
                         details = {}
                     
-                    export_rows.append({
+                    export_row = {
                         "N° Rapport": row.get("num_rapport"),
                         "Code Matériau": details.get("Code Materiau", row.get("code_materiau", get_material_code(row.get("type_materiau")))),
                         "Date de prélèvement": row.get("date_essai"),
                         "Nombre d'essais": 1,
                         "Lieu / Zone": row.get("lieu"),
                         "Provenance d'échantillon": row.get("pk"),
-                        "Classification": details.get("Classification (Auto)", details.get("Classe GTR (Auto)", "N/A")),
                         "Observation": row.get("observation")
-                    })
+                    }
+                    if include_classification:
+                        export_row["Classification"] = details.get(
+                            "Classification (Auto)", details.get("Classe GTR (Auto)", "N/A")
+                        )
+                    export_rows.append(export_row)
 
                 df_display_synth = pd.DataFrame(export_rows)
                 f_st.dataframe(df_display_synth, use_container_width=True)
@@ -1926,11 +1932,15 @@ def show(supabase_client):
                 ws.sheet_properties.pageSetUpPr.fitToPage = True
                 ws.page_setup.fitToWidth = 1
                 ws.page_setup.fitToHeight = 0
+                ws.page_margins.left = 0.25
+                ws.page_margins.right = 0.25
+                ws.page_margins.top = 0.35
+                ws.page_margins.bottom = 0.35
 
                 font_main_title = Font(name="Helvetica", size=11, bold=True, color="003366")
                 font_sub_title = Font(name="Helvetica", size=9, italic=True, color="333333")
                 font_section = Font(name="Helvetica", size=10, bold=True, color="000000")
-                font_tbl_header = Font(name="Helvetica", size=10, bold=True, color="FFFFFF")
+                font_tbl_header = Font(name="Helvetica", size=9, bold=True, color="FFFFFF")
                 font_data = Font(name="Helvetica", size=9, color="000000")
 
                 fill_tbl_header = PatternFill(start_color="003366", end_color="003366", fill_type="solid")
@@ -1944,31 +1954,37 @@ def show(supabase_client):
                     bottom=Side(style='thin', color='CCCCCC')
                 )
 
-                logo_path_excel = "logo.png.jpg"
-                if not os.path.exists(logo_path_excel):
-                    logo_path_excel = "logo.png"
-                if os.path.exists(logo_path_excel):
+                module_dir = os.path.dirname(os.path.abspath(__file__))
+                logo_candidates = [
+                    os.path.join(module_dir, "logo.png.jpg"),
+                    os.path.join(module_dir, "..", "logo.png.jpg"),
+                    os.path.join(module_dir, "logo.png"),
+                    os.path.join(module_dir, "..", "logo.png"),
+                ]
+                logo_path_excel = next((path for path in logo_candidates if os.path.exists(path)), None)
+                if logo_path_excel:
                     try:
                         img_ex = OpenpyxlImage(logo_path_excel)
-                        img_ex.width = 45
-                        img_ex.height = 25
+                        img_ex.width = 78
+                        img_ex.height = 44
                         ws.add_image(img_ex, 'A1')
                     except Exception:
                         pass
 
-                ws.merge_cells('A1:H1')
-                ws['A1'] = "L.P.E.E - LABORATOIRE PUBLIC DES ESSAIS ET D'ETUDES"
-                ws['A1'].font = font_main_title
-                ws['A1'].alignment = Alignment(horizontal='center', vertical='center')
-                ws.row_dimensions[1].height = 20
+                last_column_letter = 'H' if include_classification else 'G'
+                ws.merge_cells(f'B1:{last_column_letter}1')
+                ws['B1'] = "L.P.E.E - LABORATOIRE PUBLIC DES ESSAIS ET D'ETUDES"
+                ws['B1'].font = font_main_title
+                ws['B1'].alignment = Alignment(horizontal='center', vertical='center')
+                ws.row_dimensions[1].height = 34
 
-                ws.merge_cells('A2:H2')
-                ws['A2'] = "Centre Technique Régional CASA-SETTAT-BENI MELLAL"
-                ws['A2'].font = font_sub_title
-                ws['A2'].alignment = Alignment(horizontal='center', vertical='center')
-                ws.row_dimensions[2].height = 16
+                ws.merge_cells(f'B2:{last_column_letter}2')
+                ws['B2'] = "Centre Technique Régional CASA-SETTAT-BENI MELLAL"
+                ws['B2'].font = font_sub_title
+                ws['B2'].alignment = Alignment(horizontal='center', vertical='center')
+                ws.row_dimensions[2].height = 18
 
-                ws.merge_cells('A3:H3')
+                ws.merge_cells(f'A3:{last_column_letter}3')
                 ws['A3'] = f"SYNTHÈSE DES ESSAIS D'IDENTIFICATION — {selected_mat_sub.upper()} (Période: {filtre_mois})"
                 ws['A3'].font = font_section
                 ws['A3'].alignment = Alignment(horizontal='center', vertical='center')
@@ -1983,10 +1999,11 @@ def show(supabase_client):
                     "Date de prélèvement", 
                     "Nombre d'essais",
                     "Lieu / Zone", 
-                    "Provenance d'échantillon", 
-                    "Classification", 
-                    "Observation"
+                    "Provenance d'échantillon"
                 ]
+                if include_classification:
+                    headers.append("Classification")
+                headers.append("Observation")
 
                 for col_num, h_text in enumerate(headers, 1):
                     cell = ws.cell(row=start_row, column=col_num, value=h_text)
@@ -2004,17 +2021,20 @@ def show(supabase_client):
                     ws.cell(row=current_row, column=4, value=row_dict.get("Nombre d'essais")).alignment = Alignment(horizontal='center', vertical='center')
                     ws.cell(row=current_row, column=5, value=row_dict.get("Lieu / Zone")).alignment = Alignment(horizontal='left', vertical='center')
                     ws.cell(row=current_row, column=6, value=row_dict.get("Provenance d'échantillon")).alignment = Alignment(horizontal='left', vertical='center')
-                    ws.cell(row=current_row, column=7, value=row_dict.get("Classification")).alignment = Alignment(horizontal='center', vertical='center')
-                    ws.cell(row=current_row, column=8, value=row_dict.get("Observation")).alignment = Alignment(horizontal='left', vertical='center')
+                    observation_column = 7
+                    if include_classification:
+                        ws.cell(row=current_row, column=7, value=row_dict.get("Classification")).alignment = Alignment(horizontal='center', vertical='center')
+                        observation_column = 8
+                    ws.cell(row=current_row, column=observation_column, value=row_dict.get("Observation")).alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
 
                     row_fill = fill_zebra if r_idx % 2 == 1 else fill_white
-                    for col_num in range(1, 9):
+                    for col_num in range(1, len(headers) + 1):
                         c = ws.cell(row=current_row, column=col_num)
                         c.font = font_data
                         c.fill = row_fill
                         c.border = border_thin
                     
-                    ws.row_dimensions[current_row].height = 20
+                    ws.row_dimensions[current_row].height = 36
                     current_row += 1
 
                 total_row_idx = current_row
@@ -2026,7 +2046,7 @@ def show(supabase_client):
                 cell_tot_val.font = Font(name="Helvetica", size=9, bold=True)
                 cell_tot_val.alignment = Alignment(horizontal='center', vertical='center')
 
-                for col_num in range(1, 9):
+                for col_num in range(1, len(headers) + 1):
                     c = ws.cell(row=total_row_idx, column=col_num)
                     c.border = border_thin
                     if col_num > 4:
@@ -2034,15 +2054,14 @@ def show(supabase_client):
 
                 ws.row_dimensions[total_row_idx].height = 22
 
-                for col in ws.columns:
-                    max_len = 0
-                    col_letter = openpyxl.utils.get_column_letter(col[0].column)
-                    for cell in col:
-                        if cell.row >= start_row and cell.row <= total_row_idx:
-                            val_str = str(cell.value or "")
-                            if len(val_str) > max_len:
-                                max_len = len(val_str)
-                    ws.column_dimensions[col_letter].width = max(max_len + 4, 16)
+                # Largeurs fixes : évitent que les observations longues réduisent
+                # toute la feuille lors de l'impression A4 portrait.
+                portrait_widths = [13, 10, 12, 9, 14, 17]
+                if include_classification:
+                    portrait_widths.append(12)
+                portrait_widths.append(20)
+                for col_num, width in enumerate(portrait_widths, 1):
+                    ws.column_dimensions[openpyxl.utils.get_column_letter(col_num)].width = width
 
                 wb.save(excel_buf)
                 excel_buf.seek(0)
