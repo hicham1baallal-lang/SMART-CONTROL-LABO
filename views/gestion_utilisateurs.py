@@ -2,7 +2,7 @@
 Gestion des Utilisateurs & Mots de Passe — module d'administration.
 
 Permet de consulter, ajouter, modifier et supprimer des utilisateurs de la
-plateforme, avec sauvegarde permanente sur la table Supabase `users`
+plateforme, avec sauvegarde permanente sur la table Supabase `app_users`
 (username, password, role, can_edit, projets_autorises).
 
 Réservé aux administrateurs (role == "admin").
@@ -13,7 +13,11 @@ import pandas as pd
 import re
 import projets_config
 
-TABLE_USERS = "users"
+# Cette table est aussi celle lue par app.py à chaque connexion.  Employer
+# une autre table faisait apparaître une sauvegarde réussie dans l'interface,
+# alors que les droits et le mot de passe utilisés par l'application restaient
+# inchangés.
+TABLE_USERS = "app_users"
 
 ROLES_CONNUS = ["admin", "laboratoire", "restricted_betonnage"]
 
@@ -65,6 +69,20 @@ def _normaliser_projets(valeur):
     return []
 
 
+def _preparer_payload(payload):
+    """Adapte les valeurs de l'interface au schéma de ``app_users``.
+
+    ``app.py`` stocke ``projets_autorises`` sous forme de texte séparé par
+    des virgules ; Streamlit le manipule, lui, sous forme de liste.
+    """
+    payload = dict(payload)
+    if "projets_autorises" in payload:
+        payload["projets_autorises"] = ",".join(
+            _normaliser_projets(payload["projets_autorises"])
+        )
+    return payload
+
+
 @st.cache_data(ttl=60)
 def _charger_utilisateurs(_supabase_client):
     """Charge tous les utilisateurs depuis Supabase. Retourne une liste de
@@ -98,16 +116,17 @@ def initialiser_utilisateurs_defaut(supabase_client):
     if supabase_client is None:
         return
     
+    projet_defaut = getattr(projets_config, "PROJET_PAR_DEFAUT", None)
     utilisateurs_par_defaut = [
         {"username": "BAALLAL", "password": "arwa2020", "role": "admin", "can_edit": True, "projets_autorises": []},
-        {"username": "AMINA", "password": "amina2026", "role": "laboratoire", "can_edit": True, "projets_autorises": ["LGV CASA SUD"]},
-        {"username": "HANINE", "password": "hanine2026", "role": "laboratoire", "can_edit": False, "projets_autorises": ["LGV CASA SUD"]},
-        {"username": "IKKEN", "password": "ikken2026", "role": "laboratoire", "can_edit": True, "projets_autorises": ["LGV CASA SUD"]},
-        {"username": "HAMDANI", "password": "hamdani2026", "role": "laboratoire", "can_edit": False, "projets_autorises": ["LGV CASA SUD"]},
-        {"username": "ADAM", "password": "ctr2026", "role": "restricted_betonnage", "can_edit": False, "projets_autorises": ["LGV CASA SUD"]},
-        {"username": "LAHCEN", "password": "ctr2026", "role": "restricted_betonnage", "can_edit": False, "projets_autorises": ["LGV CASA SUD"]},
-        {"username": "ELIDRISSI", "password": "ctr2026", "role": "restricted_betonnage", "can_edit": False, "projets_autorises": ["LGV CASA SUD"]},
-        {"username": "YOUSSEF", "password": "youssef2026", "role": "restricted_betonnage", "can_edit": False, "projets_autorises": ["LGV CASA SUD"]},
+        {"username": "AMINA", "password": "amina2026", "role": "laboratoire", "can_edit": True, "projets_autorises": [projet_defaut] if projet_defaut else []},
+        {"username": "HANINE", "password": "hanine2026", "role": "laboratoire", "can_edit": False, "projets_autorises": [projet_defaut] if projet_defaut else []},
+        {"username": "IKKEN", "password": "ikken2026", "role": "laboratoire", "can_edit": True, "projets_autorises": [projet_defaut] if projet_defaut else []},
+        {"username": "HAMDANI", "password": "hamdani2026", "role": "laboratoire", "can_edit": False, "projets_autorises": [projet_defaut] if projet_defaut else []},
+        {"username": "ADAM", "password": "ctr2026", "role": "restricted_betonnage", "can_edit": False, "projets_autorises": [projet_defaut] if projet_defaut else []},
+        {"username": "LAHCEN", "password": "ctr2026", "role": "restricted_betonnage", "can_edit": False, "projets_autorises": [projet_defaut] if projet_defaut else []},
+        {"username": "ELIDRISSI", "password": "ctr2026", "role": "restricted_betonnage", "can_edit": False, "projets_autorises": [projet_defaut] if projet_defaut else []},
+        {"username": "YOUSSEF", "password": "youssef2026", "role": "restricted_betonnage", "can_edit": False, "projets_autorises": [projet_defaut] if projet_defaut else []},
     ]
 
     try:
@@ -118,7 +137,7 @@ def initialiser_utilisateurs_defaut(supabase_client):
             if user["username"] not in noms_existants:
                 _ecrire_utilisateur_adaptatif(
                     lambda p: supabase_client.table(TABLE_USERS).insert(p).execute(),
-                    user
+                    _preparer_payload(user)
                 )
         if not existants:
             st.cache_data.clear()
@@ -192,7 +211,7 @@ def show(supabase_client, can_edit=True, **kwargs):
                         }
                         _ecrire_utilisateur_adaptatif(
                             lambda p: supabase_client.table(TABLE_USERS).insert(p).execute(),
-                            payload_ajout
+                            _preparer_payload(payload_ajout)
                         )
                         st.success(f"✅ Utilisateur '{nouv_username}' ajouté avec succès.")
                         st.cache_data.clear()
@@ -242,7 +261,7 @@ def show(supabase_client, can_edit=True, **kwargs):
                         }
                         _ecrire_utilisateur_adaptatif(
                             lambda p: supabase_client.table(TABLE_USERS).update(p).eq("username", user_mod["username"]).execute(),
-                            payload_mod
+                            _preparer_payload(payload_mod)
                         )
                         st.success(f"✅ Utilisateur '{user_mod['username']}' mis à jour avec succès.")
                         st.cache_data.clear()
