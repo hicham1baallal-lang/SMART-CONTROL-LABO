@@ -404,15 +404,25 @@ def _synthesis_fraction_results(fraction_key, material):
     if mf is None and has_granulometry and fraction_key == 'SC':
         mf = compute_MF(sieves, passants)
 
-    return [
-        fines_f if fraction_key in ('GII', 'GI') else '-',
-        passant_63,
-        value_or_dash(material.get('fi')) if fraction_key in ('GII', 'GI') else '-',
-        value_or_dash(material.get('la')) if fraction_key in ('GII', 'GI') else '-',
-        value_or_dash(mf) if fraction_key == 'SC' else '-',
-        value_or_dash(material.get('se')) if fraction_key == 'SC' else '-',
-        value_or_dash(material.get('mb')) if fraction_key == 'SD' else '-',
-    ]
+    if fraction_key in ('GII', 'GI'):
+        return (
+            f"f : {fines_f} %\n"
+            f"% < 63 µm : {passant_63} %\n"
+            f"FI : {value_or_dash(material.get('fi'))}\n"
+            f"LA : {value_or_dash(material.get('la'))}"
+        )
+    if fraction_key == 'SC':
+        return (
+            f"% < 63 µm : {passant_63} %\n"
+            f"MF / CF : {value_or_dash(mf)}\n"
+            f"SE (10) : {value_or_dash(material.get('se'))}"
+        )
+    if fraction_key == 'SD':
+        return (
+            f"% < 63 µm : {passant_63} %\n"
+            f"MB : {value_or_dash(material.get('mb'))}"
+        )
+    return '-'
 
 def generate_synthesis_excel(filtered_pvs, selected_month):
     """Génère le classeur Excel coloré et imprimable de la synthèse mensuelle."""
@@ -425,8 +435,8 @@ def generate_synthesis_excel(filtered_pvs, selected_month):
     workbook = xlsxwriter.Workbook(output, {'in_memory': True})
     worksheet = workbook.add_worksheet("Synthèse mensuelle")
 
-    # Mise en page A4 paysage, ajustée à une page en largeur.
-    worksheet.set_landscape()
+    # Mise en page A4 portrait, avec résultats regroupés pour rester lisible.
+    worksheet.set_portrait()
     worksheet.set_paper(9)  # A4
     worksheet.fit_to_pages(1, 0)
     worksheet.set_margins(left=0.25, right=0.25, top=0.35, bottom=0.45)
@@ -492,13 +502,13 @@ def generate_synthesis_excel(filtered_pvs, selected_month):
         'align': 'center', 'valign': 'vcenter', 'text_wrap': True,
     })
 
-    worksheet.set_column('A:A', 18)
-    worksheet.set_column('B:B', 14)
-    worksheet.set_column('C:C', 23)
-    worksheet.set_column('D:D', 24)
-    worksheet.set_column('E:E', 23)
-    worksheet.set_column('F:F', 28)
-    worksheet.set_column('G:M', 11)
+    worksheet.set_column('A:A', 12)
+    worksheet.set_column('B:B', 11)
+    worksheet.set_column('C:C', 13)
+    worksheet.set_column('D:D', 14)
+    worksheet.set_column('E:E', 12)
+    worksheet.set_column('F:F', 20)
+    worksheet.set_column('G:G', 16)
 
     logo_path = _find_synthesis_logo_path()
     if logo_path:
@@ -510,14 +520,14 @@ def generate_synthesis_excel(filtered_pvs, selected_month):
     else:
         worksheet.write('A1', 'L.P.E.E', title_format)
 
-    worksheet.merge_range('B1:M1', "LABORATOIRE PUBLIC D'ESSAIS ET D'ÉTUDES (LPEE)", title_format)
+    worksheet.merge_range('B1:G1', "LABORATOIRE PUBLIC D'ESSAIS ET D'ÉTUDES (LPEE)", title_format)
     worksheet.merge_range(
-        'B2:M2',
+        'B2:G2',
         'CENTRE TECHNIQUE REGIONAL DE CASABLANCA-SETTAT BENI MELLAL',
         subtitle_format
     )
     worksheet.merge_range(
-        'A4:M4',
+        'A4:G4',
         f"SYNTHÈSE DES PV — PÉRIODE : {selected_month}",
         period_format
     )
@@ -531,14 +541,8 @@ def generate_synthesis_excel(filtered_pvs, selected_month):
         "Lieu de prélèvement",
         "Provenance de l'échantillon",
         "Fraction",
+        "Résultats",
         "Commentaire",
-        "f (%)",
-        "% < 63 µm",
-        "FI",
-        "LA",
-        "MF / CF",
-        "SE (10)",
-        "MB",
     ]
     header_row = 5
     for column, header in enumerate(headers):
@@ -590,7 +594,7 @@ def generate_synthesis_excel(filtered_pvs, selected_month):
                     'results': _synthesis_fraction_results(fraction_key, material),
                 })
         else:
-            fractions.append({'label': '-', 'results': ['-'] * 7})
+            fractions.append({'label': '-', 'results': '-'})
         pv_groups.append({
             'values': [reference, date_value, lieu, provenance, commentaire],
             'fractions': fractions,
@@ -613,7 +617,7 @@ def generate_synthesis_excel(filtered_pvs, selected_month):
             1: group['values'][1],  # Date de prélèvement
             2: group['values'][2],  # Lieu de prélèvement
             3: group['values'][3],  # Provenance de l'échantillon
-            5: group['values'][4],  # Commentaire
+            6: group['values'][4],  # Commentaire
         }
         for column, value in common_columns.items():
             if group_size > 1:
@@ -624,9 +628,8 @@ def generate_synthesis_excel(filtered_pvs, selected_month):
         for offset, fraction in enumerate(group['fractions']):
             row_index = group_start + offset
             worksheet.write(row_index, 4, fraction['label'], fraction_format)
-            for result_column, result_value in enumerate(fraction['results'], start=6):
-                worksheet.write(row_index, result_column, result_value, fraction_format)
-            worksheet.set_row(row_index, 34)
+            worksheet.write(row_index, 5, fraction['results'], fraction_format)
+            worksheet.set_row(row_index, 58)
 
         current_row = group_end + 1
         data_row_count += group_size
