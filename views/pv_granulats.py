@@ -1177,7 +1177,7 @@ def generate_pv_pdf(pv_info, info_p, data_granulats):
     title_style = ParagraphStyle(
         'PDFTitle', parent=styles['Normal'],
         fontName='Helvetica-Bold', fontSize=10, leading=13,
-        textColor=colors.white, alignment=1
+        textColor=colors.HexColor('#000000'), alignment=1
     )
     cell_bold = ParagraphStyle('PDFCellBold', fontName='Helvetica-Bold', fontSize=7, leading=9, alignment=1)
     cell_norm = ParagraphStyle('PDFCellNorm', fontName='Helvetica', fontSize=7, leading=9, alignment=1)
@@ -1294,7 +1294,7 @@ def generate_pv_pdf(pv_info, info_p, data_granulats):
             t = Table(t_data, colWidths=col_w)
             t.setStyle(TableStyle([
                 ('SPAN', (0,0), (0,1)),
-                ('BACKGROUND', (0,0), (-1,1), colors.HexColor('#d9edf7')),
+                ('BACKGROUND', (0,0), (-1,1), colors.HexColor('#dbe5f1')),
                 ('TEXTCOLOR', (0,0), (-1,1), colors.HexColor('#1e293b')),
                 ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#cbd5e1')),
                 ('BACKGROUND', (0,2), (0,2), colors.HexColor('#f1f5f9')),
