@@ -8,7 +8,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 import extra_streamlit_components as stx
 from supabase import Client, create_client
-from views import synthese_globale_mensuelle
+
 # Importation sécurisée du gestionnaire Hors-Ligne SQLite
 try:
     from offline_manager import (
@@ -232,6 +232,11 @@ except ImportError:
     historique_pvs = None
 
 try:
+    from views import synthese_globale_mensuelle
+except ImportError:
+    synthese_globale_mensuelle = None
+
+try:
     from views import pv_granulats
 except ImportError:
     pv_granulats = None
@@ -284,6 +289,7 @@ with st.sidebar:
         "🪨 Granulats pour Béton": pv_granulats,
         "🔬 Identification Matériau": essai_identification_materiaux,
         "📜 Historique & Audit": historique_pvs,
+        "📊 Synthèse globale mensuelle": synthese_globale_mensuelle,
     })
 
     st.session_state.setdefault("page_widget_seed", 0)
