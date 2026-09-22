@@ -13,3 +13,4 @@ extra-streamlit-components
 reportlab
 python-docx
 XlsxWriter
+streamlit>=1.39.0
