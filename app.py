@@ -8,7 +8,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 import extra_streamlit_components as stx
 from supabase import Client, create_client
-
+from views import synthese_globale_mensuelle
 # Importation sécurisée du gestionnaire Hors-Ligne SQLite
 try:
     from offline_manager import (
