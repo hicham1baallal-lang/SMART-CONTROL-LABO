@@ -2,9 +2,17 @@
 
 from io import BytesIO
 import json
+import os
 
 import pandas as pd
 import streamlit as st
+from docx import Document
+from docx.enum.section import WD_ORIENT
+from docx.enum.table import WD_ALIGN_VERTICAL, WD_TABLE_ALIGNMENT
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
+from docx.shared import Cm, Pt, RGBColor
 
 
 COLONNES = [
@@ -175,18 +183,140 @@ def charger_synthese(supabase):
     return pd.DataFrame(lignes, columns=COLONNES)
 
 
-def exporter_excel(dataframe):
+def _couleur_cellule(cellule, couleur):
+    proprietes = cellule._tc.get_or_add_tcPr()
+    remplissage = OxmlElement("w:shd")
+    remplissage.set(qn("w:fill"), couleur)
+    proprietes.append(remplissage)
+
+
+def _texte_cellule(cellule, texte, gras=False, couleur=None, taille=8):
+    cellule.text = ""
+    paragraphe = cellule.paragraphs[0]
+    paragraphe.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    paragraphe.paragraph_format.space_after = Pt(0)
+    run = paragraphe.add_run(_texte(texte, ""))
+    run.bold = gras
+    run.font.name = "Arial"
+    run._element.rPr.rFonts.set(qn("w:ascii"), "Arial")
+    run._element.rPr.rFonts.set(qn("w:hAnsi"), "Arial")
+    run.font.size = Pt(taille)
+    if couleur:
+        run.font.color.rgb = RGBColor.from_string(couleur)
+    cellule.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+
+
+def _libelle_mois(mois):
+    noms = {
+        "01": "janvier", "02": "février", "03": "mars", "04": "avril",
+        "05": "mai", "06": "juin", "07": "juillet", "08": "août",
+        "09": "septembre", "10": "octobre", "11": "novembre", "12": "décembre",
+    }
+    annee, numero = mois.split("-", 1)
+    return f"{noms.get(numero, numero)} {annee}"
+
+
+def generer_rapport_word(dataframe, mois):
+    """Produit le rapport Word officiel de la synthèse mensuelle."""
+    document = Document()
+    section = document.sections[0]
+    section.orientation = WD_ORIENT.LANDSCAPE
+    section.page_width, section.page_height = section.page_height, section.page_width
+    section.top_margin = Cm(1.4)
+    section.bottom_margin = Cm(1.4)
+    section.left_margin = Cm(1.4)
+    section.right_margin = Cm(1.4)
+
+    # En-tête LPEE et logo. Le logo doit être dans le même dossier que app.py.
+    en_tete = document.add_table(rows=1, cols=2)
+    en_tete.alignment = WD_TABLE_ALIGNMENT.CENTER
+    en_tete.autofit = False
+    en_tete.columns[0].width = Cm(3.0)
+    en_tete.columns[1].width = Cm(22.0)
+    logo_path = "logo.png.jpg"
+    if os.path.exists(logo_path):
+        p_logo = en_tete.cell(0, 0).paragraphs[0]
+        p_logo.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        p_logo.add_run().add_picture(logo_path, width=Cm(2.3))
+    else:
+        _texte_cellule(en_tete.cell(0, 0), "LPEE", gras=True, taille=14)
+
+    p_lpee = en_tete.cell(0, 1).paragraphs[0]
+    p_lpee.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    r_lpee = p_lpee.add_run("LABORATOIRE PUBLIC D ESSAIS ET D ÉTUDES  LPEE")
+    r_lpee.bold = True
+    r_lpee.font.name = "Arial"
+    r_lpee.font.size = Pt(13)
+    p_centre = en_tete.cell(0, 1).add_paragraph()
+    p_centre.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    r_centre = p_centre.add_run("CENTRE TECHNIQUE RÉGIONAL CASABLANCA SETTAT BENIMELLAL")
+    r_centre.font.name = "Arial"
+    r_centre.font.size = Pt(9)
+
+    document.add_paragraph()
+    titre = document.add_paragraph()
+    titre.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    r_titre = titre.add_run(f"RAPPORT DE SYNTHÈSE GLOBALE DU MOIS DE {_libelle_mois(mois).upper()}")
+    r_titre.bold = True
+    r_titre.font.name = "Arial"
+    r_titre.font.size = Pt(14)
+
+    informations = document.add_table(rows=2, cols=4)
+    informations.alignment = WD_TABLE_ALIGNMENT.CENTER
+    libelles = [("Client", "TGCC"), ("Projet", "LGV CASA SUD")]
+    for ligne, (libelle, valeur) in enumerate(libelles):
+        _couleur_cellule(informations.cell(ligne, 0), "D9EAF7")
+        _texte_cellule(informations.cell(ligne, 0), libelle, gras=True, taille=9)
+        _texte_cellule(informations.cell(ligne, 1), valeur, taille=9)
+    _couleur_cellule(informations.cell(0, 2), "D9EAF7")
+    _texte_cellule(informations.cell(0, 2), "Période", gras=True, taille=9)
+    _texte_cellule(informations.cell(0, 3), _libelle_mois(mois).capitalize(), taille=9)
+    _couleur_cellule(informations.cell(1, 2), "D9EAF7")
+    _texte_cellule(informations.cell(1, 2), "Nombre d essais", gras=True, taille=9)
+    _texte_cellule(informations.cell(1, 3), str(len(dataframe)), taille=9)
+
+    document.add_paragraph()
+    resume = document.add_paragraph()
+    resume.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    r_resume = resume.add_run(
+        f"Bilan mensuel : {len(dataframe)} essai(s), "
+        f"{(dataframe['Résultat'] == 'Conforme').sum()} conforme(s), "
+        f"{(dataframe['Résultat'] == 'Non conforme').sum()} non conforme(s) et "
+        f"{(dataframe['Résultat'] == 'À vérifier').sum()} à vérifier."
+    )
+    r_resume.font.name = "Arial"
+    r_resume.font.size = Pt(9)
+
+    tableau = document.add_table(rows=1, cols=len(COLONNES))
+    tableau.alignment = WD_TABLE_ALIGNMENT.CENTER
+    tableau.style = "Table Grid"
+    for index, entete in enumerate(COLONNES):
+        cellule = tableau.rows[0].cells[index]
+        _couleur_cellule(cellule, "1F4E78")
+        _texte_cellule(cellule, entete, gras=True, couleur="FFFFFF", taille=8)
+
+    for _, essai in dataframe.iterrows():
+        cellules = tableau.add_row().cells
+        valeurs = [
+            essai["Date"].strftime("%d/%m/%Y") if not pd.isna(essai["Date"]) else "—",
+            essai["Type d'essai"], essai["Référence"], essai["Emplacement / origine"],
+            essai["Matériau / couche"], essai["Résultat"], essai["Observation"],
+        ]
+        for index, valeur in enumerate(valeurs):
+            if essai["Résultat"] == "Non conforme":
+                _couleur_cellule(cellules[index], "FDE9E7")
+            elif essai["Résultat"] == "Conforme":
+                _couleur_cellule(cellules[index], "EAF4EA")
+            _texte_cellule(cellules[index], valeur, taille=7)
+
+    document.add_paragraph()
+    signatures = document.add_table(rows=1, cols=2)
+    signatures.alignment = WD_TABLE_ALIGNMENT.CENTER
+    _texte_cellule(signatures.cell(0, 0), "LE COORDINATEUR DES ESSAIS\n\nO. IKKEN\n\nVisa :", gras=True, taille=9)
+    _texte_cellule(signatures.cell(0, 1), "LE CHEF DU LABORATOIRE\n\nH. BAALLAL\n\nVisa :", gras=True, taille=9)
+
     sortie = BytesIO()
-    with pd.ExcelWriter(sortie, engine="openpyxl") as writer:
-        dataframe.to_excel(writer, index=False, sheet_name="Synthèse mensuelle")
-        feuille = writer.sheets["Synthèse mensuelle"]
-        for colonne in feuille[1]:
-            colonne.font = colonne.font.copy(bold=True, color="FFFFFF")
-            colonne.fill = colonne.fill.copy(fgColor="1F4E78", fill_type="solid")
-        for colonne in feuille.columns:
-            lettre = colonne[0].column_letter
-            largeur = min(max(len(str(cell.value or "")) for cell in colonne) + 2, 40)
-            feuille.column_dimensions[lettre].width = largeur
+    document.save(sortie)
     sortie.seek(0)
     return sortie.getvalue()
 
@@ -249,9 +379,9 @@ def show(supabase_client):
     st.dataframe(affichage, use_container_width=True, hide_index=True)
 
     st.download_button(
-        "📥 Télécharger la synthèse Excel",
-        data=exporter_excel(affichage),
-        file_name=f"Synthese_globale_{mois_choisi}.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "📥 Télécharger le rapport Word",
+        data=generer_rapport_word(resultat, mois_choisi),
+        file_name=f"Rapport_synthese_globale_{mois_choisi}.docx",
+        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         use_container_width=True,
     )
