@@ -20,6 +20,17 @@ COLONNES = [
     "Matériau / couche", "Résultat", "Observation",
 ]
 
+PRESENTATION_MATERIAUX = {
+    "Remblai ordinaire": "Matériau de remblai courant utilisé pour les terrassements, contrôlé selon sa classification GTR et son aptitude à la mise en œuvre.",
+    "GNF 0/40": "Grave non traitée de granularité 0/40, utilisée pour les couches de fondation selon les exigences du projet.",
+    "GNA 0/31.5": "Grave non traitée de granularité 0/31.5, destinée aux couches d assise et contrôlée par ses caractéristiques granulométriques.",
+    "Couche de forme": "Couche préparant la plateforme et assurant la portance requise avant la réalisation des couches supérieures.",
+    "Sous couche 0/31.5": "Matériau granulaire de sous couche, contrôlé pour vérifier sa conformité aux spécifications de compactage et de qualité.",
+    "GNT bloc technique PRA": "Grave non traitée prévue pour les blocs techniques PRA, vérifiée suivant les exigences particulières du marché.",
+    "GNT 0/60": "Grave non traitée de granularité 0/60, utilisée lorsque la structure nécessite une couche granulaire de plus forte épaisseur.",
+    "Remblai contigu type 2": "Matériau de remblai placé au voisinage des ouvrages, soumis à des critères spécifiques de classification et de qualité.",
+}
+
 
 def _texte(valeur, defaut="—"):
     """Retourne une valeur texte affichable sans jamais produire NaN."""
@@ -220,8 +231,9 @@ def generer_rapport_word(dataframe, mois):
     """Produit le rapport Word officiel de la synthèse mensuelle."""
     document = Document()
     section = document.sections[0]
-    section.orientation = WD_ORIENT.LANDSCAPE
-    section.page_width, section.page_height = section.page_height, section.page_width
+    section.orientation = WD_ORIENT.PORTRAIT
+    section.page_width = Cm(21)
+    section.page_height = Cm(29.7)
     section.top_margin = Cm(1.4)
     section.bottom_margin = Cm(1.4)
     section.left_margin = Cm(1.4)
@@ -231,8 +243,8 @@ def generer_rapport_word(dataframe, mois):
     en_tete = document.add_table(rows=1, cols=2)
     en_tete.alignment = WD_TABLE_ALIGNMENT.CENTER
     en_tete.autofit = False
-    en_tete.columns[0].width = Cm(3.0)
-    en_tete.columns[1].width = Cm(22.0)
+    en_tete.columns[0].width = Cm(2.5)
+    en_tete.columns[1].width = Cm(14.7)
     logo_path = "logo.png.jpg"
     if os.path.exists(logo_path):
         p_logo = en_tete.cell(0, 0).paragraphs[0]
@@ -293,7 +305,7 @@ def generer_rapport_word(dataframe, mois):
     for index, entete in enumerate(COLONNES):
         cellule = tableau.rows[0].cells[index]
         _couleur_cellule(cellule, "1F4E78")
-        _texte_cellule(cellule, entete, gras=True, couleur="FFFFFF", taille=8)
+        _texte_cellule(cellule, entete, gras=True, couleur="FFFFFF", taille=6.5)
 
     for _, essai in dataframe.iterrows():
         cellules = tableau.add_row().cells
@@ -307,7 +319,34 @@ def generer_rapport_word(dataframe, mois):
                 _couleur_cellule(cellules[index], "FDE9E7")
             elif essai["Résultat"] == "Conforme":
                 _couleur_cellule(cellules[index], "EAF4EA")
-            _texte_cellule(cellules[index], valeur, taille=7)
+            # En A4 portrait, une taille compacte évite de tronquer le tableau.
+            _texte_cellule(cellules[index], valeur, taille=6.5)
+
+    document.add_page_break()
+    titre_materiaux = document.add_paragraph()
+    titre_materiaux.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    r_materiaux = titre_materiaux.add_run("PRÉSENTATION DES TYPES DE MATÉRIAUX")
+    r_materiaux.bold = True
+    r_materiaux.font.name = "Arial"
+    r_materiaux.font.size = Pt(12)
+
+    intro_materiaux = document.add_paragraph()
+    intro_materiaux.add_run(
+        "Les matériaux ci dessous sont ceux suivis par le module Identification matériaux. "
+        "Leur conformité est indiquée dans le tableau de synthèse lorsqu un essai a été réalisé pendant la période."
+    ).font.size = Pt(9)
+
+    tableau_materiaux = document.add_table(rows=1, cols=2)
+    tableau_materiaux.style = "Table Grid"
+    tableau_materiaux.alignment = WD_TABLE_ALIGNMENT.CENTER
+    for index, entete in enumerate(("Type de matériau", "Présentation")):
+        cellule = tableau_materiaux.rows[0].cells[index]
+        _couleur_cellule(cellule, "1F4E78")
+        _texte_cellule(cellule, entete, gras=True, couleur="FFFFFF", taille=8)
+    for nom, presentation in PRESENTATION_MATERIAUX.items():
+        cellules = tableau_materiaux.add_row().cells
+        _texte_cellule(cellules[0], nom, gras=True, taille=8)
+        _texte_cellule(cellules[1], presentation, taille=8)
 
     document.add_paragraph()
     signatures = document.add_table(rows=1, cols=2)
