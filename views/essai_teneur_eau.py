@@ -117,8 +117,17 @@ def generate_pv_teneur_eau_pdf(header_info, points_data):
     pdf.cell(95, 7, f"   Lieu de prélèvement : {header_info.get('lieu_prelevement') or ''}", 1, 0, "L")
     pdf.cell(95, 7, f"   Teneur en eau {type_p} (%) : {header_info.get('w_opn') or ''} %", 1, 1, "L")
 
-    pdf.cell(95, 7, f"   Prélèvement effectué le : {header_info.get('date_prelevement') or ''}", 1, 0, "L")
-    pdf.cell(95, 7, f"   PK / Section : {header_info.get('pk_zone') or ''}", 1, 1, "L")
+    pdf.cell(190, 7, f"   Prélèvement effectué le : {header_info.get('date_prelevement') or ''}", 1, 1, "L")
+
+    # PK / Section : ligne pleine largeur avec retour à la ligne automatique (multi_cell)
+    # car pdf.cell() ne wrappe pas le texte et le fait déborder si la valeur est longue.
+    pk_label = "   PK / Section : "
+    pk_valeur = header_info.get('pk_zone') or ''
+    y_before_pk = pdf.get_y()
+    pdf.multi_cell(190, 7, f"{pk_label}{pk_valeur}", 1, "L")
+    # Sécurité : si multi_cell n'a produit qu'une seule ligne, sa hauteur (7) est déjà
+    # cohérente avec les cellules 95/7 du dessus ; si le texte est long, la cellule
+    # s'agrandit automatiquement sur plusieurs lignes sans jamais déborder.
     pdf.ln(8)
 
     # --- SECTION II : RÉSULTATS DES ESSAIS ---
