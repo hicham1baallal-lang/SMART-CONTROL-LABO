@@ -1236,7 +1236,14 @@ def show(supabase_client):
 
             with col_params_right:
                 f_st.markdown("##### ⚙️ Caractéristiques, Limites & Paramètres Spécifiques")
+                # IMPORTANT : ces champs sont "calculés" (disabled=True) mais possèdent un key=.
+                # Streamlit ignore alors le nouveau value= à chaque rerun et réaffiche la valeur
+                # mise en cache dans st.session_state[key] lors du tout premier rendu (ici 6500 / 4700,
+                # les valeurs par défaut du tableau). On force donc explicitement le session_state à la
+                # valeur recalculée juste avant de créer le widget, pour qu'il reflète bien le tableau.
+                f_st.session_state[f"re_10mm_mat_{mat_code}"] = re_val_calc
                 re_val = f_st.number_input("Refus R_e (10mm) (g)", value=re_val_calc, disabled=True, key=f"re_10mm_mat_{mat_code}")
+                f_st.session_state[f"me_val_mat_{mat_code}"] = me_val_calc
                 me_val = f_st.number_input("Prise Me (g) [M3-Re]", value=me_val_calc, disabled=True, key=f"me_val_mat_{mat_code}")
 
                 f_st.session_state.setdefault(f"fond_tamis_{mat_code}", 1.4)
@@ -1249,6 +1256,7 @@ def show(supabase_client):
                     r_008_val = 1850.0
 
                 m5_calc = r_008_val + fond_tamis_val
+                f_st.session_state[f"m5_auto_val_{mat_code}"] = m5_calc
                 m5_val = f_st.number_input("M5 (Total refus et passant sur 80µm)", value=m5_calc, disabled=True, key=f"m5_auto_val_{mat_code}")
 
                 f_st.session_state.setdefault(f"wopt_{mat_code}", 13.2)
