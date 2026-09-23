@@ -1,6 +1,7 @@
 import streamlit as str_module
 import streamlit as st
 import pandas as pd
+import re
 import time
 from datetime import date, datetime
 from audit_log import enregistrer_modification, afficher_historique_modifications
@@ -22,6 +23,13 @@ def _est_erreur_timeout(exc):
     ou basculer en mode local."""
     msg = str(exc).lower()
     return any(motif in msg for motif in ["timed out", "timeout", "504", "gateway", "connection reset", "temporarily unavailable"])
+
+def _colonne_manquante_pgrst204(exc):
+    """Si l'erreur Supabase/PostgREST est un PGRST204 ('colonne introuvable
+    dans le cache de schéma', typiquement parce que la colonne n'existe pas
+    encore dans la table), retourne le nom de cette colonne. Sinon None."""
+    m = re.search(r"Could not find the '([^']+)' column", str(exc))
+    return m.group(1) if m else None
 
 def _executer_avec_reprise(fn, tentatives=2, delai=1.0):
     """Exécute fn() en réessayant automatiquement en cas d'erreur réseau
@@ -852,18 +860,48 @@ def show(supabase_client):
                                 for pt in safe_payload["points_mesure"]
                             ]
 
-                        if editing_item:
-                            anciennes_valeurs_plaque = {k: editing_item.get(k) for k in safe_payload}
-                            _executer_avec_reprise(lambda: supabase.table("essai_plaque").update(safe_payload).eq("id", editing_item["id"]).eq("projet_id", projet_id_actif).select("id").execute())
-                            enregistrer_modification(supabase, "essai_plaque", editing_item["id"], "MODIFICATION", anciennes_valeurs_plaque, safe_payload)
-                            st.success(f"✅ Essai #{editing_item['id']} mis à jour avec succès !")
-                            st.session_state["edit_plaque_item"] = None
-                        else:
-                            res_ins_plaque = _executer_avec_reprise(lambda: supabase.table("essai_plaque").insert(safe_payload).select("id").execute())
-                            if res_ins_plaque.data:
-                                nouvel_id_plaque = res_ins_plaque.data[0].get("id")
-                                enregistrer_modification(supabase, "essai_plaque", nouvel_id_plaque, "CREATION", nouvelles_valeurs=safe_payload)
-                            st.success("✅ Enregistré avec succès !")
+                        # Filet de sécurité supplémentaire : même quand valid_columns n'a pas pu
+                        # être déterminé (table vide lors du tout premier essai) ou qu'il est
+                        # périmé (colonne jamais créée / supprimée côté Supabase depuis), on retire
+                        # à la volée toute colonne que Postgrest rejette explicitement (erreur
+                        # PGRST204 "Could not find the 'X' column ... in the schema cache") et on
+                        # réessaie, plutôt que de perdre tout l'enregistrement pour un seul champ.
+                        colonnes_ecartees = []
+                        for _tentative in range(len(safe_payload) + 1):
+                            try:
+                                if editing_item:
+                                    anciennes_valeurs_plaque = {k: editing_item.get(k) for k in safe_payload}
+                                    _executer_avec_reprise(lambda: supabase.table("essai_plaque").update(safe_payload).eq("id", editing_item["id"]).eq("projet_id", projet_id_actif).select("id").execute())
+                                    enregistrer_modification(supabase, "essai_plaque", editing_item["id"], "MODIFICATION", anciennes_valeurs_plaque, safe_payload)
+                                    st.success(f"✅ Essai #{editing_item['id']} mis à jour avec succès !")
+                                    st.session_state["edit_plaque_item"] = None
+                                else:
+                                    res_ins_plaque = _executer_avec_reprise(lambda: supabase.table("essai_plaque").insert(safe_payload).select("id").execute())
+                                    if res_ins_plaque.data:
+                                        nouvel_id_plaque = res_ins_plaque.data[0].get("id")
+                                        enregistrer_modification(supabase, "essai_plaque", nouvel_id_plaque, "CREATION", nouvelles_valeurs=safe_payload)
+                                    st.success("✅ Enregistré avec succès !")
+                                break  # succès : on sort de la boucle de réessai
+                            except Exception as e_col:
+                                colonne_absente = _colonne_manquante_pgrst204(e_col)
+                                if colonne_absente and colonne_absente in safe_payload:
+                                    del safe_payload[colonne_absente]
+                                    colonnes_ecartees.append(colonne_absente)
+                                    if st.session_state.get("_essai_plaque_valid_columns"):
+                                        st.session_state["_essai_plaque_valid_columns"].discard(colonne_absente)
+                                    continue  # on retire la colonne fautive et on retente
+                                raise  # autre type d'erreur (réseau, contrainte...) : on la laisse remonter
+
+                        if colonnes_ecartees:
+                            sql_suggestions = "\n".join(
+                                f"ALTER TABLE essai_plaque ADD COLUMN {c} text;" for c in colonnes_ecartees
+                            )
+                            st.warning(
+                                "⚠️ Ces champs n'existent pas dans la table Supabase **essai_plaque** "
+                                f"et n'ont donc **pas** été enregistrés : **{', '.join(colonnes_ecartees)}**. "
+                                "Ajoutez la/les colonnes manquantes côté Supabase (SQL Editor) pour que ces "
+                                f"valeurs soient sauvegardées :\n\n```sql\n{sql_suggestions}\n```"
+                            )
 
                     st.cache_data.clear()
                     st.rerun()
