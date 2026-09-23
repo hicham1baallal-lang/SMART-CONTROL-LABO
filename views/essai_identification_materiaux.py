@@ -1217,7 +1217,11 @@ def show(supabase_client):
             with col_main_tbl:
                 edited_sieve_df = f_st.data_editor(
                     df_template,
-                    disabled=["Tamis (mm)"] if not user_can_edit else [],
+                    # La colonne "Tamis (mm)" doit TOUJOURS rester verrouillée : c'est elle qui sert
+                    # de clé de correspondance pour retrouver le Refus R_e à 10mm (ligne ~1228). Si elle
+                    # devient éditable, la moindre modification accidentelle fait échouer cette
+                    # correspondance et affiche à tort la valeur de secours figée à 6500 g.
+                    disabled=["Tamis (mm)"] if user_can_edit else list(df_template.columns),
                     use_container_width=True,
                     height=500,
                     key=f"sieve_editor_{mat_code}_{f_st.session_state.get('pv_edit_reload_counter', 0)}"
@@ -1343,7 +1347,9 @@ def show(supabase_client):
             with col_main_tbl:
                 edited_sieve_df = f_st.data_editor(
                     df_template_grave,
-                    disabled=["Tamis (mm)"] if not user_can_edit else [],
+                    # Même correction que pour REM-ORD : la colonne "Tamis (mm)" reste verrouillée
+                    # pour ne jamais casser les calculs de refus cumulé basés sur la taille du tamis.
+                    disabled=["Tamis (mm)"] if user_can_edit else list(df_template_grave.columns),
                     use_container_width=True,
                     height=500,
                     key=f"sieve_editor_{mat_code}_{f_st.session_state.get('pv_edit_reload_counter', 0)}"
