@@ -611,6 +611,29 @@ def _mesure_a_tamis(tamis_cible, tamis_list, passant_list):
     return passant_arr[meilleur_idx]
 
 
+def verifier_fuseau_granulo(fuseau_def, tamis_list, passant_list):
+    """Vérifie que chaque point mesuré de la courbe granulométrique reste dans les
+    bornes du fuseau de spécification (VSI <= % passant mesuré <= VSS) pour chaque
+    tamis défini par le fuseau. Retourne (conforme: bool, detail: str, ecarts: list de
+    (tamis, mesure, vsi, vss) hors fuseau)."""
+    if not fuseau_def:
+        return True, "Pas de fuseau applicable.", []
+    ecarts = []
+    for tamis_f, vsi_f, vss_f in fuseau_def:
+        mesure = _mesure_a_tamis(tamis_f, tamis_list, passant_list)
+        if mesure is None:
+            continue
+        if not (vsi_f <= mesure <= vss_f):
+            ecarts.append((tamis_f, mesure, vsi_f, vss_f))
+    if ecarts:
+        detail = "Hors fuseau à : " + ", ".join(
+            f"{_fmt_tamis_mm(t)}mm ({m:.1f}% mesuré, attendu {_fmt_tamis_mm(vsi)}-{_fmt_tamis_mm(vss)}%)"
+            for t, m, vsi, vss in ecarts
+        )
+        return False, detail, ecarts
+    return True, "Courbe granulométrique conforme au fuseau.", []
+
+
 def calc_dx_from_curve(result_df, x_percent):
     """
     Retourne Dx (mm) : le tamis (parmi les tamis effectivement testés) dont le % passant
@@ -1640,6 +1663,22 @@ def show(supabase_client):
 
             obs_mode = mat_config.get("obs_mode")
 
+            # Conformité de la courbe granulométrique mesurée au fuseau de spécification
+            # (ex: GNF-040/"GNF1", GNA-031, CDF, SC-031, GNT-PRA). C'était auparavant
+            # affiché sur la courbe et dans un tableau de comparaison, mais jamais pris
+            # en compte dans la conclusion "conforme / non conforme" du PV — un matériau
+            # pouvait donc être déclaré conforme tout en étant hors fuseau.
+            fuseau_def_check = get_fuseau_def_for_material(mat_code, mat_config, {"Dmax (mm)": str(dmax_detected)}, mat_config["family"])
+            fuseau_conforme, fuseau_detail, _ = verifier_fuseau_granulo(
+                fuseau_def_check,
+                result_df["Tamis (mm)"].astype(float).tolist(),
+                result_df["% Passant"].astype(float).tolist(),
+            )
+            if fuseau_def_check:
+                fuseau_badge = "✅ Conforme au fuseau" if fuseau_conforme else "❌ Hors fuseau"
+                f_st.metric(f"Fuseau granulométrique — {mat_code}", fuseau_badge)
+                f_st.caption(f"Détail : {fuseau_detail}")
+
             cpc_conforme, cpc_detail = None, None
             if obs_mode != "cdf":
                 cpc_conforme, cpc_detail = verifier_cpc_grave(
@@ -1667,11 +1706,13 @@ def show(supabase_client):
                 somme_la_mde = la_val + mde_val
 
             if obs_mode == "gtr_rt":
-                is_conf = (classe_gtr_extra in ("D2", "D3")) and (qualite_rt == "RT2")
+                is_conf = (classe_gtr_extra in ("D2", "D3")) and (qualite_rt == "RT2") and fuseau_conforme
                 if is_conf:
                     obs = f"Les résultats d'identification de la {selected_mat_sub} permettent de la classer en qualité RT2, conformément aux spécifications du CCTP."
                 else:
                     obs = f"Les résultats d'identification de la {selected_mat_sub} ne permettent pas de la classer en qualité RT2, conformément aux spécifications du CCTP."
+                    if not fuseau_conforme:
+                        obs += f" {fuseau_detail}"
             elif obs_mode == "cdf":
                 cpc_conforme, cpc_detail = verifier_exigence_couche_forme(
                     classe_gtr_extra, mde_val, coeff_apl_val, mb_val, vbs_gtr_val, somme_la_mde,
@@ -1687,11 +1728,13 @@ def show(supabase_client):
                 cdf_badge = "✅ Conforme" if cpc_conforme else "❌ Non Conforme"
                 f_st.metric(f"Exigence Marché — {mat_code}", cdf_badge)
                 f_st.caption(f"Détail : {cpc_detail}")
-                is_conf = cpc_conforme
+                is_conf = cpc_conforme and fuseau_conforme
                 if is_conf:
                     obs = f"Les résultats d'identification de la {selected_mat_sub} sont conformes aux spécifications du marché."
                 else:
                     obs = f"Les résultats d'identification de la {selected_mat_sub} ne sont pas conformes aux spécifications du marché."
+                    if not fuseau_conforme:
+                        obs += f" {fuseau_detail}"
             elif obs_mode == "gnt_pra":
                 cu_val, cc_val, d10_val, d30_val, d60_val = calc_cu_cc(result_df)
                 cpc_conforme, cpc_detail = verifier_exigence_gnt_pra(
@@ -1706,17 +1749,21 @@ def show(supabase_client):
                     f"Détail : {cpc_detail} | D10={d10_val:.3f}mm | D30={d30_val:.3f}mm | D60={d60_val:.3f}mm"
                     if d10_val and d30_val and d60_val else f"Détail : {cpc_detail}"
                 )
-                is_conf = cpc_conforme
+                is_conf = cpc_conforme and fuseau_conforme
                 if is_conf:
                     obs = f"Les résultats d'identification de la {selected_mat_sub} sont conformes aux spécifications du marché."
                 else:
                     obs = f"Les résultats d'identification de la {selected_mat_sub} ne sont pas conformes aux spécifications du marché."
+                    if not fuseau_conforme:
+                        obs += f" {fuseau_detail}"
             else:
-                is_conf = cpc_conforme
+                is_conf = cpc_conforme and fuseau_conforme
                 if is_conf:
                     obs = f"Les résultats d'identification de la {selected_mat_sub} sont conformes aux spécifications du marché."
                 else:
                     obs = f"Les résultats d'identification de la {selected_mat_sub} ne sont pas conformes aux spécifications du marché."
+                    if not fuseau_conforme:
+                        obs += f" {fuseau_detail}"
 
         f_st.info(f"Observation automatique : **{obs}** | Dmax: **{dmax_detected} mm** | Passant 50mm: **{pass_50mm_val:.1f}%** | Passant {fine_sieve_label}: **{pass_fines_val:.1f}%**{ecart_tamisage_txt}")
 
