@@ -986,15 +986,15 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
     else:
         exigence_col_label = mat_config.get("exigence_col_label", "Exigence marché et CPC")
         pdf.set_font("Helvetica", "B", 7.5)
-        pdf.cell(60, 5.5, "", 1, 0, "C", fill=True)
-        pdf.cell(65, 5.5, str(ech_label), 1, 0, "C", fill=True)
-        pdf.cell(65, 5.5, exigence_col_label, 1, 1, "C", fill=True)
+        pdf.cell(60, 4.5, "", 1, 0, "C", fill=True)
+        pdf.cell(65, 4.5, str(ech_label), 1, 0, "C", fill=True)
+        pdf.cell(65, 4.5, exigence_col_label, 1, 1, "C", fill=True)
 
         def _row3(label, value, exigence="-"):
             pdf.set_font("Helvetica", "", 7.5)
-            pdf.cell(60, 5, f" {label}", 1, 0, "L")
-            pdf.cell(65, 5, str(_zero_to_star(value)), 1, 0, "C")
-            pdf.cell(65, 5, str(exigence), 1, 1, "C")
+            pdf.cell(60, 4.5, f" {label}", 1, 0, "L")
+            pdf.cell(65, 4.5, str(_zero_to_star(value)), 1, 0, "C")
+            pdf.cell(65, 4.5, str(exigence), 1, 1, "C")
 
         _row3("%< 0,063 mm", data_dict.get('Passant Fines (%)', data_dict.get('Passant 80um (%)', '22,3')))
         _row3("%< 2 mm", data_dict.get('Passant 2mm (%)', '66'))
@@ -1026,48 +1026,39 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
         if "MB (g/kg)" in data_dict:
             _row3("Bleu de Méthylène MB (0/2mm)", data_dict.get('MB (g/kg)', '-'), mat_config.get("mb_exigence_txt", "-"))
 
-        if fuseau_def:
-            pdf.set_font("Helvetica", "B", 7.5)
-            pdf.cell(190, 5, " Fuseau granulométrique de spécification (min-max)", 1, 1, "L", fill=True)
-            for tamis_f, vsi_f, vss_f in fuseau_def:
-                mesure = _mesure_a_tamis(tamis_f, tamis_mesures, passant_mesures)
-                mesure_txt = f"{mesure:.1f}".replace('.', ',') if mesure is not None else "-"
-                exigence_txt = f"{_fmt_tamis_mm(vsi_f)} - {_fmt_tamis_mm(vss_f)}"
-                _row3(f"% Passant au tamis {_fmt_tamis_mm(tamis_f)} mm", mesure_txt, exigence_txt)
-
-        pdf.cell(60, 5, " Proctor", 1, 0, "L")
+        pdf.cell(60, 4.5, " Proctor", 1, 0, "L")
         pdf.set_font("Helvetica", "B", 7)
-        pdf.cell(26, 5, " Wopt", 1, 0, "C", fill=True)
+        pdf.cell(26, 4.5, " Wopt", 1, 0, "C", fill=True)
         pdf.set_font("Helvetica", "", 7.5)
-        pdf.cell(26, 5, val_wopt, 1, 0, "C")
+        pdf.cell(26, 4.5, val_wopt, 1, 0, "C")
         pdf.set_font("Helvetica", "B", 7)
-        pdf.cell(34, 5, " Densité OPN", 1, 0, "C", fill=True)
+        pdf.cell(34, 4.5, " Densité OPN", 1, 0, "C", fill=True)
         pdf.set_font("Helvetica", "", 7.5)
-        pdf.cell(44, 5, val_dens, 1, 1, "C")
+        pdf.cell(44, 4.5, val_dens, 1, 1, "C")
 
         if "Classification GTR (Extra)" in data_dict:
             pdf.set_font("Helvetica", "", 7.5)
-            pdf.cell(60, 5, " Classification GTR", 1, 0, "L")
+            pdf.cell(60, 4.5, " Classification GTR", 1, 0, "L")
             pdf.set_font("Helvetica", "B", 8)
-            pdf.cell(130, 5, str(data_dict.get("Classification GTR (Extra)")), 1, 1, "C")
+            pdf.cell(130, 4.5, str(data_dict.get("Classification GTR (Extra)")), 1, 1, "C")
 
         if "Qualite RT" in data_dict:
             pdf.set_font("Helvetica", "", 7.5)
-            pdf.cell(60, 5, " classe de qualité ST 590", 1, 0, "L")
+            pdf.cell(60, 4.5, " classe de qualité ST 590", 1, 0, "L")
             pdf.set_font("Helvetica", "B", 8)
-            pdf.cell(130, 5, str(data_dict.get("Qualite RT")), 1, 1, "C")
+            pdf.cell(130, 4.5, str(data_dict.get("Qualite RT")), 1, 1, "C")
 
         if "Cu" in data_dict:
             pdf.set_font("Helvetica", "", 7.5)
-            pdf.cell(60, 5, " Coeff. uniformité Cu (D60/D10)", 1, 0, "L")
-            pdf.cell(65, 5, str(data_dict.get("Cu")), 1, 0, "C")
-            pdf.cell(65, 5, "> 4", 1, 1, "C")
+            pdf.cell(60, 4.5, " Coeff. uniformité Cu (D60/D10)", 1, 0, "L")
+            pdf.cell(65, 4.5, str(data_dict.get("Cu")), 1, 0, "C")
+            pdf.cell(65, 4.5, "> 4", 1, 1, "C")
 
         if "Cc" in data_dict:
             pdf.set_font("Helvetica", "", 7.5)
-            pdf.cell(60, 5, " Coeff. courbure Cc (D30²/D10.D60)", 1, 0, "L")
-            pdf.cell(65, 5, str(data_dict.get("Cc")), 1, 0, "C")
-            pdf.cell(65, 5, "1 à 4", 1, 1, "C")
+            pdf.cell(60, 4.5, " Coeff. courbure Cc (D30²/D10.D60)", 1, 0, "L")
+            pdf.cell(65, 4.5, str(data_dict.get("Cc")), 1, 0, "C")
+            pdf.cell(65, 4.5, "1 à 4", 1, 1, "C")
 
     pdf.ln(2)
 
@@ -1085,16 +1076,20 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
             fuseau_def=fuseau_def
         )
 
+    # Courbe légèrement plus compacte quand le tableau de comparaison au fuseau suit,
+    # pour que l'ensemble du PV reste sur une seule page.
+    curve_h = 4.6 * 10 if fuseau_def else 6.2 * 10
+
     if curve_buf is not None:
         try:
-            pdf.image(curve_buf, x=10, y=pdf.get_y() + 1, w=190, h=6.2 * 10)
-            pdf.ln(64)
+            pdf.image(curve_buf, x=10, y=pdf.get_y() + 1, w=190, h=curve_h)
+            pdf.ln(curve_h + 2)
         except Exception:
             pdf.cell(190, 62, "[Erreur d'insertion de la courbe]", 1, 1, "C")
     elif curve_img_path and os.path.exists(curve_img_path):
         try:
-            pdf.image(curve_img_path, x=10, y=pdf.get_y() + 1, w=190, h=6.2 * 10)
-            pdf.ln(64)
+            pdf.image(curve_img_path, x=10, y=pdf.get_y() + 1, w=190, h=curve_h)
+            pdf.ln(curve_h + 2)
         except Exception:
             pdf.cell(190, 62, "[Erreur d'insertion de la courbe]", 1, 1, "C")
     else:
@@ -1107,38 +1102,38 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
     if fuseau_def:
         pdf.set_font("Helvetica", "B", 8)
         pdf.set_fill_color(220, 230, 242)
-        pdf.cell(190, 5, " COMPARAISON AU FUSEAU DE SPÉCIFICATION", 1, 1, "L", fill=True)
+        pdf.cell(190, 4.5, " COMPARAISON AU FUSEAU DE SPÉCIFICATION", 1, 1, "L", fill=True)
 
-        pdf.set_font("Helvetica", "B", 7.5)
-        pdf.cell(38, 5.5, "Tamis (mm)", 1, 0, "C", fill=True)
-        pdf.cell(50, 5.5, "% Passant mesuré", 1, 0, "C", fill=True)
-        pdf.cell(34, 5.5, "Min (VSI)", 1, 0, "C", fill=True)
-        pdf.cell(34, 5.5, "Max (VSS)", 1, 0, "C", fill=True)
-        pdf.cell(34, 5.5, "Conforme", 1, 1, "C", fill=True)
+        pdf.set_font("Helvetica", "B", 7)
+        pdf.cell(38, 4.5, "Tamis (mm)", 1, 0, "C", fill=True)
+        pdf.cell(50, 4.5, "% Passant mesuré", 1, 0, "C", fill=True)
+        pdf.cell(34, 4.5, "Min (VSI)", 1, 0, "C", fill=True)
+        pdf.cell(34, 4.5, "Max (VSS)", 1, 0, "C", fill=True)
+        pdf.cell(34, 4.5, "Conforme", 1, 1, "C", fill=True)
 
-        pdf.set_font("Helvetica", "", 7.5)
+        pdf.set_font("Helvetica", "", 7)
         for tamis_f, vsi_f, vss_f in fuseau_def:
             mesure = _mesure_a_tamis(tamis_f, tamis_stored, passant_stored)
             mesure_txt = f"{mesure:.1f}".replace('.', ',') if mesure is not None else "-"
             conforme_txt = "-"
             if mesure is not None:
                 conforme_txt = "OUI" if vsi_f <= mesure <= vss_f else "NON"
-            pdf.cell(38, 5, _fmt_tamis_mm(tamis_f), 1, 0, "C")
-            pdf.cell(50, 5, mesure_txt, 1, 0, "C")
-            pdf.cell(34, 5, _fmt_tamis_mm(vsi_f), 1, 0, "C")
-            pdf.cell(34, 5, _fmt_tamis_mm(vss_f), 1, 0, "C")
-            pdf.cell(34, 5, conforme_txt, 1, 1, "C")
+            pdf.cell(38, 4.2, _fmt_tamis_mm(tamis_f), 1, 0, "C")
+            pdf.cell(50, 4.2, mesure_txt, 1, 0, "C")
+            pdf.cell(34, 4.2, _fmt_tamis_mm(vsi_f), 1, 0, "C")
+            pdf.cell(34, 4.2, _fmt_tamis_mm(vss_f), 1, 0, "C")
+            pdf.cell(34, 4.2, conforme_txt, 1, 1, "C")
 
-        pdf.ln(2)
+        pdf.ln(1.5)
 
 
     pdf.set_font("Helvetica", "B", 8)
     pdf.set_fill_color(220, 230, 242)
-    pdf.cell(190, 5, " Commentaires :", 1, 1, "L", fill=True)
+    pdf.cell(190, 4.5, " Commentaires :", 1, 1, "L", fill=True)
     pdf.set_font("Helvetica", "", 7.5)
     obs_text = data_dict.get('Observation', 'Le matériau peut être utilisé pour un remblai.')
-    pdf.multi_cell(190, 4, f" - Observation : {obs_text}\n ", 1, "L")
-    pdf.ln(4)
+    pdf.multi_cell(190, 3.8, f" - Observation : {obs_text}\n ", 1, "L")
+    pdf.ln(1.5)
 
     pdf.set_font("Helvetica", "B", 7.5)
     pdf.set_fill_color(240, 240, 240)
@@ -1147,9 +1142,9 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
     pdf.cell(64, 4.5, "LE CHEF DU LABORATOIRE", 1, 1, "C", fill=True)
 
     pdf.set_font("Helvetica", "", 7.5)
-    pdf.cell(63, 10, "Nom : ", 1, 0, "L")
-    pdf.cell(63, 10, "Nom :                 O. IKKEN", 1, 0, "L")
-    pdf.cell(64, 10, "Nom :                 H. BAALLAL", 1, 1, "L")
+    pdf.cell(63, 8, "Nom : ", 1, 0, "L")
+    pdf.cell(63, 8, "Nom :                 O. IKKEN", 1, 0, "L")
+    pdf.cell(64, 8, "Nom :                 H. BAALLAL", 1, 1, "L")
 
     return bytes(pdf.output())
 
