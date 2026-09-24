@@ -558,6 +558,59 @@ def calc_fuseau_gnt_pra(dmax):
     ]
 
 
+def get_fuseau_def_for_material(mat_code, mat_config, data_dict, family):
+    """Retourne la liste [(tamis_mm, VSI, VSS), ...] du fuseau de spécification
+    applicable à ce matériau (ex: GNF-040/« GNF1 », GNA-031), ou None s'il n'y en a pas.
+    Gère aussi bien le fuseau fixe (FUSEAUX_GRANULO) que le fuseau dynamique GNT-PRA
+    (dont les bornes dépendent du Dmax mesuré sur l'échantillon)."""
+    if family != "GRAVE":
+        return None
+    if mat_config.get("fuseau_dynamic") == "gnt_pra":
+        try:
+            dmax = float(str(data_dict.get("Dmax (mm)", "0")).replace(',', '.'))
+        except (ValueError, TypeError):
+            dmax = 0.0
+        return calc_fuseau_gnt_pra(dmax) or None
+    return FUSEAUX_GRANULO.get(mat_code)
+
+
+def _fmt_tamis_mm(v):
+    """Formate une valeur de tamis en mm à la française (virgule), sans zéro inutile
+    (ex: 31.5 -> '31,5', 10.0 -> '10', 0.08 -> '0,08')."""
+    try:
+        v = float(v)
+    except (TypeError, ValueError):
+        return str(v)
+    if v == int(v):
+        return str(int(v))
+    s = f"{v:.3f}".rstrip('0').rstrip('.')
+    return s.replace('.', ',')
+
+
+def _mesure_a_tamis(tamis_cible, tamis_list, passant_list):
+    """Retrouve, dans les mesures de la courbe granulométrique (Courbe Tamis / Courbe
+    Passant), le % passant correspondant à un tamis du fuseau, en tolérant les petits
+    écarts d'arrondi. Retourne None si aucune mesure suffisamment proche n'est trouvée."""
+    if not tamis_list or not passant_list or tamis_cible is None:
+        return None
+    try:
+        tamis_arr = [float(t) for t in tamis_list]
+        passant_arr = [float(p) for p in passant_list]
+    except (TypeError, ValueError):
+        return None
+    meilleur_idx, meilleur_ecart = None, None
+    for i, t in enumerate(tamis_arr):
+        ecart = abs(t - tamis_cible)
+        if meilleur_ecart is None or ecart < meilleur_ecart:
+            meilleur_ecart, meilleur_idx = ecart, i
+    if meilleur_idx is None:
+        return None
+    tolerance = max(0.01, tamis_cible * 0.05)  # 5% de tolérance (arrondis de saisie)
+    if meilleur_ecart > tolerance:
+        return None
+    return passant_arr[meilleur_idx]
+
+
 def calc_dx_from_curve(result_df, x_percent):
     """
     Retourne Dx (mm) : le tamis (parmi les tamis effectivement testés) dont le % passant
@@ -817,6 +870,13 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
     family = mat_config["family"]
     mat_label = mat_config["label"]
 
+    # Fuseau de spécification applicable (ex: GNF1/GNF-040, GNA-031) : calculé une seule
+    # fois ici, réutilisé à la fois dans le tableau "Exigence marché et CPC" et dans le
+    # tableau de comparaison détaillé par tamis, plus bas.
+    fuseau_def = get_fuseau_def_for_material(mat_code, mat_config, data_dict, family)
+    tamis_mesures = data_dict.get("Courbe Tamis (mm)") or []
+    passant_mesures = data_dict.get("Courbe Passant (%)") or []
+
     pdf.set_font("Helvetica", "B", 7)
     pdf.multi_cell(190, 3.5, "TRAVAUX D'EXECUTION DE TERRASSEMENT, OUVRAGES D'ART ET RETABLISSEMENTS DE COMMUNICATION ENTRE PK 5+450 et PK 10+000 - GARE CASA SUD", 0, "C")
     pdf.ln(2)
@@ -966,6 +1026,15 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
         if "MB (g/kg)" in data_dict:
             _row3("Bleu de Méthylène MB (0/2mm)", data_dict.get('MB (g/kg)', '-'), mat_config.get("mb_exigence_txt", "-"))
 
+        if fuseau_def:
+            pdf.set_font("Helvetica", "B", 7.5)
+            pdf.cell(190, 5, " Fuseau granulométrique de spécification (min-max)", 1, 1, "L", fill=True)
+            for tamis_f, vsi_f, vss_f in fuseau_def:
+                mesure = _mesure_a_tamis(tamis_f, tamis_mesures, passant_mesures)
+                mesure_txt = f"{mesure:.1f}".replace('.', ',') if mesure is not None else "-"
+                exigence_txt = f"{_fmt_tamis_mm(vsi_f)} - {_fmt_tamis_mm(vss_f)}"
+                _row3(f"% Passant au tamis {_fmt_tamis_mm(tamis_f)} mm", mesure_txt, exigence_txt)
+
         pdf.cell(60, 5, " Proctor", 1, 0, "L")
         pdf.set_font("Helvetica", "B", 7)
         pdf.cell(26, 5, " Wopt", 1, 0, "C", fill=True)
@@ -1010,18 +1079,10 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
     passant_stored = data_dict.get("Courbe Passant (%)")
     curve_buf = None
     if tamis_stored and passant_stored and len(tamis_stored) == len(passant_stored):
-        if family == "GRAVE" and mat_config.get("fuseau_dynamic") == "gnt_pra":
-            try:
-                dmax_pdf = float(str(data_dict.get("Dmax (mm)", "0")).replace(',', '.'))
-            except (ValueError, TypeError):
-                dmax_pdf = 0.0
-            fuseau_def_pdf = calc_fuseau_gnt_pra(dmax_pdf)
-        else:
-            fuseau_def_pdf = FUSEAUX_GRANULO.get(mat_code) if family == "GRAVE" else None
         curve_buf = _build_curve_png_bytes(
             tamis_stored, passant_stored,
             ech_label=str(data_dict.get('Ref Echantillon', 'Ech 1')),
-            fuseau_def=fuseau_def_pdf
+            fuseau_def=fuseau_def
         )
 
     if curve_buf is not None:
@@ -1038,8 +1099,38 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
             pdf.cell(190, 62, "[Erreur d'insertion de la courbe]", 1, 1, "C")
     else:
         pdf.cell(190, 62, "[Courbe non disponible]", 1, 1, "C")
-    
+
     pdf.ln(2)
+
+    # --- Tableau de comparaison au fuseau : un tamis par ligne, avec la valeur mesurée
+    # et l'intervalle min (VSI) - max (VSS) exigé, plus une conclusion de conformité. ---
+    if fuseau_def:
+        pdf.set_font("Helvetica", "B", 8)
+        pdf.set_fill_color(220, 230, 242)
+        pdf.cell(190, 5, " COMPARAISON AU FUSEAU DE SPÉCIFICATION", 1, 1, "L", fill=True)
+
+        pdf.set_font("Helvetica", "B", 7.5)
+        pdf.cell(38, 5.5, "Tamis (mm)", 1, 0, "C", fill=True)
+        pdf.cell(50, 5.5, "% Passant mesuré", 1, 0, "C", fill=True)
+        pdf.cell(34, 5.5, "Min (VSI)", 1, 0, "C", fill=True)
+        pdf.cell(34, 5.5, "Max (VSS)", 1, 0, "C", fill=True)
+        pdf.cell(34, 5.5, "Conforme", 1, 1, "C", fill=True)
+
+        pdf.set_font("Helvetica", "", 7.5)
+        for tamis_f, vsi_f, vss_f in fuseau_def:
+            mesure = _mesure_a_tamis(tamis_f, tamis_stored, passant_stored)
+            mesure_txt = f"{mesure:.1f}".replace('.', ',') if mesure is not None else "-"
+            conforme_txt = "-"
+            if mesure is not None:
+                conforme_txt = "OUI" if vsi_f <= mesure <= vss_f else "NON"
+            pdf.cell(38, 5, _fmt_tamis_mm(tamis_f), 1, 0, "C")
+            pdf.cell(50, 5, mesure_txt, 1, 0, "C")
+            pdf.cell(34, 5, _fmt_tamis_mm(vsi_f), 1, 0, "C")
+            pdf.cell(34, 5, _fmt_tamis_mm(vss_f), 1, 0, "C")
+            pdf.cell(34, 5, conforme_txt, 1, 1, "C")
+
+        pdf.ln(2)
+
 
     pdf.set_font("Helvetica", "B", 8)
     pdf.set_fill_color(220, 230, 242)
