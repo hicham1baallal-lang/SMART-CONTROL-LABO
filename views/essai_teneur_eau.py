@@ -172,7 +172,7 @@ def generate_pv_teneur_eau_pdf(header_info, points_data):
 
     pdf.set_font("Helvetica", "I", 9)
     pdf.cell(63, 5, "(Nom, Visa, Date)", 0, 0, "C")
-    pdf.cell(64, 5, "B. ELAMRI", 0, 0, "C")
+    pdf.cell(64, 5, "O. IKKEN", 0, 0, "C")
     pdf.cell(63, 5, "H. BAALLAL", 0, 1, "C")
 
     return bytes(pdf.output())
