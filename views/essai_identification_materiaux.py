@@ -1,6 +1,7 @@
 import datetime
 import io
 import json
+import math
 import os
 import re
 import unicodedata
@@ -611,6 +612,26 @@ def _mesure_a_tamis(tamis_cible, tamis_list, passant_list):
     return passant_arr[meilleur_idx]
 
 
+def _sanitize_pour_json(obj):
+    """Remplace récursivement les NaN / +-Infinity (non valides en JSON strict, contrairement
+    au JSON permissif de Python) par None, et convertit les scalaires numpy en types Python
+    natifs. Sans ça, un seul NaN caché dans les mesures (division par zéro, cellule vide
+    convertie en float, etc.) fait échouer TOUT l'enregistrement Supabase avec l'erreur
+    « Out of range float values are not JSON compliant: nan »."""
+    if isinstance(obj, dict):
+        return {k: _sanitize_pour_json(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_sanitize_pour_json(v) for v in obj]
+    if isinstance(obj, (np.floating, float)):
+        v = float(obj)
+        return None if (math.isnan(v) or math.isinf(v)) else v
+    if isinstance(obj, np.integer):
+        return int(obj)
+    if isinstance(obj, np.bool_):
+        return bool(obj)
+    return obj
+
+
 def verifier_fuseau_granulo(fuseau_def, tamis_list, passant_list):
     """Vérifie que chaque point mesuré de la courbe granulométrique reste dans les
     bornes du fuseau de spécification (VSI <= % passant mesuré <= VSS) pour chaque
@@ -1155,6 +1176,20 @@ def generate_pdf(header_info, data_dict, type_mat, curve_img_path=None):
     pdf.cell(190, 4.5, " Commentaires :", 1, 1, "L", fill=True)
     pdf.set_font("Helvetica", "", 7.5)
     obs_text = data_dict.get('Observation', 'Le matériau peut être utilisé pour un remblai.')
+
+    # Sécurité : on revérifie toujours la conformité au fuseau à partir des mesures brutes
+    # au moment de générer le PDF, plutôt que de faire confiance au texte "Observation" tel
+    # qu'enregistré. Ceci corrige aussi bien les PV nouvellement créés que le téléchargement,
+    # depuis l'onglet Historique, de PV déjà enregistrés en base (dont l'Observation a pu être
+    # calculée par une version antérieure de l'application, avant la vérification du fuseau).
+    if fuseau_def:
+        _fuseau_ok, _fuseau_detail, _ = verifier_fuseau_granulo(fuseau_def, tamis_mesures, passant_mesures)
+        if not _fuseau_ok and "hors fuseau" not in obs_text.lower():
+            obs_text = (
+                "Les résultats d'identification ne sont PAS conformes aux spécifications du marché "
+                f"(hors fuseau granulométrique). {_fuseau_detail}"
+            )
+
     pdf.multi_cell(190, 3.8, f" - Observation : {obs_text}\n ", 1, "L")
     pdf.ln(1.5)
 
@@ -1868,6 +1903,10 @@ def show(supabase_client):
                     "details": data_dict,
                     "observation": obs
                 }
+                # Assainissement : un NaN caché n'importe où dans "details" (division par
+                # zéro, cellule vide convertie en float, etc.) ferait échouer TOUT
+                # l'enregistrement avec "Out of range float values are not JSON compliant".
+                payload_record = _sanitize_pour_json(payload_record)
                 saved_to_db = False
                 save_error = None
                 if supabase_client:
